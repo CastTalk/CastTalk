@@ -2,6 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    /* Light Mode Colors */
+    --text: #151414;
+    --background: #fcfcfc;
+    --foreground: #ffffff;
+    --primary: #005eff;
+    --secondary: #01000f;
+    --accent: #4a1ded;
+  }
+
+  .dark {
+    /* Dark Mode Colors */
+    --text: #ebeaea;
+    --background: #0d0d0d;
+    --foreground: #1a1a1a;
+    --primary: #005eff;
+    --secondary: #f1f0ff;
+    --accent: #3f12e2;
+  }
+
+  /* Typography Scale - Perfect Fourth (1.333) */
+  body {
+    font-family: 'Geist', sans-serif;
+    background-color: var(--background);
+    color: var(--text);
+    font-size: 1rem; /* 16px base */
+    line-height: 1.5;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Geist', sans-serif;
+    line-height: 1.2;
+  }
+
+  h1 {
+    font-size: 3.157rem; /* ~50.5px */
+  }
+
+  h2 {
+    font-size: 2.369rem; /* ~37.9px */
+  }
+
+  h3 {
+    font-size: 1.777rem; /* ~28.4px */
+  }
+
+  h4 {
+    font-size: 1.333rem; /* ~21.3px */
+  }
+
+  h5 {
+    font-size: 1rem; /* 16px */
+  }
+
+  h6 {
+    font-size: 0.75rem; /* 12px */
+  }
+
+  small {
+    font-size: 0.563rem; /* ~9px */
+  }
+}
+
 * {
   margin: 0;
   padding: 0;

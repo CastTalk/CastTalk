@@ -19,6 +19,11 @@ const config = {
     },
     extend: {
       colors: {
+        text: 'var(--text)',
+        background: 'var(--background)',
+        primary: 'var(--primary)',
+        secondary: 'var(--secondary)',
+        accent: 'var(--accent)',
         dark: {
           1: '#1C1F2E',
           2: '#161925',
@@ -42,6 +47,23 @@ const config = {
         yellow: {
           1: '#F9A90E',
         },
+      },
+      fontSize: {
+        sm: '0.750rem',
+        base: '1rem',
+        xl: '1.333rem',
+        '2xl': '1.777rem',
+        '3xl': '2.369rem',
+        '4xl': '3.158rem',
+        '5xl': '4.210rem',
+      },
+      fontFamily: {
+        heading: ['Charlie Display', 'sans-serif'],
+        body: ['Inter', 'sans-serif'],
+      },
+      fontWeight: {
+        normal: '400',
+        bold: '700',
       },
       keyframes: {
         'accordion-down': {
