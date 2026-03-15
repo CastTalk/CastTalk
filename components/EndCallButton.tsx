@@ -31,9 +31,14 @@ const EndCallButton = () => {
   };
 
   return (
-    <Button onClick={endCall} className="bg-red-500">
-      End call for everyone
-    </Button>
+    <>
+      <div className="w-[2px] h-10 bg-gray-200 mx-2" />
+      <div className="flex items-center h-12">
+        <Button onClick={endCall} className="bg-red-500 hover:bg-red-600 h-10 px-3 py-1.5 text-xs rounded-full whitespace-nowrap">
+          End Meeting
+        </Button>
+      </div>
+    </>
   );
 };
 

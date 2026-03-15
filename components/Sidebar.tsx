@@ -2,18 +2,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Calendar, CalendarClock, Video, Plus } from 'lucide-react';
-import { useUser } from '@clerk/nextjs';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { useClerk } from '@clerk/nextjs';
+import { Home, Calendar, CalendarClock, Video, Plus, Settings } from 'lucide-react';
+import { UserButton, useUser, SignedIn } from '@clerk/nextjs';
 
 import { cn } from '@/lib/utils';
 
@@ -49,10 +39,22 @@ const Sidebar = () => {
   const pathname = usePathname();
 
   return (
-    <section className="flex h-screen w-fit flex-col p-3 pt-3 max-sm:hidden" style={{ backgroundColor: '#fcfcfc', color: 'var(--text)', width: '200px' }}>
-      <div className="flex flex-col gap-2">
+    <section className="flex h-screen w-[80px] flex-col justify-between border-r border-gray-200 bg-white p-4 max-sm:hidden shrink-0">
+      
+      <div className="flex flex-col items-center gap-8">
+        {/* Logo / Brand Icon */}
+        <Link href="/" className="flex-center">
+          <Image 
+            src="/logo/Main.svg" 
+            alt="CastTalk" 
+            width={40} 
+            height={40}
+            className="object-contain"
+          />
+        </Link>
+        
         {/* Navigation Links */}
-        <div className="flex flex-1 flex-col gap-2">
+        <div className="flex flex-col gap-4 w-full items-center">
           {sidebarLinks.map((item) => {
             const isActive = pathname === item.route || pathname.startsWith(`${item.route}/`);
             const Icon = item.icon;
@@ -61,54 +63,29 @@ const Sidebar = () => {
               <Link
                 href={item.route}
                 key={item.label}
-                className="flex gap-3 items-center px-2 py-1.5 rounded-md justify-start transition-all"
-                style={isActive ? { 
-                  backgroundColor: 'var(--primary)',
-                  color: 'white',
-                  fontFamily: 'Geist, sans-serif',
-                  fontWeight: '600'
-                } : { 
-                  color: 'var(--text)',
-                  fontFamily: 'Geist, sans-serif',
-                  backgroundColor: 'transparent',
-                  fontWeight: '400'
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
+                title={item.label}
+                className={cn(
+                  "flex-center size-[46px] rounded-2xl transition-all duration-200",
+                  isActive ? "bg-blue-1/10 text-blue-1" : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                )}
               >
-                <div style={{
-                  backgroundColor: isActive ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
-                  borderRadius: '4px',
-                  padding: '2px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <Icon 
-                    size={18} 
-                    strokeWidth={isActive ? 2.5 : 2} 
-                    style={{ 
-                      color: isActive ? 'white' : 'currentColor',
-                      fill: 'none'
-                    }} 
-                  />
-                </div>
-                <p className="text-xs font-normal">
-                  {item.label}
-                </p>
+                <Icon 
+                  size={22} 
+                  strokeWidth={isActive ? 2.5 : 2} 
+                  className={isActive ? "text-blue-1" : "currentColor"}
+                />
               </Link>
             );
           })}
         </div>
       </div>
+
+      <div className="flex flex-col items-center gap-4">
+        <button className="flex-center size-[46px] rounded-2xl text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all duration-200" title="Settings">
+          <Settings size={22} strokeWidth={2} />
+        </button>
+      </div>
+
     </section>
   );
 };
