@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle } from "@phosphor-icons/react";
 import {
   Toast,
   ToastClose,
@@ -21,21 +21,27 @@ export function Toaster() {
           <Toast
             key={id}
             {...props}
-            className="border border-white/40 bg-[rgba(200,203,210,0.75)] backdrop-blur-md text-gray-900 shadow-[0_4px_24px_rgba(0,0,0,0.12)] rounded-md min-w-[240px] w-fit"
+            className="border border-slate-300 bg-[#ecedef] text-slate-900 shadow-lg rounded-none min-w-[300px] p-4 pr-10"
+            style={{ borderWidth: '0.8px' }}
           >
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-3">
               {title && (
-                <CheckCircle2 size={18} strokeWidth={1.8} className="text-green-600 shrink-0" />
+                <div 
+                  className="size-8 flex-center shrink-0 bg-white border border-slate-300 text-black rounded-none"
+                  style={{ borderWidth: '0.8px' }}
+                >
+                  <CheckCircle weight="regular" size={18} className="text-black" />
+                </div>
               )}
-              <div className="grid gap-1">
-                {title && <ToastTitle>{title}</ToastTitle>}
+              <div className="grid gap-0.5">
+                {title && <ToastTitle className="text-sm font-normal text-slate-900">{title}</ToastTitle>}
                 {description && (
-                  <ToastDescription>{description}</ToastDescription>
+                  <ToastDescription className="text-xs font-normal text-slate-500">{description}</ToastDescription>
                 )}
               </div>
             </div>
             {action}
-            <ToastClose />
+            <ToastClose className="rounded-none hover:bg-black/5 p-1 text-black" />
           </Toast>
         );
       })}

@@ -5,12 +5,14 @@ import {
   useCall,
   useCallStateHooks,
 } from '@stream-io/video-react-sdk';
-import { Mic, MicOff, Video, VideoOff, Settings, Pencil } from 'lucide-react';
+import { Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash, Gear, PencilSimple, Check, Users } from '@phosphor-icons/react';
 import { useUser } from '@clerk/nextjs';
 import { Ripple } from './ui/ripple';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import Alert from './Alert';
 import { Button } from './ui/button';
+import { cn } from '@/lib/utils';
+import { NoiseTexture } from './ui/noise-texture';
 
 const DEVICE_PREFS_KEY = '@stream-io/device-preferences';
 
@@ -77,84 +79,66 @@ const DeviceSettingsPanel = () => {
       : { devices: speakers, selected: selectedSpeaker, onSelect: selectSpeaker };
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full bg-transparent relative z-10">
       {/* Tabs */}
-      <div className="flex gap-6 border-b border-gray-200 px-6 mt-2">
+      <div className="flex gap-8 border-b border-slate-200 px-8 mt-2">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`pb-3 text-[14px] font-medium transition-colors relative font-heading ${
-              activeTab === tab.id ? 'text-blue-600' : 'text-gray-500 hover:text-gray-800'
+            className={`pb-4 text-[14px] font-semibold transition-all relative font-heading ${
+              activeTab === tab.id ? 'text-[#110b21] font-bold' : 'text-slate-400 hover:text-slate-600 font-normal'
             }`}
           >
             {tab.label}
             {activeTab === tab.id && (
-              <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-600" />
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#110b21] rounded-none" />
             )}
           </button>
         ))}
       </div>
 
       {/* Device list */}
-      <div className="flex flex-col px-6 py-6 pb-10 flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        <h2 className="text-[17px] font-semibold text-gray-900 mb-2">
-          {tabs.find(t => t.id === activeTab)?.label}
-        </h2>
-        
-        <div className="flex flex-col mt-4">
+      <div className="flex flex-col px-8 py-8 flex-1 overflow-y-auto no-scrollbar">
+        <div className="flex flex-col gap-2">
           {deviceList.devices?.map((device, index) => {
             const isSelected = deviceList.selected === device.deviceId;
             return (
               <label
                 key={device.deviceId}
-                className={`flex items-start gap-4 justify-between py-5 cursor-pointer group ${
-                  index !== deviceList.devices!.length - 1 ? 'border-b border-gray-100' : ''
-                }`}
+                className={cn(
+                  "flex items-center gap-4 justify-between p-4 rounded-none cursor-pointer transition-all duration-200 border",
+                  isSelected 
+                    ? "bg-white border-black text-[#110b21] shadow-sm" 
+                    : "bg-white/60 border-slate-300 text-slate-700 hover:bg-white/80"
+                )}
+                style={{ borderWidth: '0.8px' }}
               >
-                <div className="flex flex-col gap-1.5 pr-4">
-                  <span className={`text-[15px] font-medium leading-tight transition-colors ${isSelected ? 'text-blue-600' : 'text-gray-900 group-hover:text-blue-400'}`}>
+                <div className="flex flex-col gap-1 pr-4">
+                  <span className={cn(
+                    "text-sm transition-colors",
+                    isSelected ? "text-black font-bold" : "text-slate-700 font-normal"
+                  )}>
                     {device.label || `Default ${activeTab}`}
                   </span>
-                  <span className="text-xs text-gray-400 leading-snug">
-                    {(() => {
-                      const label = (device.label || '').toLowerCase();
-                      if (activeTab === 'camera') {
-                        if (label.includes('virtual') || label.includes('obs')) return 'Virtual or software-based camera source.';
-                        if (label.includes('integrated') || label.includes('built-in')) return 'Built-in camera on your device.';
-                        if (label.includes('bluetooth')) return 'Wireless Bluetooth camera.';
-                        return 'External camera connected to your device.';
-                      }
-                      if (activeTab === 'microphone') {
-                        if (label.includes('cable') || label.includes('virtual')) return 'Virtual audio cable — typically used for routing audio.';
-                        if (label.includes('bluetooth') || label.includes('headset')) return 'Wireless headset microphone.';
-                        if (label.includes('array')) return 'Built-in microphone array on your device.';
-                        if (label.includes('default')) return 'System default microphone input.';
-                        if (label.includes('communications')) return 'Optimized for voice calls and communication.';
-                        return 'External microphone input.';
-                      }
-                      if (activeTab === 'speaker') {
-                        if (label.includes('bluetooth') || label.includes('headphone') || label.includes('headset')) return 'Wireless audio output via Bluetooth.';
-                        if (label.includes('default')) return 'System default audio output.';
-                        if (label.includes('communications')) return 'Optimized output for calls and communication.';
-                        if (label.includes('cable') || label.includes('virtual')) return 'Virtual audio cable output.';
-                        if (label.includes('epson') || label.includes('projector')) return 'Audio output through connected projector.';
-                        return 'External speaker or audio output device.';
-                      }
-                      return 'Select this as your preferred device.';
-                    })()}
+                  <span className="text-[12px] text-slate-500 leading-tight line-clamp-1">
+                    {isSelected ? 'Active Device' : 'Ready to use'}
                   </span>
                 </div>
                 
-                <div className="relative flex items-center shrink-0 pt-0.5">
-                  <input
-                    type="radio"
-                    name={activeTab}
-                    checked={isSelected}
-                    onChange={() => deviceList.onSelect(device.deviceId)}
-                    className="w-4 h-4 accent-blue-600 border-gray-300 focus:ring-blue-600 cursor-pointer"
-                  />
+                <div className={cn(
+                  "size-5 rounded-none flex-center border transition-all",
+                  isSelected ? "bg-black border-black text-white" : "border-slate-300 bg-white"
+                )}>
+                  {isSelected && <Check weight="bold" size={12} className="text-white" />}
                 </div>
+                <input
+                  type="radio"
+                  name={activeTab}
+                  checked={isSelected}
+                  onChange={() => deviceList.onSelect(device.deviceId)}
+                  className="hidden"
+                />
               </label>
             );
           })}
@@ -192,20 +176,53 @@ const MeetingSetup = ({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
-    if (isMicOn) {
-      call.microphone.enable();
-    } else {
-      call.microphone.disable();
-    }
-  }, [isMicOn, call.microphone]);
+    const toggleMic = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasMic = devices.some(device => device.kind === 'audioinput');
+        
+        if (isMicOn && hasMic) {
+          await call.microphone.enable();
+        } else {
+          await call.microphone.disable();
+        }
+      } catch (err) {
+        if (err instanceof Error && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
+          console.warn('Microphone permission denied by user');
+          return;
+        }
+        console.error('Error toggling microphone:', err);
+      }
+    };
+    toggleMic();
+  }, [isMicOn, call]);
 
   useEffect(() => {
-    if (isCameraOn) {
-      call.camera.enable();
-    } else {
-      call.camera.disable();
-    }
-  }, [isCameraOn, call.camera]);
+    const toggleCamera = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasCamera = devices.some(device => device.kind === 'videoinput');
+
+        if (isCameraOn && hasCamera) {
+          await call.camera.enable();
+        } else {
+          await call.camera.disable();
+        }
+      } catch (err) {
+        if (err instanceof Error) {
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            console.warn('Camera permission denied by user');
+            return;
+          }
+          if (err.name === 'NotFoundError') {
+            return;
+          }
+        }
+        console.error('Error toggling camera:', err);
+      }
+    };
+    toggleCamera();
+  }, [isCameraOn, call]);
 
   if (callTimeNotArrived)
     return (
@@ -225,72 +242,75 @@ const MeetingSetup = ({
   const participantCount = call.state.participants.length;
 
   return (
-    <div className="flex h-screen w-full flex-col items-center justify-center bg-white p-6 font-heading overflow-hidden relative">
-      {/* Subtle grid background with gradient fade */}
-      <div 
-        className="absolute inset-0 pointer-events-none"
+    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f8fafc] p-6 font-heading overflow-hidden relative">
+      <NoiseTexture className="opacity-[0.12]" />
+      <div
+        className="absolute inset-0 z-0 pointer-events-none opacity-50"
         style={{
-          backgroundImage: `
-            linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px)
-          `,
+          backgroundImage: `linear-gradient(to right, #c4cccc 1px, transparent 1px), linear-gradient(to bottom, #c4cccc 1px, transparent 1px)`,
           backgroundSize: '40px 40px',
-          maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.2) 70%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.2) 70%, transparent 100%)'
         }}
       />
-      
-      <div className="flex flex-col items-center gap-4 w-full max-w-4xl relative z-10 mb-16">
+
+      <div className="flex flex-col items-center gap-8 w-full max-w-4xl relative z-10">
         
-        {/* Header */}
-        <div className="flex flex-col items-center gap-2">
-          <h1 className="text-3xl font-semibold text-gray-900">Get Started</h1>
-          <p className="text-gray-500 text-sm">Prepare your audio and video setup before connecting</p>
+        {/* Header Section */}
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="flex items-center gap-2 px-3 py-1 bg-[#ecedef] border border-black/10 text-slate-900 rounded-none mb-2" style={{ borderWidth: '0.8px' }}>
+            <VideoCamera weight="bold" size={14} className="text-slate-900" />
+            <span className="text-[11px] font-bold tracking-wider uppercase">Lobby</span>
+          </div>
+          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-0">Ready to join?</h1>
+          <p className="text-slate-500 text-base max-w-md font-normal leading-relaxed">Configure your workspace and check your appearance before entering the call.</p>
         </div>
 
-        {/* Participant Count Badge */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-red-500 rounded-full px-3 py-1.5">
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            <span className="text-white text-xs font-semibold">LIVE</span>
-          </div>
-          <div className="bg-gray-200 rounded-full px-3 py-1.5">
-            <span className="text-gray-700 text-xs">{participantCount} participant{participantCount !== 1 ? 's' : ''}</span>
-          </div>
-        </div>
-
-        {/* Video Preview */}
-        <div className="w-full max-w-2xl aspect-video rounded-2xl overflow-hidden relative">
+        {/* Video Preview Card */}
+        <div className="w-full max-w-2xl aspect-video rounded-sm overflow-hidden relative shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02),_0_24px_50px_-12px_rgba(0,0,0,0.06)] border border-black/10 bg-slate-900 group" style={{ borderWidth: '0.8px' }}>
           {isCameraOn ? (
             <div className="w-full h-full bg-black [&>*]:!w-full [&>*]:!h-full [&_video]:!w-full [&_video]:!h-full [&_video]:!object-cover [&>div]:!w-full [&>div]:!h-full [&_*]:!border-0 [&_*]:!outline-0 [&_*]:!bg-transparent">
               <VideoPreview />
             </div>
           ) : (
-            <div className="w-full h-full bg-gray-150 flex items-center justify-center relative overflow-hidden" style={{ backgroundColor: '#e8e8e8' }}>
-              {/* Ripple effect with gradient */}
+            <div className="w-full h-full bg-[#ecedef] flex items-center justify-center relative overflow-hidden">
               <Ripple 
-                mainCircleSize={150} 
-                mainCircleOpacity={0.6} 
-                numCircles={6} 
-                className="[&_.animate-ripple:nth-child(1)]:!border-[#8b7d6b]/70 [&_.animate-ripple:nth-child(1)]:!bg-[#8b7d6b]/30 [&_.animate-ripple:nth-child(2)]:!border-[#9d8f7d]/60 [&_.animate-ripple:nth-child(2)]:!bg-[#9d8f7d]/25 [&_.animate-ripple:nth-child(3)]:!border-[#afa18f]/50 [&_.animate-ripple:nth-child(3)]:!bg-[#afa18f]/20 [&_.animate-ripple:nth-child(4)]:!border-[#c1b3a1]/40 [&_.animate-ripple:nth-child(4)]:!bg-[#c1b3a1]/15 [&_.animate-ripple:nth-child(5)]:!border-[#d3c5b3]/30 [&_.animate-ripple:nth-child(5)]:!bg-[#d3c5b3]/10 [&_.animate-ripple:nth-child(6)]:!border-[#e5d7c5]/20 [&_.animate-ripple:nth-child(6)]:!bg-[#e5d7c5]/5" 
+                mainCircleSize={180} 
+                numCircles={5} 
+                className="opacity-20"
               />
               
               {user?.imageUrl ? (
-                <img 
-                  src={user.imageUrl} 
-                  alt={displayName}
-                  className="w-32 h-32 rounded-full object-cover relative z-10"
-                />
+                <div className="relative group/avatar">
+                  <img 
+                    src={user.imageUrl} 
+                    alt={displayName}
+                    className="w-32 h-32 rounded-full object-cover relative z-10 border-4 border-white shadow-xl"
+                  />
+                  <div className="absolute inset-0 bg-primary/10 blur-2xl rounded-full scale-75 animate-pulse" />
+                </div>
               ) : (
-                <div className="w-32 h-32 rounded-full bg-gray-400 flex items-center justify-center text-white text-5xl font-bold relative z-10">
+                <div className="w-32 h-32 rounded-full bg-primary/10 flex items-center justify-center text-primary text-5xl font-bold relative z-10 border-4 border-white shadow-xl">
                   {user?.firstName?.[0] || user?.username?.[0] || 'U'}
                 </div>
               )}
             </div>
           )}
           
+          {/* Overlay Badges */}
+          <div className="absolute top-6 left-6 z-20 flex gap-2">
+             <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-none px-3 py-1.5 border border-white/10" style={{ borderWidth: '0.8px' }}>
+                <div className="size-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                <span className="text-white text-[10px] font-bold uppercase tracking-widest">Live</span>
+             </div>
+             {participantCount > 0 && (
+               <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-none px-3 py-1.5 border border-white/10" style={{ borderWidth: '0.8px' }}>
+                  <Users weight="bold" size={14} className="text-white" />
+                  <span className="text-white text-[10px] font-bold uppercase tracking-widest">{participantCount}</span>
+               </div>
+             )}
+          </div>
+
           {/* Editable Name Overlay */}
-          <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 z-10">
+          <div className="absolute bottom-6 left-6 flex items-center gap-3 bg-black/50 backdrop-blur-md rounded-none p-2 pl-4 z-20 border border-white/10 transition-all duration-300 hover:bg-black/70" style={{ borderWidth: '0.8px' }}>
             {isEditingName ? (
               <input
                 type="text"
@@ -299,81 +319,120 @@ const MeetingSetup = ({
                 onBlur={() => setIsEditingName(false)}
                 onKeyDown={(e) => e.key === 'Enter' && setIsEditingName(false)}
                 autoFocus
-                className="bg-transparent text-white text-sm font-medium outline-none !border-b !border-white/50 w-32"
+                className="bg-transparent text-white text-sm font-semibold outline-none border-none w-32 placeholder:text-white/40"
               />
             ) : (
-              <span className="text-white text-sm font-medium">{displayName}</span>
+              <span className="text-white text-sm font-semibold">{displayName}</span>
             )}
             <button
               onClick={() => setIsEditingName(!isEditingName)}
-              className="text-white/80 hover:text-white transition-colors"
+              className="size-8 rounded-none bg-white/10 flex-center text-white hover:bg-white/20 transition-colors"
             >
-              <Pencil size={14} />
+              <PencilSimple size={16} weight="bold" />
             </button>
           </div>
 
-          {/* Join Button Overlay - bottom right */}
-          <div className="absolute bottom-4 right-4 z-10">
-            <Button
-              onClick={() => {
-                call.join();
-                setIsSetupComplete(true);
-              }}
-              className="bg-blue-1 hover:bg-blue-1/90 text-white px-6 py-2 rounded-lg font-semibold text-sm h-auto"
+          {/* Setup Status Indicators */}
+          <div className="absolute bottom-6 right-6 z-20 flex gap-2">
+            <div 
+              className={cn(
+                "size-10 rounded-none flex-center backdrop-blur-md border border-white/10 transition-colors",
+                isMicOn ? "bg-white/20 text-white" : "bg-red-500/80 text-white"
+              )}
+              style={{ borderWidth: '0.8px' }}
             >
-              JOIN NOW
-            </Button>
+              {isMicOn ? <Microphone size={20} weight="bold" /> : <MicrophoneSlash size={20} weight="bold" />}
+            </div>
+            <div 
+              className={cn(
+                "size-10 rounded-none flex-center backdrop-blur-md border border-white/10 transition-colors",
+                isCameraOn ? "bg-white/20 text-white" : "bg-red-500/80 text-white"
+              )}
+              style={{ borderWidth: '0.8px' }}
+            >
+              {isCameraOn ? <VideoCamera size={20} weight="bold" /> : <VideoCameraSlash size={20} weight="bold" />}
+            </div>
           </div>
         </div>
 
-        {/* Controls Row - Mic, Camera, Join, Settings */}
-        <div className="flex items-center justify-between w-full max-w-2xl gap-4">
-          {/* Left side - Mic and Camera */}
-          <div className="flex items-center gap-3">
+        {/* Controls Bar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between w-full max-w-2xl gap-6 pt-4">
+          {/* Quick Toggle Controls */}
+          <div className="flex items-center gap-4">
             <button
               onClick={() => setIsMicOn(!isMicOn)}
-              className="w-12 h-12 rounded-full flex items-center justify-center transition-all backdrop-blur-md border border-white/30 shadow-sm"
-              style={{ backgroundColor: isMicOn ? 'rgba(228, 230, 235, 0.7)' : 'rgba(239, 68, 68, 0.85)' }}
+              className={cn(
+                "size-14 rounded-none flex-center transition-all duration-300 border shadow-sm group",
+                isMicOn 
+                  ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-50" 
+                  : "bg-red-600 text-white border-red-700 hover:bg-red-700"
+              )}
+              style={{ borderWidth: '0.8px' }}
             >
-              {isMicOn ? <Mic size={18} strokeWidth={1.5} className="text-gray-800" /> : <MicOff size={18} strokeWidth={1.5} className="text-white" />}
+              {isMicOn ? <Microphone size={24} weight="regular" /> : <MicrophoneSlash size={24} weight="bold" />}
             </button>
             
             <button
               onClick={() => setIsCameraOn(!isCameraOn)}
-              className="w-12 h-12 rounded-full flex items-center justify-center transition-all backdrop-blur-md border border-white/30 shadow-sm"
-              style={{ backgroundColor: isCameraOn ? 'rgba(228, 230, 235, 0.7)' : 'rgba(239, 68, 68, 0.85)' }}
+              className={cn(
+                "size-14 rounded-none flex-center transition-all duration-300 border shadow-sm group",
+                isCameraOn 
+                  ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-50" 
+                  : "bg-red-600 text-white border-red-700 hover:bg-red-700"
+              )}
+              style={{ borderWidth: '0.8px' }}
             >
-              {isCameraOn ? <Video size={18} strokeWidth={1.5} className="text-gray-800" /> : <VideoOff size={18} strokeWidth={1.5} className="text-white" />}
+              {isCameraOn ? <VideoCamera size={24} weight="regular" /> : <VideoCameraSlash size={24} weight="bold" />}
+            </button>
+
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="size-14 rounded-none bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 shadow-sm flex-center transition-all duration-300 group"
+              style={{ borderWidth: '0.8px' }}
+            >
+              <Gear size={24} weight="regular" className="group-hover:rotate-90 transition-transform duration-500" />
             </button>
           </div>
 
-          {/* Right side - Settings */}
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="w-12 h-12 rounded-full flex items-center justify-center transition-all backdrop-blur-md border border-white/30 shadow-sm"
-            style={{ backgroundColor: 'rgba(228, 230, 235, 0.7)' }}
+          {/* Action Button */}
+          <Button
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('streamDisplayName', displayName);
+              }
+              call.join();
+              setIsSetupComplete(true);
+            }}
+            className="w-full sm:w-auto h-14 px-10 border border-black bg-black hover:bg-[#121212] text-white rounded-none font-bold text-lg shadow-sm transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]"
+            style={{ borderWidth: '0.8px' }}
           >
-            <Settings size={18} strokeWidth={1.5} className="text-gray-800" />
-          </button>
-
-          <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-            <SheetContent side="right" className="w-[370px] sm:max-w-[370px] bg-white shadow-2xl p-0 border-none sm:border-l sm:border-gray-200 flex flex-col gap-0 font-heading">
-              <SheetHeader className="px-6 pt-8 pb-4 bg-white border-none">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-xl border border-gray-200 flex items-center justify-center bg-white shadow-sm shrink-0">
-                    <Settings className="w-7 h-7 text-gray-800" />
-                  </div>
-                  <div className="flex flex-col text-left">
-                    <SheetTitle className="text-xl text-gray-900 font-semibold leading-tight">Device Settings</SheetTitle>
-                    <p className="text-[14px] text-gray-500 mt-1">Audio and video workspace</p>
-                  </div>
-                </div>
-              </SheetHeader>
-              <DeviceSettingsPanel />
-            </SheetContent>
-          </Sheet>
+            Enter Meeting
+          </Button>
         </div>
       </div>
+
+      {/* Settings Sheet */}
+      <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-[440px] bg-[#ecedef] p-0 border-l border-slate-300 flex flex-col font-heading relative overflow-hidden" style={{ borderWidth: '0.8px' }}>
+          <NoiseTexture className="opacity-[0.12]" />
+          
+          <SheetHeader className="px-8 pt-10 pb-6 bg-transparent border-none relative z-10">
+            <div className="flex items-center gap-5">
+              <div 
+                className="size-16 rounded-none border border-slate-300 flex-center bg-white shadow-sm text-slate-900"
+                style={{ borderWidth: '0.8px' }}
+              >
+                <Gear weight="bold" size={32} className="text-slate-900" />
+              </div>
+              <div className="flex flex-col text-left">
+                <SheetTitle className="text-2xl text-slate-900 font-bold tracking-tight">Workspace</SheetTitle>
+                <p className="text-sm text-slate-550 mt-1">Configure your audio and video inputs</p>
+              </div>
+            </div>
+          </SheetHeader>
+          <DeviceSettingsPanel />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

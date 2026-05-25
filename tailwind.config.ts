@@ -19,51 +19,63 @@ const config = {
     },
     extend: {
       colors: {
-        text: 'var(--text)',
-        background: 'var(--background)',
-        primary: 'var(--primary)',
-        secondary: 'var(--secondary)',
-        accent: 'var(--accent)',
-        dark: {
-          1: '#1C1F2E',
-          2: '#161925',
-          3: '#252A41',
-          4: '#1E2757',
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: '#004bff',
+          foreground: '#ffffff',
+        },
+        secondary: {
+          DEFAULT: '#110b21',
+          foreground: '#ffffff',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
+        },
+        muted: {
+          DEFAULT: '#f4f4f7',
+          foreground: '#64748b',
+        },
+        accent: {
+          DEFAULT: '#f4f4f7',
+          foreground: '#110b21',
+        },
+        popover: {
+          DEFAULT: '#ffffff',
+          foreground: '#110b21',
+        },
+        card: {
+          DEFAULT: '#ffffff',
+          foreground: '#110b21',
         },
         blue: {
-          1: '#0E78F9',
+          1: '#004bff',
         },
-        sky: {
-          1: '#C9DDFF',
-          2: '#ECF0FF',
-          3: '#F5FCFF',
-        },
-        orange: {
-          1: '#FF742E',
-        },
-        purple: {
-          1: '#830EF9',
-        },
-        yellow: {
-          1: '#F9A90E',
-        },
+        dark: {
+          1: '#110b21',
+          2: '#1a142e',
+          3: '#25203d',
+        }
       },
-      fontSize: {
-        sm: '0.750rem',
-        base: '1rem',
-        xl: '1.333rem',
-        '2xl': '1.777rem',
-        '3xl': '2.369rem',
-        '4xl': '3.158rem',
-        '5xl': '4.210rem',
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        heading: ['Charlie Display', 'sans-serif'],
-        body: ['Charlie Display', 'sans-serif'],
+        geist: ['Geist', 'sans-serif'],
+        charlie: ['Charlie Sans', 'sans-serif'],
+        sans: ['Geist', 'sans-serif'],
+        heading: ['Charlie Sans', 'sans-serif'],
       },
-      fontWeight: {
-        normal: '400',
-        bold: '700',
+      letterSpacing: {
+        tightest: '-.06em',
+        tighter: '-.04em',
+        tight: '-.02em',
       },
       keyframes: {
         'accordion-down': {
@@ -89,9 +101,6 @@ const config = {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
         ripple: 'ripple 3s ease-in-out infinite',
-      },
-      backgroundImage: {
-        hero: "url('/images/hero-background.png')",
       },
     },
   },

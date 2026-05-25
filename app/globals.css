@@ -1,4 +1,3 @@
-@import url('https://fonts.cdnfonts.com/css/charlie-display');
 
 @tailwind base;
 @tailwind components;
@@ -6,75 +5,82 @@
 
 @layer base {
   :root {
-    /* Pure Light Mode Colors */
-    --text: #151414;
-    --background: #F8F9FA;
-    --foreground: #ffffff;
-    --primary: #005eff;
-    --secondary: #f1f0ff;
-    --accent: #4a1ded;
+    --background: 210 40% 98%;
+    --foreground: 228 48% 9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 228 48% 9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 228 48% 9%;
+
+    --primary: 221 100% 50%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 228 48% 9%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 210 20% 96%;
+    --accent-foreground: 228 48% 9%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 100% 50%;
+
+    --radius: 0.75rem;
   }
 
-  /* Force dark class to also be light to prevent any OS level overrides if using next-themes */
   .dark {
-    --text: #151414;
-    --background: #F8F9FA;
-    --foreground: #ffffff;
-    --primary: #005eff;
-    --secondary: #f1f0ff;
-    --accent: #4a1ded;
+    --background: 210 40% 98%;
+    --foreground: 228 48% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 228 48% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 228 48% 9%;
+    --primary: 221 100% 50%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 228 48% 9%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 20% 96%;
+    --accent-foreground: 228 48% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 100% 50%;
   }
 
-  /* Typography Scale - Perfect Fourth (1.333) */
+  * {
+    @apply border-border;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
   body {
-    font-family: 'Charlie Display', sans-serif;
-    background-color: var(--background);
-    color: var(--text);
-    font-size: 1rem; /* 16px base */
-    line-height: 1.5;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Geist', sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Charlie Display', sans-serif;
-    line-height: 1.2;
+    @apply font-heading font-bold tracking-tight;
+    color: #110b21;
+    letter-spacing: -0.04em;
   }
 
-  h1 {
-    font-size: 3.157rem; /* ~50.5px */
-  }
-
-  h2 {
-    font-size: 2.369rem; /* ~37.9px */
-  }
-
-  h3 {
-    font-size: 1.777rem; /* ~28.4px */
-  }
-
-  h4 {
-    font-size: 1.333rem; /* ~21.3px */
-  }
-
-  h5 {
-    font-size: 1rem; /* 16px */
-  }
-
-  h6 {
-    font-size: 0.75rem; /* 12px */
-  }
-
-  small {
-    font-size: 0.563rem; /* ~9px */
-  }
-  .theme {
-    --animate-ripple: ripple var(--duration,2s) ease calc(var(--i, 0)*.2s) infinite;
-  }
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+  h1 { font-size: 3.5rem; line-height: 1; margin-bottom: 1.5rem; }
+  h2 { font-size: 2.5rem; line-height: 1.1; margin-bottom: 1.25rem; }
+  h3 { font-size: 1.75rem; line-height: 1.2; margin-bottom: 1rem; }
+  h4 { font-size: 1.25rem; line-height: 1.3; }
 }
 
 /* ======== stream css overrides ======== */
@@ -84,131 +90,113 @@
 }
 
 .str-video__speaker-layout__wrapper {
-  max-height: 700px;
+  height: 100%;
 }
 
 .str-video__participant-details {
-  color: white; /* Still white since it usually overlays the video feed */
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(12px) !important;
+  color: #110b21 !important;
+  border-radius: 12px !important;
+  padding: 8px 16px !important;
+  font-weight: 600 !important;
+  bottom: 16px !important;
+  left: 16px !important;
+  border: 1px solid rgba(0, 75, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
 }
 
 .str-video__menu-container,
 .str-video__device-settings__menu,
 .str-video__device-settings__container {
   background-color: white !important;
-  color: #151414 !important;
-  border-radius: 12px;
-  border: 1px solid #e3e3e3;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+  color: #110b21 !important;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
 }
 
 .str-video__device-settings__option:hover,
 .str-video__menu-item:hover {
-  background-color: #f1f0ff !important;
-}
-
-.str-video__device-settings__option,
-.str-video__menu-item {
-  color: #151414 !important;
-}
-
-/* Remove ALL dark backgrounds from dropdown buttons - targeting composite buttons specifically */
-.str-video__call-controls__button[data-state="open"],
-.str-video__call-controls__button[aria-expanded="true"],
-.str-video__call-controls__button.str-video__call-controls__button--active,
-.str-video__call-controls__button:active,
-.str-video__call-controls__button[data-active="true"],
-.str-video__composite-button .str-video__call-controls__button[aria-expanded="true"],
-.str-video__composite-button .str-video__call-controls__button:last-child {
-  background-color: transparent !important;
-  background: transparent !important;
-}
-
-/* Target the dropdown toggle button in composite buttons */
-.str-video__composite-button__button--secondary,
-.str-video__composite-button button:last-child,
-.str-video__composite-button .str-video__call-controls__button:nth-child(2) {
-  background-color: transparent !important;
-  background: transparent !important;
-}
-
-/* Target the specific dropdown wrapper */
-.str-video__composite-button__wrapper[data-state="open"] .str-video__call-controls__button,
-.str-video__composite-button__wrapper .str-video__call-controls__button[aria-expanded="true"] {
-  background-color: transparent !important;
-  background: transparent !important;
-}
-
-.str-video__notification {
-  color: #151414;
-}
-
-/* Override Stream SDK color variables for light theme */
-.str-video__call-controls,
-.str-video__device-settings__button {
-  --str-video__base-color1: #1f2937;
-  --str-video__icon-default: #1f2937;
-  --str-video__icon-hover: #111827;
-}
-
-/* Direct override for the settings icon */
-.str-video__icon.str-video__device-settings__settings-icon {
-  color: #1f2937 !important;
-}
-
-.str-video__participant-list {
-  background-color: white;
-  border: 1px solid #e3e3e3;
-  padding: 10px;
-  border-radius: 10px;
-  color: #151414;
-  height: 100%;
+  background-color: #f1f5f9 !important;
 }
 
 .str-video__call-controls__button {
-  height: 40px;
+  background-color: white !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #110b21 !important;
+  border-radius: 12px !important;
+  transition: all 0.2s ease;
 }
 
+.str-video__call-controls__button:hover {
+  background-color: #f8fafc !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+.str-video__notification {
+  color: #110b21;
+  background-color: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+/* Glassmorphism Refined */
 .glassmorphism {
-  background: rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-.glassmorphism2 {
-  background: rgba(18, 17, 17, 0.25);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-/* ==== clerk class override ===== */
-
-.cl-userButtonPopoverActionButtonIcon {
-  color: #151414;
+.premium-card {
+  @apply bg-white border border-slate-200 rounded-2xl shadow-sm transition-all duration-300;
 }
 
-.cl-logoBox {
-  height: 40px;
-}
-.cl-dividerLine {
-  background: #e3e3e3;
-  height: 2px;
+.premium-card:hover {
+  @apply shadow-md -translate-y-1 border-primary/20;
 }
 
-.cl-socialButtonsIconButton {
-  border: 1px solid #e3e3e3;
+.cl-rootBox {
+  font-family: 'Geist', sans-serif;
 }
 
-.cl-internal-wkkub3 {
-  color: #151414;
-}
-.cl-userButtonPopoverActionButton {
-  color: #151414;
-}
-
-.cl-formFieldOptionalLabel {
-  display: none !important;
+.cl-card {
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-/* =============================== */
+.cl-internal-wkkub3, .cl-userButtonPopoverActionButton {
+  color: #110b21;
+}
+
+.cl-formButtonPrimary {
+  background-color: #004bff;
+}
+
+.cl-formButtonPrimary:hover {
+  background-color: #003dcc;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-8px); }
+}
+
+.animate-slide-down {
+  animation: slideDown 0.2s ease forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.15s ease forwards;
+}
 
 @layer utilities {
   .flex-center {
@@ -218,38 +206,19 @@
   .flex-between {
     @apply flex justify-between items-center;
   }
-}
 
-/* animation */
-
-.show-block {
-  width: 100%;
-  max-width: 350px;
-  display: block;
-  animation: show 0.7s forwards linear;
-}
-
-@keyframes show {
-  0% {
-    animation-timing-function: ease-in;
-    width: 0%;
+  .text-balance {
+    text-wrap: balance;
   }
 
-  100% {
-    animation-timing-function: ease-in;
-    width: 100%;
+  .no-scrollbar::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
-}
 
-@theme inline {
-  @keyframes ripple {
-  0% {
-    transform: translate(-50%, -50%) scale(0.8);
-    opacity: 1;
-    }
-  100% {
-    transform: translate(-50%, -50%) scale(2);
-    opacity: 0;
-    }
+  .no-scrollbar {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
   }
 }

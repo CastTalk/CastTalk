@@ -1,11 +1,11 @@
-/* eslint-disable camelcase */
 'use client';
-
+import { VideoCamera, Link, Calendar, FilmReel, X, ClipboardText, CheckCircle } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import HomeCard from './HomeCard';
 import MeetingModal from './MeetingModal';
+import CreateMeetingModal from './CreateMeetingModal';
 import { Call, useStreamVideoClient } from '@stream-io/video-react-sdk';
 import { useUser } from '@clerk/nextjs';
 import Loader from './Loader';
@@ -38,7 +38,7 @@ const MeetingTypeList = () => {
         toast({ title: 'Please select a date and time' });
         return;
       }
-      const id = crypto.randomUUID();
+      const id = values.link || crypto.randomUUID();
       const call = client.call('default', id);
       if (!call) throw new Error('Failed to create meeting');
       const startsAt =
@@ -53,7 +53,7 @@ const MeetingTypeList = () => {
         },
       });
       setCallDetail(call);
-      if (!values.description) {
+      if (!values.description || meetingState === 'isInstantMeeting') {
         router.push(`/meeting/${call.id}`);
       }
       toast({
@@ -70,37 +70,36 @@ const MeetingTypeList = () => {
   const meetingLink = `${process.env.NEXT_PUBLIC_BASE_URL}/meeting/${callDetail?.id}`;
 
   return (
-    <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <section className="grid grid-cols-1 sm:grid-cols-2 gap-6">
       <HomeCard
-        img="/icons/add-meeting.svg"
+        icon={VideoCamera}
         title="New Meeting"
-        description="Set up new meeting"
-        className="bg-[#FF742E]" // Orange
-        cardNumber="01"
-        handleClick={() => setMeetingState('isInstantMeeting')}
+        description="Start an instant meeting"
+        iconColor="text-orange-500"
+        handleClick={() => {
+          setValues({ ...initialValues, link: crypto.randomUUID() });
+          setMeetingState('isInstantMeeting');
+        }}
       />
       <HomeCard
-        img="/icons/join-meeting.svg"
+        icon={Link}
         title="Join Meeting"
-        description="via invitation link"
-        className="bg-[#0E78F9]" // Blue
-        cardNumber="02"
+        description="Via invitation link"
+        iconColor="text-blue-500"
         handleClick={() => setMeetingState('isJoiningMeeting')}
       />
       <HomeCard
-        img="/icons/schedule.svg"
+        icon={Calendar}
         title="Schedule"
-        description="plan your meetings"
-        className="bg-[#0E78F9]" // Blue
-        cardNumber="03"
+        description="Plan your meetings"
+        iconColor="text-purple-500"
         handleClick={() => setMeetingState('isScheduleMeeting')}
       />
       <HomeCard
-        img="/icons/recordings.svg" // Using recordings as placeholder for Share Screen or keep it as Recordings
-        title="View Recordings"
-        description="Meeting Recordings"
-        className="bg-[#0E78F9]" // Blue
-        cardNumber="04"
+        icon={FilmReel}
+        title="Recordings"
+        description="View past meetings"
+        iconColor="text-emerald-500"
         handleClick={() => router.push('/recordings')}
       />
 
@@ -110,33 +109,39 @@ const MeetingTypeList = () => {
           onClose={() => setMeetingState(undefined)}
           title="Create Meeting"
           handleClick={createMeeting}
-          image="/icons/schedule.svg"
+          icon={Calendar}
         >
-          <div className="flex flex-col gap-2.5">
-            <label className="text-sm font-normal leading-[22px] text-gray-200">
-              Add a description
-            </label>
-            <Textarea
-              className="border-none bg-[#252A41] text-white focus-visible:ring-0 focus-visible:ring-offset-0 rounded-md"
-              onChange={(e) =>
-                setValues({ ...values, description: e.target.value })
-              }
-            />
-          </div>
-          <div className="flex w-full flex-col gap-2.5">
-            <label className="text-sm font-normal leading-[22px] text-gray-200">
-              Select Date and Time
-            </label>
-            <ReactDatePicker
-              selected={values.dateTime}
-              onChange={(date) => setValues({ ...values, dateTime: date! })}
-              showTimeSelect
-              timeFormat="HH:mm"
-              timeIntervals={15}
-              timeCaption="time"
-              dateFormat="MMMM d, yyyy h:mm aa"
-              className="w-full rounded-md bg-[#252A41] text-white p-2.5 focus:outline-none"
-            />
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-bold text-slate-700">
+                Description
+              </label>
+              <Textarea
+                placeholder="What is this meeting about?"
+                className="bg-slate-50 border-slate-100 text-slate-900 focus-visible:ring-primary/20 rounded-xl min-h-[100px] p-4"
+                onChange={(e) =>
+                  setValues({ ...values, description: e.target.value })
+                }
+              />
+            </div>
+            <div className="flex w-full flex-col gap-2">
+              <label className="text-sm font-bold text-slate-700">
+                Select Date and Time
+              </label>
+              <div className="relative group">
+                <ReactDatePicker
+                  selected={values.dateTime}
+                  onChange={(date) => setValues({ ...values, dateTime: date! })}
+                  showTimeSelect
+                  timeFormat="HH:mm"
+                  timeIntervals={15}
+                  timeCaption="time"
+                  dateFormat="MMMM d, yyyy h:mm aa"
+                  className="w-full rounded-xl bg-slate-50 border border-slate-100 text-slate-900 p-4 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
+                />
+                <Calendar weight="bold" size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-focus-within:text-primary transition-colors" />
+              </div>
+            </div>
           </div>
         </MeetingModal>
       ) : (
@@ -148,8 +153,8 @@ const MeetingTypeList = () => {
             navigator.clipboard.writeText(meetingLink);
             toast({ title: 'Link Copied' });
           }}
-          image={'/icons/checked.svg'}
-          buttonIcon="/icons/copy.svg"
+          icon={CheckCircle}
+          buttonIcon={ClipboardText}
           className="text-center"
           buttonText="Copy Meeting Link"
         />
@@ -158,27 +163,28 @@ const MeetingTypeList = () => {
       <MeetingModal
         isOpen={meetingState === 'isJoiningMeeting'}
         onClose={() => setMeetingState(undefined)}
-        title="Type the link here"
+        title="Join a Meeting"
         className="text-center"
         buttonText="Join Meeting"
         handleClick={() => router.push(values.link)}
-        image="/icons/join-meeting.svg"
+        icon={Link}
       >
-        <Input
-          placeholder="Meeting link"
-          onChange={(e) => setValues({ ...values, link: e.target.value })}
-          className="border-none bg-[#252A41] text-white focus-visible:ring-0 focus-visible:ring-offset-0 rounded-md py-6"
-        />
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-slate-500 font-medium -mt-2">Enter the invitation link or meeting ID below</p>
+          <Input
+            placeholder="https://cancast.com/meeting/..."
+            onChange={(e) => setValues({ ...values, link: e.target.value })}
+            className="bg-slate-50 border-slate-100 text-slate-900 focus-visible:ring-primary/20 rounded-xl py-6 px-4 font-medium"
+          />
+        </div>
       </MeetingModal>
 
-      <MeetingModal
+      <CreateMeetingModal
         isOpen={meetingState === 'isInstantMeeting'}
         onClose={() => setMeetingState(undefined)}
-        title="Start an Instant Meeting"
-        className="text-center"
-        buttonText="Start Meeting"
         handleClick={createMeeting}
-        image="/icons/add-meeting.svg"
+        values={values}
+        setValues={setValues}
       />
     </section>
   );
