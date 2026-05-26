@@ -1,8 +1,4 @@
 import Link from 'next/link';
-import Image from 'next/image';
-
-import { Button } from './ui/button';
-import { Card, CardContent } from './ui/card';
 import { Info } from '@phosphor-icons/react';
 import { NoiseTexture } from './ui/noise-texture';
 
@@ -13,48 +9,49 @@ interface PermissionCardProps {
 
 const Alert = ({ title, iconUrl }: PermissionCardProps) => {
   return (
-    <section className="flex-center h-screen w-full bg-[#f8fafc] px-4">
-      <Card 
-        className="w-full max-w-[480px] border border-black/10 bg-[#ecedef] text-slate-900 rounded-sm shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02),_0_24px_50px_-12px_rgba(0,0,0,0.06)] relative overflow-hidden"
-        style={{ borderWidth: '0.8px' }}
+    <section className="flex items-center justify-center min-h-screen w-full bg-[#FCFBFB] px-4 font-geist relative overflow-hidden select-none">
+      <NoiseTexture className="opacity-[0.15]" />
+      <div
+        className="absolute inset-0 z-0 pointer-events-none opacity-50"
+        style={{
+          backgroundImage: `linear-gradient(to right, #c4cccc 1px, transparent 1px), linear-gradient(to bottom, #c4cccc 1px, transparent 1px)`,
+          backgroundSize: '40px 40px',
+        }}
+      />
+      
+      <div 
+        className="relative flex flex-col w-full max-w-[480px] overflow-hidden rounded-2xl bg-white border-2 border-[rgba(62,39,35,0.4)] shadow-2xl transition-all duration-300 z-10 p-8 pt-10"
       >
         <NoiseTexture className="opacity-[0.12]" />
-        
-        {/* Top Accent Bar */}
-        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-primary via-[#3b82f6] to-primary z-30" />
 
-        <CardContent className="p-8 pt-10 relative z-10">
-          <div className="flex flex-col gap-6 items-center">
-            {iconUrl ? (
-              <div 
-                className="size-14 flex-center bg-white border border-slate-300 rounded-none shadow-sm"
-                style={{ borderWidth: '0.8px' }}
-              >
-                <img src={iconUrl} className="w-8 h-8 object-contain" alt="icon" />
-              </div>
-            ) : (
-              <div 
-                className="size-14 flex-center bg-white border border-slate-300 rounded-none shadow-sm text-slate-800"
-                style={{ borderWidth: '0.8px' }}
-              >
-                <Info size={28} className="text-slate-800" weight="regular" />
-              </div>
-            )}
-
-            <p className="text-center text-[15px] font-normal leading-relaxed text-slate-700 max-w-sm px-2">
-              {title}
-            </p>
-
-            <Button 
-              asChild 
-              className="w-full h-11 border border-black bg-black hover:bg-primary hover:border-primary text-white text-xs font-bold uppercase tracking-wider transition-all duration-300 rounded-none"
-              style={{ borderWidth: '0.8px' }}
+        <div className="relative z-10 flex flex-col gap-6 items-center">
+          {iconUrl ? (
+            <div 
+              className="size-16 flex items-center justify-center bg-[#3E2723]/5 border-2 border-[rgba(62,39,35,0.2)] rounded-2xl shadow-sm"
             >
-              <Link href="/">Back to Home</Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+              <img src={iconUrl} className="w-9 h-9 object-contain" alt="icon" />
+            </div>
+          ) : (
+            <div 
+              className="size-16 flex items-center justify-center bg-[#3E2723]/5 border-2 border-[rgba(62,39,35,0.2)] rounded-2xl shadow-sm text-[#3E2723]"
+            >
+              <Info size={32} className="text-[#3E2723]" weight="regular" />
+            </div>
+          )}
+
+          <p className="text-center text-[15px] font-semibold leading-relaxed text-[#3E2723]/95 max-w-sm px-2">
+            {title}
+          </p>
+
+          <Link href="/" className="w-full mt-2">
+            <button 
+              className="w-full h-12 bg-[#3E2723] hover:opacity-90 text-[#ffffff] text-[14px] font-bold rounded-xl transition-all shadow-md active:scale-[0.98]"
+            >
+              Back to Home
+            </button>
+          </Link>
+        </div>
+      </div>
     </section>
   );
 };

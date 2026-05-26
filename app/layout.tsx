@@ -6,6 +6,8 @@ import "@stream-io/video-react-sdk/dist/css/styles.css";
 import "react-datepicker/dist/react-datepicker.css";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { GeistSans } from 'geist/font/sans';
+import { GeistMono } from 'geist/font/mono';
 
 import "./theme.css";
 
@@ -21,7 +23,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" className="light">
+    <html lang="en" className={`light ${GeistSans.variable} ${GeistMono.variable}`}>
       <ClerkProvider
         appearance={{
           layout: {

@@ -67,7 +67,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Geist', sans-serif;
+    font-family: var(--font-geist-sans), sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
@@ -159,7 +159,7 @@
 }
 
 .cl-rootBox {
-  font-family: 'Geist', sans-serif;
+  font-family: var(--font-geist-sans), sans-serif;
 }
 
 .cl-card {

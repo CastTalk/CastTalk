@@ -67,9 +67,9 @@ const config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        geist: ['Geist', 'sans-serif'],
+        geist: ['var(--font-geist-sans)', 'sans-serif'],
         charlie: ['Charlie Sans', 'sans-serif'],
-        sans: ['Geist', 'sans-serif'],
+        sans: ['var(--font-geist-sans)', 'sans-serif'],
         heading: ['Charlie Sans', 'sans-serif'],
       },
       letterSpacing: {
