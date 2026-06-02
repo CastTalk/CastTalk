@@ -13,7 +13,7 @@ const HomeLayout = ({ children }: Readonly<{ children: ReactNode }>) => {
       <AppNavbar />
 
       <div className="flex-1 w-full flex justify-center overflow-hidden">
-        <main className="w-full max-w-[1440px] flex flex-col flex-1 border-l-2 border-r-2 border-dashed border-[#c4cccc] bg-[var(--theme-background)] overflow-hidden">
+        <main className="relative w-full max-w-[1440px] flex flex-col flex-1 border-l-2 border-r-2 border-dashed border-[#c4cccc] bg-[var(--theme-background)] overflow-hidden">
           {children}
         </main>
       </div>

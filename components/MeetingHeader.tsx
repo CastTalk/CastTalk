@@ -27,7 +27,7 @@ const MeetingHeader = () => {
     <div className="w-full flex items-center justify-between px-8 py-4 shrink-0 bg-transparent z-10 font-heading">
       {/* Left side: Title */}
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-4 bg-[#ecedef] border border-black/10 px-5 py-3 rounded-none shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02)]" style={{ borderWidth: '0.8px' }}>
+        <div className="flex items-center gap-4 bg-[#ecedef] border border-black/5 px-5 py-3 rounded-none shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02)]" style={{ borderWidth: '0.5px' }}>
           <div className="size-8 rounded-none bg-primary flex-center shadow-sm">
              <VideoCamera weight="bold" size={18} className="text-white" />
           </div>
@@ -42,7 +42,7 @@ const MeetingHeader = () => {
 
       {/* Right side: Timer */}
       <div className="flex items-center">
-        <div className="flex items-center gap-4 bg-[#ecedef] border border-black/10 px-5 py-3 rounded-none shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02)]" style={{ borderWidth: '0.8px' }}>
+        <div className="flex items-center gap-4 bg-[#ecedef] border border-black/5 px-5 py-3 rounded-none shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02)]" style={{ borderWidth: '0.5px' }}>
           <div className="flex items-center gap-2">
             <div className="size-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
             <span className="text-slate-900 text-[12px] font-bold uppercase tracking-widest">Live</span>

@@ -332,7 +332,7 @@ const Home = () => {
               <div className="space-y-4">
                 <div>
                   <h2 className="text-[22px] font-bold text-[#111827] leading-none mb-1.5">
-                    What's your meeting about?
+                    {"What's your meeting about?"}
                   </h2>
                   <p className="text-[14px] text-[#6B7280]" style={{ marginBottom: '10px' }}>
                     Fill out the details of your meeting.

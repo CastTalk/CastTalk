@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   VideoPreview,
   useCall,
@@ -153,6 +154,7 @@ const MeetingSetup = ({
 }: {
   setIsSetupComplete: (value: boolean) => void;
 }) => {
+  const router = useRouter();
   const { useCallEndedAt, useCallStartsAt } = useCallStateHooks();
   const callStartsAt = useCallStartsAt();
   const callEndedAt = useCallEndedAt();
@@ -251,21 +253,24 @@ const MeetingSetup = ({
           backgroundSize: '40px 40px',
         }}
       />
+      {/* Top Left Branding Logo Text */}
+      <div 
+        onClick={() => router.push('/')}
+        className="absolute top-8 left-8 z-20 cursor-pointer select-none hover:opacity-80 transition-opacity"
+      >
+        <img src="/logo/logoMain.svg" alt="CastTalk" className="h-8 w-auto object-contain" />
+      </div>
 
       <div className="flex flex-col items-center gap-8 w-full max-w-4xl relative z-10">
         
         {/* Header Section */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex items-center gap-2 px-3 py-1 bg-[#ecedef] border border-black/10 text-slate-900 rounded-none mb-2" style={{ borderWidth: '0.8px' }}>
-            <VideoCamera weight="bold" size={14} className="text-slate-900" />
-            <span className="text-[11px] font-bold tracking-wider uppercase">Lobby</span>
-          </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-0">Ready to join?</h1>
           <p className="text-slate-500 text-base max-w-md font-normal leading-relaxed">Configure your workspace and check your appearance before entering the call.</p>
         </div>
 
         {/* Video Preview Card */}
-        <div className="w-full max-w-2xl aspect-video rounded-sm overflow-hidden relative shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02),_0_24px_50px_-12px_rgba(0,0,0,0.06)] border border-black/10 bg-slate-900 group" style={{ borderWidth: '0.8px' }}>
+        <div className="w-full max-w-2xl aspect-video rounded-sm overflow-hidden relative shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02),_0_24px_50px_-12px_rgba(0,0,0,0.06)] border border-black/5 bg-slate-900 group" style={{ borderWidth: '0.5px' }}>
           {isCameraOn ? (
             <div className="w-full h-full bg-black [&>*]:!w-full [&>*]:!h-full [&_video]:!w-full [&_video]:!h-full [&_video]:!object-cover [&>div]:!w-full [&>div]:!h-full [&_*]:!border-0 [&_*]:!outline-0 [&_*]:!bg-transparent">
               <VideoPreview />
@@ -396,6 +401,7 @@ const MeetingSetup = ({
 
           {/* Action Button */}
           <Button
+            disabled
             onClick={() => {
               if (typeof window !== 'undefined') {
                 localStorage.setItem('streamDisplayName', displayName);
@@ -403,24 +409,24 @@ const MeetingSetup = ({
               call.join();
               setIsSetupComplete(true);
             }}
-            className="w-full sm:w-auto h-14 px-10 border border-black bg-black hover:bg-[#121212] text-white rounded-none font-bold text-lg shadow-sm transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]"
+            className="w-full sm:w-auto h-14 px-10 border border-slate-300 bg-slate-300 text-slate-500 rounded-none font-bold text-lg shadow-sm cursor-not-allowed opacity-50"
             style={{ borderWidth: '0.8px' }}
           >
-            Enter Meeting
+            Enter Meeting (Disabled)
           </Button>
         </div>
       </div>
 
       {/* Settings Sheet */}
       <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-[440px] bg-[#ecedef] p-0 border-l border-slate-300 flex flex-col font-heading relative overflow-hidden" style={{ borderWidth: '0.8px' }}>
+        <SheetContent side="right" className="w-full sm:max-w-[440px] bg-[#ecedef] p-0 border-l border-slate-200 flex flex-col font-heading overflow-hidden" style={{ borderWidth: '0.5px' }}>
           <NoiseTexture className="opacity-[0.12]" />
           
           <SheetHeader className="px-8 pt-10 pb-6 bg-transparent border-none relative z-10">
             <div className="flex items-center gap-5">
               <div 
-                className="size-16 rounded-none border border-slate-300 flex-center bg-white shadow-sm text-slate-900"
-                style={{ borderWidth: '0.8px' }}
+                className="size-16 rounded-none border border-slate-200 flex-center bg-white shadow-sm text-slate-900"
+                style={{ borderWidth: '0.5px' }}
               >
                 <Gear weight="bold" size={32} className="text-slate-900" />
               </div>

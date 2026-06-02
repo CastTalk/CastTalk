@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { Call, useStreamVideoClient } from '@stream-io/video-react-sdk';
 
@@ -38,15 +38,19 @@ export const useGetCalls = () => {
     loadCalls();
   }, [client, user?.id]);
 
-  const now = new Date();
+  const endedCalls = useMemo(() => {
+    const now = new Date();
+    return calls?.filter(({ state: { startsAt, endedAt } }: Call) => {
+      return (startsAt && new Date(startsAt) < now) || !!endedAt;
+    });
+  }, [calls]);
 
-  const endedCalls = calls?.filter(({ state: { startsAt, endedAt } }: Call) => {
-    return (startsAt && new Date(startsAt) < now) || !!endedAt
-  })
+  const upcomingCalls = useMemo(() => {
+    const now = new Date();
+    return calls?.filter(({ state: { startsAt, endedAt } }: Call) => {
+      return startsAt && new Date(startsAt) > now && !endedAt;
+    });
+  }, [calls]);
 
-  const upcomingCalls = calls?.filter(({ state: { startsAt, endedAt } }: Call) => {
-    return startsAt && new Date(startsAt) > now && !endedAt
-  })
-
-  return { endedCalls, upcomingCalls, calls, callRecordings: calls, isLoading }
+  return { endedCalls, upcomingCalls, calls, callRecordings: calls, isLoading };
 };

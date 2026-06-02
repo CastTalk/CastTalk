@@ -295,21 +295,31 @@ export default function SchedulePage() {
                     return (
                       <div
                         key={call.id}
-                        className="absolute left-1 right-1 z-10 cursor-pointer rounded-sm overflow-hidden transition-all group"
+                        className="absolute left-0 right-0 z-10 cursor-pointer overflow-hidden transition-all group"
                         style={{ 
-                          top: top + 1, 
-                          height: height - 2,
+                          top: top, 
+                          height: height,
                         }}
                         onClick={() => setSelectedCall(call)}
                       >
                         <div 
                           className={cn(
-                            "h-full border p-3 flex flex-col justify-between text-[13px] leading-snug transition-opacity hover:opacity-95 rounded-sm relative",
-                            isPast 
-                              ? "bg-slate-100/80 border-slate-200 text-slate-600" 
-                              : `${theme.bg} ${theme.border} ${theme.text}`
+                            "h-full border p-3 flex flex-col justify-between text-[13px] leading-snug transition-opacity hover:opacity-95 rounded-none relative overflow-hidden",
+                            theme.bg,
+                            theme.border,
+                            theme.text,
+                            isPast && "opacity-70 saturate-[0.8]"
                           )}
                         >
+                          {/* Slashing Pattern Overlay for Past/Done Meetings */}
+                          {isPast && (
+                            <div 
+                              className="absolute inset-0 pointer-events-none opacity-[0.14]"
+                              style={{
+                                backgroundImage: 'repeating-linear-gradient(135deg, currentColor, currentColor 1.5px, transparent 1.5px, transparent 8px)'
+                              }}
+                            />
+                          )}
                           {/* Top row: Title and Badge Icon */}
                           <div>
                             <div className="flex items-start justify-between gap-2">
@@ -337,28 +347,26 @@ export default function SchedulePage() {
                             </div>
                           </div>
 
-                          {!isPast && (
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                const confirmDelete = confirm("Are you sure you want to cancel and delete this scheduled meeting?");
-                                if (confirmDelete) {
-                                  try {
-                                    await call.endCall();
-                                    toast({ title: "Meeting cancelled successfully" });
-                                    window.location.reload();
-                                  } catch (err) {
-                                    console.error(err);
-                                    toast({ title: "Failed to cancel meeting" });
-                                  }
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const confirmDelete = confirm("Are you sure you want to cancel and delete this scheduled meeting?");
+                              if (confirmDelete) {
+                                try {
+                                  await call.endCall();
+                                  toast({ title: "Meeting cancelled successfully" });
+                                  window.location.reload();
+                                } catch (err) {
+                                  console.error(err);
+                                  toast({ title: "Failed to cancel meeting" });
                                 }
-                              }}
-                              className="absolute top-2.5 right-2.5 p-1 rounded-md hover:bg-black/5 opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-all active:scale-95 text-current"
-                              title="Cancel Meeting"
-                            >
-                              <Trash size={15} weight="bold" />
-                            </button>
-                          )}
+                              }
+                            }}
+                            className="absolute top-2.5 right-2.5 p-1 rounded-md hover:bg-black/5 opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-all active:scale-95 text-current"
+                            title="Cancel Meeting"
+                          >
+                            <Trash size={15} weight="bold" />
+                          </button>
                         </div>
                       </div>
                     );

@@ -139,19 +139,19 @@ const MeetingRoom = () => {
       {/* Main Immersive Video Area - Fills remaining space */}
       <div className="relative flex-1 flex items-center justify-center px-6 pt-6 pb-4 z-10">
         <div 
-          className="flex w-full h-full items-center justify-center mx-auto rounded-xl overflow-hidden border border-black/10 shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02),_0_24px_50px_-12px_rgba(0,0,0,0.06)] bg-white"
-          style={{ borderWidth: '0.8px' }}
+          className="flex w-full h-full items-center justify-center mx-auto rounded-xl overflow-hidden border border-black/5 shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02),_0_24px_50px_-12px_rgba(0,0,0,0.06)] bg-white"
+          style={{ borderWidth: '0.5px' }}
         >
           <CallLayout />
         </div>
         
         {/* Participants Sidebar Panel (slides out dynamically resizing call layout) */}
         <div
-          className={cn('h-full ml-4 bg-[#ecedef] border border-black/10 shadow-lg rounded-none w-80 transition-all relative overflow-hidden', {
+          className={cn('h-full ml-4 bg-[#ecedef] border border-black/5 shadow-lg rounded-none w-80 transition-all relative overflow-hidden', {
             'flex': showParticipants,
             'hidden': !showParticipants,
           })}
-          style={{ borderWidth: '0.8px' }}
+          style={{ borderWidth: '0.5px' }}
         >
           <NoiseTexture className="opacity-[0.12]" />
           <div className="p-4 h-full w-full relative z-10 flex flex-col">

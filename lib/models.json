@@ -1,0 +1,116 @@
+{
+  "primaryModelId": "moonshotai/kimi-k2.6:free",
+  "fallbacks": [
+    "openai/gpt-oss-120b:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "openai/gpt-oss-20b:free",
+    "google/gemma-4-31b-it:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "openrouter/owl-alpha",
+    "poolside/laguna-xs.2:free",
+    "liquid/lfm-2.5-1.2b-instruct:free"
+  ],
+  "models": [
+    {
+      "id": "moonshotai/kimi-k2.6:free",
+      "name": "Kimi K2.6 (Free)",
+      "description": "Primary Moonshot AI conversational and reasoning model.",
+      "maxTokens": 1000,
+      "temperature": 0.7,
+      "supportsTools": true,
+      "supportsStructuredOutput": true,
+      "supportsReasoning": true
+    },
+    {
+      "id": "openai/gpt-oss-120b:free",
+      "name": "GPT OSS 120B (Free)",
+      "description": "High parameter open source instruction model.",
+      "maxTokens": 1000,
+      "temperature": 0.7,
+      "supportsTools": true,
+      "supportsStructuredOutput": true,
+      "supportsReasoning": true
+    },
+    {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "name": "Nemotron 3 Super 120B (Free)",
+      "description": "NVIDIA high parameter instruction and coding model.",
+      "maxTokens": 1000,
+      "temperature": 0.7,
+      "supportsTools": true,
+      "supportsStructuredOutput": true,
+      "supportsReasoning": true
+    },
+    {
+      "id": "meta-llama/llama-3.3-70b-instruct:free",
+      "name": "Llama 3.3 70B Instruct (Free)",
+      "description": "Meta Llama instruction model with excellent reasoning capabilities.",
+      "maxTokens": 1000,
+      "temperature": 0.7,
+      "supportsTools": true,
+      "supportsStructuredOutput": true,
+      "supportsReasoning": true
+    },
+    {
+      "id": "openai/gpt-oss-20b:free",
+      "name": "GPT OSS 20B (Free)",
+      "description": "Medium parameter open source conversational model.",
+      "maxTokens": 800,
+      "temperature": 0.7,
+      "supportsTools": true,
+      "supportsStructuredOutput": true,
+      "supportsReasoning": false
+    },
+    {
+      "id": "google/gemma-4-31b-it:free",
+      "name": "Gemma 4 31B IT (Free)",
+      "description": "Google Gemma instruction tuned medium model.",
+      "maxTokens": 1000,
+      "temperature": 0.7,
+      "supportsTools": false,
+      "supportsStructuredOutput": true,
+      "supportsReasoning": false
+    },
+    {
+      "id": "google/gemma-4-26b-a4b-it:free",
+      "name": "Gemma 4 26B A4B IT (Free)",
+      "description": "Google Gemma instruction tuned small model.",
+      "maxTokens": 800,
+      "temperature": 0.7,
+      "supportsTools": false,
+      "supportsStructuredOutput": true,
+      "supportsReasoning": false
+    },
+    {
+      "id": "openrouter/owl-alpha",
+      "name": "Owl Alpha",
+      "description": "OpenRouter customized routing and fallback model.",
+      "maxTokens": 800,
+      "temperature": 0.7,
+      "supportsTools": false,
+      "supportsStructuredOutput": false,
+      "supportsReasoning": false
+    },
+    {
+      "id": "poolside/laguna-xs.2:free",
+      "name": "Laguna XS.2 (Free)",
+      "description": "Poolside lightweight coding and instruction model.",
+      "maxTokens": 800,
+      "temperature": 0.7,
+      "supportsTools": false,
+      "supportsStructuredOutput": false,
+      "supportsReasoning": false
+    },
+    {
+      "id": "liquid/lfm-2.5-1.2b-instruct:free",
+      "name": "Liquid LFM 2.5 Instruct (Free)",
+      "description": "Liquid instruction model optimized for latency and efficiency.",
+      "maxTokens": 800,
+      "temperature": 0.7,
+      "supportsTools": false,
+      "supportsStructuredOutput": false,
+      "supportsReasoning": false
+    }
+  ]
+}
