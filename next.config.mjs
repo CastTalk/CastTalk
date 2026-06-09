@@ -8,6 +8,9 @@ const nextConfig = {
       },
     ],
   },
+  experimental: {
+    serverComponentsExternalPackages: ['node-appwrite', 'undici'],
+  },
 };
 
 export default nextConfig;

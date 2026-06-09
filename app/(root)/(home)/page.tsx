@@ -216,7 +216,7 @@ const Home = () => {
                 placeholder="Enter a code or link"
                 value={linkOrCode}
                 onChange={(e) => setLinkOrCode(e.target.value)}
-                className="w-full px-4 py-3.5 bg-transparent border border-black text-black rounded-none focus:outline-none focus:ring-1 focus:ring-black transition-all placeholder:text-slate-500"
+                className="w-full pl-4 pr-20 py-3.5 bg-transparent border border-black text-black rounded-none focus:outline-none focus:ring-1 focus:ring-black transition-all placeholder:text-slate-500"
               />
               <button
                 onClick={joinMeeting}

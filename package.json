@@ -34,6 +34,7 @@
     "lucide-react": "^0.350.0",
     "motion": "^12.40.0",
     "next": "14.0.4",
+    "node-appwrite": "^26.2.0",
     "react": "^18",
     "react-datepicker": "^6.3.0",
     "react-day-picker": "^10.0.1",

@@ -33,6 +33,30 @@ const StreamVideoProvider = ({ children }: { children: ReactNode }) => {
     });
 
     setVideoClient(client);
+
+    // Sync Clerk authenticated user to Appwrite Auth
+    const syncUserToAppwrite = async () => {
+      try {
+        const email = user.emailAddresses?.[0]?.emailAddress || '';
+        const name = user.fullName || user.firstName || '';
+        
+        await fetch('/api/auth/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            email,
+            name,
+          }),
+        });
+      } catch (error) {
+        console.error('[StreamClientProvider] Failed to sync user to Appwrite:', error);
+      }
+    };
+
+    syncUserToAppwrite();
   }, [user, isLoaded]);
 
   if (!videoClient) return <Loader />;
