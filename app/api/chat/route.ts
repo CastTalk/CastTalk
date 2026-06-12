@@ -4,6 +4,103 @@ import { systemPromptTemplate } from '@/ai-context/prompts/systemPrompt';
 import { ActionPlanner } from '@/ai-context/planner/actionPlanner';
 import { checkPrivacyPolicy } from '@/ai-context/policies/privacy.policy';
 import { EventStreamDispatcher, TaskState } from '@/lib/agent-sse';
+import { appwrite } from '@/lib/appwrite';
+import { Query } from 'node-appwrite';
+
+async function getAIUserContext(userId: string): Promise<string> {
+  if (!userId) return '';
+  try {
+    const DATABASE_ID = 'castdb';
+    
+    // 1. Fetch user schedules
+    let schedulesText = 'None';
+    try {
+      const schedulesRes = await appwrite.databases.listDocuments(
+        DATABASE_ID,
+        'schedules',
+        [
+          Query.equal('createdBy', userId),
+          Query.limit(100)
+        ]
+      );
+      if (schedulesRes.documents.length > 0) {
+        schedulesText = schedulesRes.documents.map((d: any) => 
+          `- ID: ${d.meetingId}, Title: ${d.title}, Starts At: ${d.startsAt}, Duration: ${d.duration} mins, Type: ${d.meetingType}`
+        ).join('\n');
+      }
+    } catch (err) {
+      console.warn('[AI User Context] Failed to fetch schedules:', err);
+    }
+
+    // 2. Fetch user tasks
+    let tasksText = 'None';
+    try {
+      const tasksRes = await appwrite.databases.listDocuments(
+        DATABASE_ID,
+        'tasks',
+        [
+          Query.equal('userId', userId),
+          Query.limit(100)
+        ]
+      );
+      if (tasksRes.documents.length > 0) {
+        tasksText = tasksRes.documents.map((d: any) => 
+          `- Title: ${d.title}, Status: ${d.status}, Due Date: ${d.dueDate || 'N/A'}`
+        ).join('\n');
+      }
+    } catch (err) {
+      console.warn('[AI User Context] Failed to fetch tasks:', err);
+    }
+
+    // 3. Fetch user recordings (linked via meetingId of schedules created by the user)
+    let recordingsText = 'None';
+    try {
+      const schedulesRes = await appwrite.databases.listDocuments(
+        DATABASE_ID,
+        'schedules',
+        [
+          Query.equal('createdBy', userId),
+          Query.limit(100)
+        ]
+      );
+      const meetingIds = schedulesRes.documents.map((d: any) => d.meetingId);
+      if (meetingIds.length > 0) {
+        const recordingsRes = await appwrite.databases.listDocuments(
+          DATABASE_ID,
+          'recordings',
+          [
+            Query.equal('meetingId', meetingIds),
+            Query.limit(100)
+          ]
+        );
+        if (recordingsRes.documents.length > 0) {
+          recordingsText = recordingsRes.documents.map((d: any) => 
+            `- Title: ${d.title}, URL: ${d.url}, Duration: ${d.duration} mins, Created At: ${d.createdAt}`
+          ).join('\n');
+        }
+      }
+    } catch (err) {
+      console.warn('[AI User Context] Failed to fetch recordings:', err);
+    }
+
+    return `
+=== USER RELEVANT CONTEXT (DATABASE READ-ONLY ACCESS) ===
+The following information is retrieved from the database and belongs strictly to the interacting user. You may use this context to answer their questions or plan actions. Do not reference other users' data.
+
+Upcoming Schedules/Meetings:
+${schedulesText}
+
+Tasks:
+${tasksText}
+
+Recordings:
+${recordingsText}
+========================================================`;
+  } catch (err) {
+    console.error('[AI User Context] Global error:', err);
+    return '';
+  }
+}
 
 function generateFallbackTasks(prompt: string, isCompleted: boolean = false) {
   const lower = prompt.toLowerCase();
@@ -553,12 +650,15 @@ export async function POST(req: Request) {
     (async () => {
       try {
         const referenceDateTime = currentDateTime || new Date().toISOString();
+        const userContextText = await getAIUserContext(userId);
         const systemPromptContent = `${systemPromptTemplate}
 
 Strict Time Grounding:
 - The user's current local date and time is: ${referenceDateTime}.
 - You MUST use this exact date and time reference to resolve relative temporal terms such as "today", "tomorrow", "7:30 PM", "in 2 hours", etc.
-- Always check that any meeting you plan is strictly in the future relative to this current date and time reference.`;
+- Always check that any meeting you plan is strictly in the future relative to this current date and time reference.
+
+${userContextText}`;
 
         const systemMessage: OpenRouterMessage = {
           role: 'system',
@@ -646,26 +746,48 @@ Strict Time Grounding:
 
         // ─── Parse LLM response to detect structured action plans ───
         let isActionPlan = false;
-        let parsedPlan: any = null;
+        let parsedPlans: any[] = [];
 
         try {
-          let jsonText = responseText.trim();
-          if (jsonText.startsWith('```json') && jsonText.endsWith('```')) {
-            jsonText = jsonText.substring(7, jsonText.length - 3).trim();
-          } else if (jsonText.startsWith('```') && jsonText.endsWith('```')) {
-            jsonText = jsonText.substring(3, jsonText.length - 3).trim();
-          }
+          // Robust extraction: find all JSON blocks inside markdown fence blocks
+          const jsonRegex = /```json\s*([\s\S]*?)\s*```|```\s*(\{[\s\S]*?\})\s*```/g;
+          const matches = [...responseText.matchAll(jsonRegex)];
           
-          const parsed = JSON.parse(jsonText);
-          if (parsed && typeof parsed === 'object' && parsed.intent) {
+          if (matches.length > 0) {
+            for (const m of matches) {
+              const jsonText = (m[1] || m[2] || "").trim();
+              try {
+                const parsed = JSON.parse(jsonText);
+                if (parsed && typeof parsed === 'object' && parsed.intent) {
+                  parsedPlans.push(parsed);
+                }
+              } catch (err) {
+                // Ignore invalid JSON inside code blocks
+              }
+            }
+          } else {
+            // Check if the entire response is a JSON object
+            const trimmed = responseText.trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+              try {
+                const parsed = JSON.parse(trimmed);
+                if (parsed && typeof parsed === 'object' && parsed.intent) {
+                  parsedPlans.push(parsed);
+                }
+              } catch (err) {
+                // Ignore
+              }
+            }
+          }
+
+          if (parsedPlans.length > 0) {
             isActionPlan = true;
-            parsedPlan = parsed;
           }
         } catch (e) {
-          // Not a structured JSON action plan — treat as plain text
+          // Not structured JSON action plans — treat as plain text
         }
 
-        if (isActionPlan && parsedPlan && !isAutomate) {
+        if (isActionPlan && parsedPlans.length > 0 && !isAutomate) {
           // Upgrade to Automate mode on the fly!
           isAutomate = true;
 
@@ -685,39 +807,40 @@ Strict Time Grounding:
         }
 
         // ─── ACTION PLAN PATH (meeting scheduling, etc.) ───
-        if (isActionPlan && parsedPlan) {
-          const title = parsedPlan.entities?.title || 'AI Scheduled Meeting';
-          const duration = Number(parsedPlan.entities?.duration || 60);
-
+        if (isActionPlan && parsedPlans.length > 0) {
           // Step 2: Governance Security Audit
           if (isAutomate) {
             await emit('step-2', 'running');
             await emit('step-2.1', 'running');
           }
 
-          const policyResult = await checkPrivacyPolicy({
-            userId: userId || 'unknown-user',
-            action: parsedPlan.intent,
-            payload: parsedPlan.entities,
-          });
+          const approvedPlans: any[] = [];
 
-          if (!policyResult.allowed) {
-            if (isAutomate) {
-              await emit('step-2.1', 'failed');
-              await emit('step-2.2', 'blocked');
-              await emit('step-2.3', 'blocked');
-              await emit('step-2', 'failed');
-              await emit('step-3', 'blocked');
-              await emit('step-3.1', 'blocked');
-              await emit('step-3.2', 'blocked');
-            }
-            await dispatcher.send({
-              schema_version: '1.0',
-              timestamp: new Date().toISOString(),
-              type: 'final_message',
-              text: `Governance Policy Blocked Action:\n${policyResult.reason || 'Unauthorized operation.'}`,
+          for (const parsedPlan of parsedPlans) {
+            const policyResult = await checkPrivacyPolicy({
+              userId: userId || 'unknown-user',
+              action: parsedPlan.intent,
+              payload: parsedPlan.entities,
             });
-            return;
+
+            if (!policyResult.allowed) {
+              if (isAutomate) {
+                await emit('step-2.1', 'failed');
+                await emit('step-2.2', 'blocked');
+                await emit('step-2.3', 'blocked');
+                await emit('step-2', 'failed');
+                await emit('step-3', 'blocked');
+                await emit('step-3.1', 'blocked');
+                await emit('step-3.2', 'blocked');
+              }
+              await dispatcher.send({
+                schema_version: '1.0',
+                timestamp: new Date().toISOString(),
+                type: 'final_message',
+                text: `Governance Policy Blocked Action:\n${policyResult.reason || 'Unauthorized operation.'}`,
+              });
+              return;
+            }
           }
 
           if (isAutomate) {
@@ -726,27 +849,31 @@ Strict Time Grounding:
             await emit('step-2.3', 'running');
           }
 
-          const plannerResult = ActionPlanner.planAction({
-            intent: parsedPlan.intent,
-            entities: parsedPlan.entities,
-          });
-
-          if (!plannerResult.success) {
-            if (isAutomate) {
-              await emit('step-2.2', 'failed');
-              await emit('step-2.3', 'blocked');
-              await emit('step-2', 'failed');
-              await emit('step-3', 'blocked');
-              await emit('step-3.1', 'blocked');
-              await emit('step-3.2', 'blocked');
-            }
-            await dispatcher.send({
-              schema_version: '1.0',
-              timestamp: new Date().toISOString(),
-              type: 'final_message',
-              text: `Governance Audit Blocked Action:\n${plannerResult.error}`,
+          for (const parsedPlan of parsedPlans) {
+            const plannerResult = ActionPlanner.planAction({
+              intent: parsedPlan.intent,
+              entities: parsedPlan.entities,
             });
-            return;
+
+            if (!plannerResult.success) {
+              if (isAutomate) {
+                await emit('step-2.2', 'failed');
+                await emit('step-2.3', 'blocked');
+                await emit('step-2', 'failed');
+                await emit('step-3', 'blocked');
+                await emit('step-3.1', 'blocked');
+                await emit('step-3.2', 'blocked');
+              }
+              await dispatcher.send({
+                schema_version: '1.0',
+                timestamp: new Date().toISOString(),
+                type: 'final_message',
+                text: `Governance Audit Blocked Action:\n${plannerResult.error}`,
+              });
+              return;
+            }
+
+            approvedPlans.push(plannerResult.plan);
           }
 
           if (isAutomate) {
@@ -764,13 +891,16 @@ Strict Time Grounding:
             await emit('step-3', 'succeeded');
           }
 
-          const actionVerb = parsedPlan.intent === 'updateMeeting' ? 'Updating' : 'Scheduling';
+          const intents = parsedPlans.map(p => p.intent);
+          const hasUpdate = intents.includes('updateMeeting');
+          const actionVerb = hasUpdate ? 'Updating/Scheduling' : 'Scheduling';
           await dispatcher.send({
             schema_version: '1.0',
             timestamp: new Date().toISOString(),
             type: 'final_message',
-            text: `Action approved by Governance Engine! ${actionVerb} meeting now...`,
-            actionPlan: plannerResult.plan,
+            text: `Action approved by Governance Engine! ${actionVerb} meeting(s) now...`,
+            actionPlan: approvedPlans[0],
+            actionPlans: approvedPlans,
           });
 
         // ─── NON-ACTION PLAN PATH (regular text responses) ───

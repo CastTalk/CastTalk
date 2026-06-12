@@ -354,6 +354,11 @@ export default function SchedulePage() {
                               if (confirmDelete) {
                                 try {
                                   await call.endCall();
+                                  // Delete from Appwrite DB schedules
+                                  await fetch(`/api/schedules?meetingId=${call.id}`, {
+                                    method: 'DELETE'
+                                  }).catch(err => console.error('[Error deleting schedule from DB]:', err));
+                                  
                                   toast({ title: "Meeting cancelled successfully" });
                                   window.location.reload();
                                 } catch (err) {

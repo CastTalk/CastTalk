@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { PromptInputBox } from '@/components/ui/ai-prompt-box';
-import { Brain, Sparkles, User, Calendar, FileText, CheckSquare, Plus, ArrowLeft, ChevronDown } from 'lucide-react';
+import { Brain, Sparkles, User, Calendar, FileText, CheckSquare, Plus, ArrowLeft, ChevronDown, Pin, Trash2, Search, MessageSquare, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { NoiseTexture } from '@/components/ui/noise-texture';
@@ -422,6 +422,38 @@ const getClientCustomTasks = (prompt: string): Task[] => {
   ];
 };
 
+const groupThreads = (threads: any[]) => {
+  const pinned = threads.filter(t => t.pinned);
+  const unpinned = threads.filter(t => !t.pinned);
+
+  const groups: { [key: string]: any[] } = {
+    Today: [],
+    Yesterday: [],
+    'Last Week': [],
+    Older: []
+  };
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
+  const lastWeekStart = todayStart - 7 * 24 * 60 * 60 * 1000;
+
+  unpinned.forEach(thread => {
+    const updatedTime = new Date(thread.updatedAt).getTime();
+    if (updatedTime >= todayStart) {
+      groups.Today.push(thread);
+    } else if (updatedTime >= yesterdayStart) {
+      groups.Yesterday.push(thread);
+    } else if (updatedTime >= lastWeekStart) {
+      groups['Last Week'].push(thread);
+    } else {
+      groups.Older.push(thread);
+    }
+  });
+
+  return { pinned, groups };
+};
+
 export default function CastAIPage() {
   const { user } = useUser();
   const router = useRouter();
@@ -432,6 +464,95 @@ export default function CastAIPage() {
 
   const [expandedPlans, setExpandedPlans] = useState<Record<string, boolean>>({});
   const startTimeRef = useRef<number | null>(null);
+
+  // Scoped AI Chat History & Floating Modal States
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [chatThreads, setChatThreads] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  const fetchChatThreads = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const res = await fetch('/api/chat/history');
+      if (res.ok) {
+        const data = await res.json();
+        setChatThreads(data.threads || []);
+      }
+    } catch (err) {
+      console.error('[Fetch Chat Threads Error]:', err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showHistoryModal) {
+      fetchChatThreads();
+    }
+  }, [showHistoryModal]);
+
+
+
+  const loadChatThread = async (chatId: string) => {
+    try {
+      const res = await fetch(`/api/chat/history?chatId=${chatId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const loadedMessages = (data.messages || []).map((m: any) => ({
+          id: m.id,
+          sender: m.role === 'user' ? 'user' : 'ai',
+          text: m.content,
+          timestamp: new Date(m.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+          mode: m.content.startsWith('[Deep Search: ') ? 'search' : (m.content.startsWith('[Automate: ') ? 'think' : undefined)
+        }));
+        setMessages(loadedMessages);
+        setActiveChatId(chatId);
+        setShowHistoryModal(false);
+      }
+    } catch (err) {
+      console.error('[Load Chat Thread Error]:', err);
+    }
+  };
+
+  const togglePinChat = async (chatId: string, currentPinned: boolean) => {
+    try {
+      const res = await fetch('/api/chat/history', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId, pinned: !currentPinned })
+      });
+      if (res.ok) {
+        fetchChatThreads();
+      }
+    } catch (err) {
+      console.error('[Toggle Pin Chat Error]:', err);
+    }
+  };
+
+  const deleteChatThread = async (chatId: string) => {
+    try {
+      const res = await fetch(`/api/chat/history?chatId=${chatId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        if (activeChatId === chatId) {
+          setActiveChatId(null);
+          setMessages([]);
+        }
+        fetchChatThreads();
+      }
+    } catch (err) {
+      console.error('[Delete Chat Thread Error]:', err);
+    }
+  };
+
+  const startNewChat = () => {
+    setActiveChatId(null);
+    setMessages([]);
+    setShowHistoryModal(false);
+  };
 
   const togglePlanExpanded = (msgId: string) => {
     setExpandedPlans((prev) => ({
@@ -511,6 +632,30 @@ export default function CastAIPage() {
     };
 
     setMessages((prev) => [...prev, initialAiMsg]);
+
+    let currentChatId = activeChatId;
+
+    // Save user message to database history
+    try {
+      const saveRes = await fetch('/api/chat/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: currentChatId || 'new',
+          role: 'user',
+          content: cleanText
+        })
+      });
+      if (saveRes.ok) {
+        const saveData = await saveRes.json();
+        if (saveData.success) {
+          currentChatId = saveData.chatId;
+          setActiveChatId(currentChatId);
+        }
+      }
+    } catch (saveErr) {
+      console.error('[Error saving user message to history]:', saveErr);
+    }
 
     try {
       const formattedHistory = messages.map((msg) => ({
@@ -680,7 +825,138 @@ export default function CastAIPage() {
             } else if (eventType === 'final_message') {
               let aiText = eventData.text || 'I could not process that request.';
               
-              if (eventData.actionPlan) {
+              if (eventData.actionPlans && Array.isArray(eventData.actionPlans) && eventData.actionPlans.length > 0) {
+                const results: string[] = [];
+                let hasErrors = false;
+
+                for (let i = 0; i < eventData.actionPlans.length; i++) {
+                  const plan = eventData.actionPlans[i];
+                  const { action, arguments: args } = plan;
+
+                  if (action === 'createMeeting' && client) {
+                    try {
+                      const meetingId = crypto.randomUUID();
+                      const call = client.call('default', meetingId);
+                      
+                      const startsAt = args.startsAt || new Date().toISOString();
+                      const title = args.title || 'AI Scheduled Meeting';
+                      const duration = Number(args.duration || 60);
+
+                      await call.getOrCreate({
+                        data: {
+                          starts_at: startsAt,
+                          custom: {
+                            title: title,
+                            description: title,
+                            duration: duration,
+                          },
+                        },
+                      });
+
+                      // Sync scheduled meeting into Appwrite schedules database collection
+                      await fetch('/api/schedules', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          meetingId,
+                          title,
+                          description: title,
+                          startsAt,
+                          duration,
+                          meetingType: 'ai'
+                        })
+                      }).catch(err => console.error('[Error syncing schedule to DB]:', err));
+
+                      const formattedDate = new Date(startsAt).toLocaleString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      });
+
+                      results.push(`**Meeting ${i + 1}: ${title}**\n- **Starts At**: ${formattedDate}\n- **Duration**: ${duration} minutes\n- **Meeting ID**: \`${meetingId}\``);
+                    } catch (err: any) {
+                      console.error(`Failed to create meeting ${i + 1} in Stream:`, err);
+                      hasErrors = true;
+                      results.push(`**Meeting ${i + 1} Failed**\nError: ${err.message || err}`);
+                    }
+                  } else if (action === 'updateMeeting' && client) {
+                    try {
+                      const { meetingId, updates } = args;
+                      if (!meetingId) {
+                        throw new Error('Meeting ID is required to update a meeting.');
+                      }
+                      const call = client.call('default', meetingId);
+                      
+                      const updateData: any = {};
+                      if (updates?.startsAt) {
+                        updateData.starts_at = updates.startsAt;
+                      }
+                      
+                      if (updates?.title || updates?.duration !== undefined) {
+                        updateData.custom = {};
+                        if (updates.title) {
+                          updateData.custom.title = updates.title;
+                          updateData.custom.description = updates.title;
+                        }
+                        if (updates.duration !== undefined) {
+                          updateData.custom.duration = Number(updates.duration);
+                        }
+                      }
+
+                      await call.update(updateData);
+
+                      // Sync updated meeting details into Appwrite schedules database collection
+                      const syncTitle = updates?.title || call.state?.custom?.title || 'Meeting';
+                      const syncStartsAt = updates?.startsAt || call.state?.startedAt?.toISOString() || new Date().toISOString();
+                      const syncDuration = updates?.duration !== undefined ? Number(updates.duration) : (call.state?.custom?.duration || 60);
+
+                      await fetch('/api/schedules', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          meetingId,
+                          title: syncTitle,
+                          description: syncTitle,
+                          startsAt: syncStartsAt,
+                          duration: syncDuration,
+                          meetingType: 'ai'
+                        })
+                      }).catch(err => console.error('[Error syncing updated schedule to DB]:', err));
+
+                      const formattedDate = updates?.startsAt
+                        ? new Date(updates.startsAt).toLocaleString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })
+                        : undefined;
+
+                      let details = '';
+                      if (updates?.title) details += `\n- **New Title**: ${updates.title}`;
+                      if (formattedDate) details += `\n- **New Starts At**: ${formattedDate}`;
+                      if (updates?.duration !== undefined) details += `\n- **New Duration**: ${updates.duration} minutes`;
+
+                      results.push(`**Meeting Updated Successfully!**\n- **Meeting ID**: \`${meetingId}\`${details}`);
+                    } catch (err: any) {
+                      console.error('Failed to update meeting in Stream:', err);
+                      hasErrors = true;
+                      results.push(`**Meeting Update Failed**\nError: ${err.message || err}`);
+                    }
+                  }
+                }
+
+                if (!hasErrors) {
+                  aiText = `CastAI scheduled the meetings successfully!\n\n` + results.join('\n\n') + `\n\nThe events have been successfully scheduled and are now visible on your upcoming calendar dashboard.`;
+                } else {
+                  aiText = `CastAI finished executing the scheduled actions with some errors:\n\n` + results.join('\n\n');
+                }
+              } else if (eventData.actionPlan) {
                 const { action, arguments: args } = eventData.actionPlan;
                 
                 if (action === 'createMeeting' && client) {
@@ -702,6 +978,20 @@ export default function CastAIPage() {
                         },
                       },
                     });
+
+                    // Sync scheduled meeting into Appwrite schedules database collection
+                    await fetch('/api/schedules', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        meetingId,
+                        title,
+                        description: title,
+                        startsAt,
+                        duration,
+                        meetingType: 'ai'
+                      })
+                    }).catch(err => console.error('[Error syncing schedule to DB]:', err));
 
                     const formattedDate = new Date(startsAt).toLocaleString('en-US', {
                       weekday: 'long',
@@ -750,6 +1040,24 @@ The event has been successfully scheduled and is now visible on your upcoming ca
 
                     await call.update(updateData);
 
+                    // Sync updated meeting details into Appwrite schedules database collection
+                    const syncTitle = updates?.title || call.state?.custom?.title || 'Meeting';
+                    const syncStartsAt = updates?.startsAt || call.state?.startedAt?.toISOString() || new Date().toISOString();
+                    const syncDuration = updates?.duration !== undefined ? Number(updates.duration) : (call.state?.custom?.duration || 60);
+
+                    await fetch('/api/schedules', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        meetingId,
+                        title: syncTitle,
+                        description: syncTitle,
+                        startsAt: syncStartsAt,
+                        duration: syncDuration,
+                        meetingType: 'ai'
+                      })
+                    }).catch(err => console.error('[Error syncing updated schedule to DB]:', err));
+
                     const formattedDate = updates?.startsAt
                       ? new Date(updates.startsAt).toLocaleString('en-US', {
                           weekday: 'long',
@@ -784,6 +1092,19 @@ The event modifications have been successfully saved.`;
                   msg.id === aiMessageId ? { ...msg, text: aiText, durationMs } : msg
                 )
               );
+
+              // Save assistant message to database history
+              if (currentChatId) {
+                fetch('/api/chat/history', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    chatId: currentChatId,
+                    role: 'assistant',
+                    content: aiText
+                  })
+                }).catch(err => console.error('[Error saving assistant response to history]:', err));
+              }
             } else if (eventType === 'error_message') {
               const durationMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
               setMessages((prev) =>
@@ -865,6 +1186,7 @@ The event modifications have been successfully saved.`;
                 isLoading={isTyping}
                 placeholder="Ask CastAI anything about meetings, notes, or tasks..."
                 className="border-slate-200 shadow-none"
+                onHistoryClick={() => setShowHistoryModal(prev => !prev)}
               />
             </div>
           </div>
@@ -995,12 +1317,176 @@ The event modifications have been successfully saved.`;
                   isLoading={isTyping}
                   placeholder="Ask CastAI anything about meetings, notes, or tasks..."
                   className="border-slate-200 shadow-none"
+                  onHistoryClick={() => setShowHistoryModal(prev => !prev)}
                 />
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Floating Convo History Modal (Gemini IDE style) */}
+      <AnimatePresence>
+        {showHistoryModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowHistoryModal(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+
+            {/* Modal Content */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: 'spring', duration: 0.3 }}
+              className="relative w-full max-w-[550px] max-h-[80vh] flex flex-col bg-white/95 border border-slate-200/80 shadow-2xl rounded-2xl overflow-hidden z-10"
+            >
+              {/* Header Search Area */}
+              <div className="p-4 border-b border-slate-100 flex items-center gap-3">
+                <Search className="size-5 text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search all convos..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full text-base bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                  autoFocus
+                />
+                <button
+                  onClick={startNewChat}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold shrink-0 transition-all shadow-sm"
+                >
+                  <Plus className="size-3.5" />
+                  <span>New chat</span>
+                </button>
+              </div>
+
+              {/* Body List Area */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-6 no-scrollbar min-h-0">
+                {isLoadingHistory ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-2">
+                    <Loader2 className="size-8 animate-spin text-slate-500" />
+                    <span className="text-sm font-medium">Loading history...</span>
+                  </div>
+                ) : (() => {
+                  const filteredThreads = chatThreads.filter(thread => 
+                    thread.title.toLowerCase().includes(searchQuery.toLowerCase())
+                  );
+
+                  if (filteredThreads.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-20 text-slate-400 text-center">
+                        <MessageSquare className="size-10 text-slate-300 mb-2" />
+                        <span className="text-sm font-medium">No conversations found</span>
+                      </div>
+                    );
+                  }
+
+                  const { pinned, groups } = groupThreads(filteredThreads);
+
+                  return (
+                    <>
+                      {/* Pinned Section */}
+                      {pinned.length > 0 && (
+                        <div className="space-y-2">
+                          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-1">Pinned</h3>
+                          <div className="space-y-1">
+                            {pinned.map((thread) => (
+                              <div
+                                key={thread.id}
+                                className="group flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer border border-transparent hover:border-slate-100"
+                                onClick={() => loadChatThread(thread.id)}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <MessageSquare className="size-4 text-slate-400 shrink-0" />
+                                  <span className="text-sm font-medium text-slate-700 truncate">{thread.title}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      togglePinChat(thread.id, thread.pinned);
+                                    }}
+                                    className="p-1 hover:bg-slate-200/60 rounded text-slate-400 hover:text-slate-700 transition-colors"
+                                    title="Unpin conversation"
+                                  >
+                                    <Pin className="size-3.5 fill-slate-400 text-slate-400" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteChatThread(thread.id);
+                                    }}
+                                    className="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-600 transition-colors"
+                                    title="Delete conversation"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Date Groups */}
+                      {Object.entries(groups).map(([groupName, threads]) => {
+                        if (threads.length === 0) return null;
+                        return (
+                          <div key={groupName} className="space-y-2">
+                            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-1">{groupName}</h3>
+                            <div className="space-y-1">
+                              {threads.map((thread) => (
+                                <div
+                                  key={thread.id}
+                                  className="group flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer border border-transparent hover:border-slate-100"
+                                  onClick={() => loadChatThread(thread.id)}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <MessageSquare className="size-4 text-slate-400 shrink-0" />
+                                    <span className="text-sm font-medium text-slate-700 truncate">{thread.title}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        togglePinChat(thread.id, thread.pinned);
+                                      }}
+                                      className="p-1 hover:bg-slate-200/60 rounded text-slate-400 hover:text-slate-700 transition-colors"
+                                      title="Pin conversation"
+                                    >
+                                      <Pin className="size-3.5 text-slate-400 hover:text-slate-600" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteChatThread(thread.id);
+                                      }}
+                                      className="p-1 hover:bg-red-50 rounded text-slate-400 hover:text-red-600 transition-colors"
+                                      title="Delete conversation"
+                                    >
+                                      <Trash2 className="size-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

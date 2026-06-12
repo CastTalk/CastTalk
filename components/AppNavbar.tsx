@@ -2,26 +2,54 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { UserButton } from '@clerk/nextjs';
+import { UserButton, useUser } from '@clerk/nextjs';
 import { Bell, X, Calendar, Brain, Clock } from '@phosphor-icons/react';
-import { useGetCalls } from '@/hooks/useGetCalls';
+import { Client } from 'appwrite';
+
+const appwriteClient = new Client()
+  .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://syd.cloud.appwrite.io/v1')
+  .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a27f0d9002671523088');
+
+interface NotificationItem {
+  id: string;
+  text: string;
+  read: boolean;
+  type: string;
+  createdAt: string;
+  time: string; // Dynamic formatted label (e.g. "Just now")
+}
 
 const AppNavbar = () => {
   const router = useRouter();
   const pathname = usePathname();
+  const { user } = useUser();
   const [time, setTime] = useState('');
   const [date, setDate] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
-  
-  const { upcomingCalls } = useGetCalls();
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
-  const [notifications, setNotifications] = useState([
-    { id: 'default-1', text: "Meeting scheduled successfully.", time: "Just now", read: false, type: "success" },
-    { id: 'default-2', text: "CastAI generated a meeting summary.", time: "10m ago", read: false, type: "ai" },
-    { id: 'default-3', text: "Meeting starts in 30 minutes.", time: "30m ago", read: true, type: "alert" },
-    { id: 'default-4', text: "Meeting has been rescheduled.", time: "2h ago", read: true, type: "update" }
-  ]);
+  const formatRelativeTime = (isoString: string) => {
+    try {
+      const date = new Date(isoString);
+      const now = new Date();
+      const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+      
+      if (diffSeconds < 60) return 'Just now';
+      
+      const diffMinutes = Math.floor(diffSeconds / 60);
+      if (diffMinutes < 60) return `${diffMinutes}m ago`;
+      
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}d ago`;
+    } catch (e) {
+      return 'Just now';
+    }
+  };
 
+  // Clock updates
   useEffect(() => {
     const update = () => {
       const now = new Date();
@@ -33,15 +61,11 @@ const AppNavbar = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Dropdown close trigger
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      
-      // If the clicked element is no longer in the DOM, ignore (prevents closing when deleting items)
-      if (!document.body.contains(target)) {
-        return;
-      }
-
+      if (!document.body.contains(target)) return;
       if (!target.closest('.notification-container')) {
         setShowNotifications(false);
       }
@@ -50,45 +74,92 @@ const AppNavbar = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
+  // Fetch initial notifications and subscribe to Appwrite Realtime
   useEffect(() => {
-    if (upcomingCalls && upcomingCalls.length > 0) {
-      const dynamicNotifs = upcomingCalls.map((call) => {
-        const title = call.state.custom?.title || call.state.custom?.description || 'Meeting';
-        const startsAt = new Date(call.state.startsAt!);
-        const diffMs = startsAt.getTime() - new Date().getTime();
-        const diffMins = Math.round(diffMs / 60000);
-        
-        let text = `Meeting "${title}" scheduled successfully.`;
-        let type = 'success';
-        let timeLabel = 'Upcoming';
+    if (!user?.id) return;
 
-        if (diffMins > 0 && diffMins <= 30) {
-          text = `Meeting "${title}" starts in ${diffMins} minutes.`;
-          type = 'alert';
-        } else if (diffMins <= 0) {
-          text = `Meeting "${title}" is starting now.`;
-          type = 'alert';
-          timeLabel = 'Now';
-        } else {
-          text = `New meeting "${title}" created for later.`;
-          type = 'update';
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch('/api/notifications');
+        if (res.ok) {
+          const data = await res.json();
+          const formatted = (data.notifications || []).map((n: any) => ({
+            ...n,
+            time: formatRelativeTime(n.createdAt)
+          }));
+          setNotifications(formatted);
         }
+      } catch (err) {
+        console.error('[AppNavbar] Error fetching notifications:', err);
+      }
+    };
 
-        return {
-          id: `dynamic-${call.id}`,
-          text,
-          time: timeLabel,
-          read: false,
-          type
-        };
-      });
+    fetchNotifications();
 
-      setNotifications(prev => {
-        const filteredPrev = prev.filter(n => !n.id.startsWith('dynamic-') && !n.id.startsWith('default-'));
-        return [...dynamicNotifs, ...filteredPrev];
+    // Appwrite Realtime listener
+    const unsubscribe = appwriteClient.subscribe(
+      'databases.castdb.collections.notifications.documents',
+      (response) => {
+        const doc = response.payload as any;
+        if (doc.userId !== user.id) return;
+
+        if (response.events.some(e => e.includes('create'))) {
+          const formatted: NotificationItem = {
+            id: doc.$id,
+            text: doc.text,
+            read: doc.read,
+            type: doc.type,
+            createdAt: doc.createdAt,
+            time: formatRelativeTime(doc.createdAt)
+          };
+          setNotifications(prev => [formatted, ...prev]);
+        } else if (response.events.some(e => e.includes('update'))) {
+          setNotifications(prev => prev.map(n => n.id === doc.$id ? { ...n, read: doc.read } : n));
+        } else if (response.events.some(e => e.includes('delete'))) {
+          setNotifications(prev => prev.filter(n => n.id !== doc.$id));
+        }
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user?.id]);
+
+  const markAllRead = async () => {
+    try {
+      await fetch('/api/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markAll: true })
       });
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (e) {
+      console.error(e);
     }
-  }, [upcomingCalls]);
+  };
+
+  const markRead = async (id: string) => {
+    try {
+      await fetch('/api/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [id] })
+      });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    try {
+      await fetch(`/api/notifications?id=${id}`, {
+        method: 'DELETE'
+      });
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const getNotifIcon = (type: string) => {
     switch (type) {
@@ -155,7 +226,6 @@ const AppNavbar = () => {
             <span>{time}</span><span>•</span><span>{date}</span>
           </div>
           <div className="flex items-center gap-4">
-            {/* Notification Icon & Dropdown */}
             <div className="notification-container relative flex items-center">
               <button 
                 onClick={() => setShowNotifications(!showNotifications)} 
@@ -170,7 +240,6 @@ const AppNavbar = () => {
 
               {showNotifications && (
                 <div className="absolute right-0 top-[42px] w-[360px] bg-white/95 backdrop-blur-md text-slate-800 rounded-2xl shadow-xl border border-slate-200/80 z-50 animate-slide-down overflow-hidden">
-                  {/* Header */}
                   <div className="flex items-center justify-between p-4 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                       <Bell size={18} weight="fill" className="text-amber-500" />
@@ -179,7 +248,7 @@ const AppNavbar = () => {
                     <div className="flex items-center gap-2">
                       {notifications.some(n => !n.read) && (
                         <button 
-                          onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}
+                          onClick={markAllRead}
                           className="text-xs text-slate-500 hover:text-slate-800 font-semibold transition-colors"
                         >
                           Mark all read
@@ -188,7 +257,6 @@ const AppNavbar = () => {
                     </div>
                   </div>
 
-                  {/* Notifications List */}
                   <div className="max-h-[320px] overflow-y-auto no-scrollbar py-2">
                     {notifications.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
@@ -202,7 +270,7 @@ const AppNavbar = () => {
                       notifications.map((notif) => (
                         <div 
                           key={notif.id}
-                          onClick={() => setNotifications(notifications.map(n => n.id === notif.id ? { ...n, read: true } : n))}
+                          onClick={() => !notif.read && markRead(notif.id)}
                           className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50/80 cursor-pointer border-b border-slate-100 last:border-0 transition-colors"
                         >
                           <div className={`size-8 rounded-full flex items-center justify-center border shrink-0 ${getNotifBg(notif.type)}`}>
@@ -218,7 +286,7 @@ const AppNavbar = () => {
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setNotifications(notifications.filter(n => n.id !== notif.id));
+                                deleteNotification(notif.id);
                               }}
                               className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition-colors"
                               title="Delete notification"

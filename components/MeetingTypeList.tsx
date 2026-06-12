@@ -52,6 +52,22 @@ const MeetingTypeList = () => {
           },
         },
       });
+
+      // Sync manual meeting into Appwrite schedules database
+      const meetingType = !values.description || meetingState === 'isInstantMeeting' ? 'instant' : 'scheduled';
+      await fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          meetingId: id,
+          title: description,
+          description,
+          startsAt,
+          duration: 60, // default manual meeting duration (minutes)
+          meetingType
+        })
+      }).catch(err => console.error('[Error syncing manual schedule to Appwrite DB]:', err));
+
       setCallDetail(call);
       if (!values.description || meetingState === 'isInstantMeeting') {
         router.push(`/meeting/${call.id}`);

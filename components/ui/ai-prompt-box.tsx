@@ -1,7 +1,7 @@
 import React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ArrowUp, Paperclip, Square, X, StopCircle, Mic, Globe, BrainCog, FolderCog } from "lucide-react";
+import { ArrowUp, Paperclip, Square, X, StopCircle, Mic, Globe, BrainCog, FolderCog, History } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Utility function for className merging
@@ -453,14 +453,15 @@ interface PromptInputBoxProps {
   isLoading?: boolean;
   placeholder?: string;
   className?: string;
+  onHistoryClick?: () => void;
 }
 export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref: React.Ref<HTMLDivElement>) => {
-  const { onSend = () => {}, isLoading = false, placeholder = "Type your message here...", className } = props;
+  const { onSend = () => {}, isLoading = false, placeholder = "Type your message here...", className, onHistoryClick } = props;
   const [input, setInput] = React.useState("");
   const [files, setFiles] = React.useState<File[]>([]);
   const [filePreviews, setFilePreviews] = React.useState<{ [key: string]: string }>({});
   const [selectedImage, setSelectedImage] = React.useState<string | null>(null);
-  const [isRecording, setIsRecording] = React.useState(false);
+
   const [showSearch, setShowSearch] = React.useState(false);
   const [showThink, setShowThink] = React.useState(false);
   const [showCanvas, setShowCanvas] = React.useState(false);
@@ -589,24 +590,13 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
     }
   }, [input, showSearch, showThink, onSend]);
 
-  const handleStartRecording = () => console.log("Started recording");
 
-  const handleStopRecording = (duration: number) => {
-    console.log(`Stopped recording after ${duration} seconds`);
-    setIsRecording(false);
-    onSend(`[Voice message - ${duration} seconds]`, []);
-  };
 
   const hasContent = input.trim() !== "";
 
   const actionButtons = React.useMemo(() => {
     return (
-      <div
-        className={cn(
-          "flex items-center gap-1 transition-opacity duration-300",
-          isRecording ? "opacity-0 invisible h-0" : "opacity-100 visible"
-        )}
-      >
+      <div className="flex items-center gap-1 transition-opacity duration-300">
         <div className="flex items-center">
           <button
             type="button"
@@ -680,7 +670,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
         </div>
       </div>
     );
-  }, [showSearch, showThink, isRecording, handleToggleChange]);
+  }, [showSearch, showThink, handleToggleChange]);
 
   const sendButton = React.useMemo(() => {
     return (
@@ -688,44 +678,49 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
         tooltip={
           isLoading
             ? "Stop generation"
-            : isRecording
-            ? "Stop recording"
-            : hasContent
-            ? "Send message"
-            : "Voice message"
+            : "Send message"
         }
       >
         <Button
+          type="button"
           variant="default"
           size="icon"
           className={cn(
             "h-8 w-8 rounded-full transition-all duration-200",
-            isRecording
-              ? "bg-transparent hover:bg-slate-100 text-red-500 hover:text-red-400"
-              : hasContent
-              ? "bg-slate-900 hover:bg-slate-800 text-white"
-              : "bg-transparent hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+            hasContent || isLoading
+              ? "bg-slate-900 hover:bg-slate-800 text-white cursor-pointer"
+              : "bg-slate-100 text-slate-300 cursor-not-allowed"
           )}
           onClick={() => {
-            if (isRecording) setIsRecording(false);
-            else if (hasContent) handleSubmit();
-            else setIsRecording(true);
+            if (hasContent) handleSubmit();
           }}
-          disabled={isLoading && !hasContent}
+          disabled={!hasContent && !isLoading}
         >
           {isLoading ? (
             <Square className="h-4 w-4 fill-white animate-pulse" />
-          ) : isRecording ? (
-            <StopCircle className="h-5 w-5 text-red-500" />
-          ) : hasContent ? (
-            <ArrowUp className="h-4 w-4 text-white" />
           ) : (
-            <Mic className="h-5 w-5 text-white transition-colors" />
+            <ArrowUp className="h-4 w-4 text-white" />
           )}
         </Button>
       </PromptInputAction>
     );
-  }, [isLoading, isRecording, hasContent, handleSubmit]);
+  }, [isLoading, hasContent, handleSubmit]);
+
+  const historyButton = React.useMemo(() => {
+    return (
+      <PromptInputAction tooltip="Chat history">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0"
+          onClick={onHistoryClick}
+        >
+          <History className="h-5 w-5" />
+        </Button>
+      </PromptInputAction>
+    );
+  }, [onHistoryClick]);
 
   return (
     <>
@@ -736,16 +731,15 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
         onSubmit={handleSubmit}
         className={cn(
           "w-full shadow-none transition-all duration-300 ease-in-out",
-          isRecording && "border-red-500/70",
           className
         )}
-        disabled={isLoading || isRecording}
+        disabled={isLoading}
         ref={ref || promptBoxRef}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {files.length > 0 && !isRecording && (
+        {files.length > 0 && (
           <div className="flex flex-wrap gap-2 p-0 pb-1 transition-all duration-300">
             {files.map((file, index) => (
               <div key={index} className="relative group">
@@ -755,9 +749,9 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
                     onClick={() => openImageModal(filePreviews[file.name])}
                   >
                     <img
-                      src={filePreviews[file.name]}
-                      alt={file.name}
-                      className="h-full w-full object-cover"
+                       src={filePreviews[file.name]}
+                       alt={file.name}
+                       className="h-full w-full object-cover"
                     />
                     <button
                       onClick={(e) => {
@@ -775,12 +769,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
           </div>
         )}
 
-        <div
-          className={cn(
-            "transition-all duration-300",
-            isRecording ? "h-0 overflow-hidden opacity-0" : "opacity-100"
-          )}
-        >
+        <div className="transition-all duration-300 opacity-100">
           <PromptInputTextarea
             placeholder={
               showSearch
@@ -793,17 +782,12 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
           />
         </div>
 
-        {isRecording && (
-          <VoiceRecorder
-            isRecording={isRecording}
-            onStartRecording={handleStartRecording}
-            onStopRecording={handleStopRecording}
-          />
-        )}
-
         <PromptInputActions className="flex items-center justify-between gap-2 p-0 pt-2">
           {actionButtons}
-          {sendButton}
+          <div className="flex items-center gap-1.5">
+            {onHistoryClick && historyButton}
+            {sendButton}
+          </div>
         </PromptInputActions>
       </PromptInput>
 

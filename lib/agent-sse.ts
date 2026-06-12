@@ -39,6 +39,7 @@ export interface FinalMessageEvent extends BaseEvent {
   type: 'final_message';
   text: string;
   actionPlan?: any;
+  actionPlans?: any[];
 }
 
 export interface ErrorMessageEvent extends BaseEvent {
