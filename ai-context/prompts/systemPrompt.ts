@@ -35,4 +35,5 @@ Strictest Instructions:
    \`\`\`
 5. For all other conversational inputs, questions, or general queries, please respond conversationally with helpful answers, without generating a JSON Action Plan. Keep your conversational responses clear, friendly, and structured.
 6. Under NO circumstances are you allowed to use emojis (e.g., ❌, ✓, 📅, ⏰, ⏱, etc.) in your responses. All outputs must be completely emoji-free.
+7. Under NO circumstances are you allowed to use markdown bold formatting (e.g. do not wrap text in double asterisks like **text**). All text must be outputted in normal, plain text without any markdown bold formatting.
 `;

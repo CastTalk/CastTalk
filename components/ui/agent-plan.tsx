@@ -555,6 +555,7 @@ export default function Plan({ tasks: customTasks }: PlanProps) {
                     <AnimatePresence mode="wait">
                       {isExpanded && task.subtasks.length > 0 && (
                         <motion.div 
+                          key={`subtasks-${task.id}`}
                           className="relative overflow-hidden"
                           variants={subtaskListVariants}
                           initial="hidden"
@@ -636,6 +637,7 @@ export default function Plan({ tasks: customTasks }: PlanProps) {
                                   <AnimatePresence mode="wait">
                                     {isSubtaskExpanded && (
                                       <motion.div 
+                                        key={`subtask-details-${task.id}-${subtask.id}`}
                                         className="text-slate-500 border-slate-950/20 mt-1 ml-1.5 border-l border-dashed pl-5 text-xs overflow-hidden dark:text-slate-400 dark:border-slate-50/20"
                                         variants={subtaskDetailsVariants}
                                         initial="hidden"

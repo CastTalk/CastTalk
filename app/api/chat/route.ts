@@ -558,8 +558,7 @@ IMPORTANT RULES:
       [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }
-      ],
-      'google/gemini-2.5-flash:free' // Using a very fast LLM optimized for JSON
+      ]
     );
     
     let jsonText = rawResult.trim();
@@ -609,8 +608,7 @@ Respond ONLY with a JSON object in the following format:
       [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage }
-      ],
-      'google/gemini-2.5-flash:free'
+      ]
     );
     
     let jsonText = rawResult.trim();

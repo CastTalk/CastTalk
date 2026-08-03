@@ -64,13 +64,13 @@ const Home = () => {
 
   const previewLink = typeof window !== 'undefined' ? `${window.location.origin}/meeting/${previewId}` : '';
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (bypassConflict = false) => {
     if (!client || !user) return;
     try {
       setIsCreating(true);
 
       // Check conflict if scheduling a meeting for later
-      if (meetingMode === 'later') {
+      if (meetingMode === 'later' && !bypassConflict) {
         const proposedStart = formDate;
         const proposedEnd = new Date(formDate.getTime() + formDuration * 60000);
 
@@ -134,10 +134,25 @@ const Home = () => {
             title: formTitle || 'Untitled Meeting',
             description: formDesc,
             meetingType,
-            duration: formDuration, // Store duration in minutes
-          }
+            duration: formDuration,
+          },
         },
       });
+
+      // Sync manual meeting into Appwrite schedules database
+      await fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          meetingId: call.id,
+          title: formTitle || (meetingMode === 'instant' ? 'Instant Meeting' : 'Scheduled Meeting'),
+          description: formDesc || '',
+          startsAt,
+          duration: formDuration,
+          meetingType: meetingMode === 'instant' ? 'instant' : meetingType
+        })
+      }).catch(err => console.error('[Error syncing manual schedule to Appwrite DB]:', err));
+
       if (meetingMode === 'later') {
         setMeetingMode(null);
         setStep(1);
@@ -197,14 +212,14 @@ const Home = () => {
                     )}
                     style={{ borderWidth: '0.8px' }}
                   >
-                    <button onClick={() => openModal('later')} className="w-full flex items-center gap-4 px-5 py-4 text-[15px] font-normal text-black hover:bg-black/5 transition-colors">
-                      <LinkIcon size={22} weight="regular" />
-                      Create a meeting for later
-                    </button>
-                    <div className="h-px bg-black/10 mx-4" />
                     <button onClick={() => openModal('instant')} className="w-full flex items-center gap-4 px-5 py-4 text-[15px] font-normal text-black hover:bg-black/5 transition-colors">
                       <Plus size={22} weight="regular" />
                       Start an instant meeting
+                    </button>
+                    <div className="h-px bg-black/10 mx-4" />
+                    <button onClick={() => openModal('later')} className="w-full flex items-center gap-4 px-5 py-4 text-[15px] font-normal text-black hover:bg-black/5 transition-colors">
+                      <LinkIcon size={22} weight="regular" />
+                      Create a meeting for later
                     </button>
                   </div>
                 </>
@@ -240,17 +255,20 @@ const Home = () => {
                 <div className={cn("flex-1 h-1.5 rounded-full", step >= 2 ? "bg-[#3E2723]" : "bg-slate-200")} />
               </div>
               <div className="flex items-center gap-2 mb-6">
-                <div className={cn("flex-1 text-[12px] font-bold text-left", step >= 1 ? "text-[#3E2723]" : "text-slate-400")}>
+                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 1 ? "text-[#3E2723]" : "text-slate-400")}>
                   Session
                 </div>
-                <div className={cn("flex-1 text-[12px] font-bold text-left", step >= 2 ? "text-[#3E2723]" : "text-slate-400")}>
+                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 2 ? "text-[#3E2723]" : "text-slate-400")}>
                   Details
                 </div>
               </div>
             </>
           )}
 
-          <div className="relative w-full h-[300px] overflow-hidden">
+          <div className={cn(
+            "relative w-full transition-all duration-300 overflow-hidden",
+            (step === 2 && meetingType === 'general') ? "h-[140px]" : "h-[300px]"
+          )}>
             {/* Step 1: Session Choice */}
             <div className={cn(
               "absolute top-0 left-0 w-full transition-all duration-400 ease-in-out",
@@ -258,7 +276,7 @@ const Home = () => {
             )}>
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-[22px] font-bold text-[#111827] leading-none mb-1.5">
+                  <h2 className="text-[22px] font-medium text-[#111827] leading-none mb-1.5">
                     Select Meeting Type
                   </h2>
                   <p className="text-[14px] text-[#6B7280]" style={{ marginBottom: '10px' }}>
@@ -285,7 +303,7 @@ const Home = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-0.5">
                         <Globe weight="fill" className={cn("w-4 h-4", meetingType === 'general' ? "text-emerald-600" : "text-slate-500")} />
-                        <span className="text-[15px] font-semibold text-[#111827]">General</span>
+                        <span className="text-[15px] font-medium text-[#111827]">General</span>
                       </div>
                       <p className="text-[13px] text-[#6B7280] leading-snug">
                         Open to anyone with the link — session data is stored and accessible after the meeting.
@@ -311,7 +329,7 @@ const Home = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-0.5">
                         <Lock weight="fill" className={cn("w-4 h-4", meetingType === 'secure' ? "text-amber-600" : "text-slate-500")} />
-                        <span className="text-[15px] font-semibold text-[#111827]">Secure</span>
+                        <span className="text-[15px] font-medium text-[#111827]">Secure</span>
                       </div>
                       <p className="text-[13px] text-[#6B7280] leading-snug">
                         Private and invite-only — all session data is permanently removed once the meeting ends.
@@ -331,17 +349,17 @@ const Home = () => {
             )}>
               <div className="space-y-4">
                 <div>
-                  <h2 className="text-[22px] font-bold text-[#111827] leading-none mb-1.5">
+                  <h2 className="text-[22px] font-medium text-[#111827] leading-none mb-1.5">
                     {"What's your meeting about?"}
                   </h2>
-                  <p className="text-[14px] text-[#6B7280]" style={{ marginBottom: '10px' }}>
+                  <p className="text-[14px] text-[#6B7280]" style={{ marginBottom: '20px' }}>
                     Fill out the details of your meeting.
                   </p>
                 </div>
 
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[13px] font-bold text-[#374151] mb-1.5 block">
+                    <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
                       Event Topic <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -358,126 +376,137 @@ const Home = () => {
                     />
                   </div>
 
-                  <div className="flex flex-col w-full">
-                    <label className="text-[13px] font-bold text-[#374151] mb-1.5 block">
-                      Start Date <span className="text-red-500">*</span>
-                    </label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          disabled={meetingMode === 'instant'}
-                          className={cn(
-                            "w-full px-3 py-2 rounded-lg text-[14px] outline-none flex items-center justify-between transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-                            !formDate ? "text-[#9CA3AF]" : "text-[#111827]"
-                          )}
-                          style={{
-                            backgroundColor: '#F9FAFB',
-                            border: '1px solid #E5E7EB'
-                          }}
-                        >
-                          {meetingMode === 'instant' ? <span>Today</span> : (formDate ? format(formDate, "MMM d, yyyy") : <span>Pick a date</span>)}
-                          <Clock className="w-4 h-4 opacity-50" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 z-[10000] border-[#E5E7EB] bg-white" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={formDate}
-                          onSelect={(date) => {
-                            if (date) {
+                  {meetingType !== 'general' && (
+                    <>
+                      <div className="flex flex-col w-full">
+                        <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
+                          Start Date <span className="text-red-500">*</span>
+                        </label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              disabled={meetingMode === 'instant'}
+                              className={cn(
+                                "w-full px-3 py-2 rounded-lg text-[14px] outline-none flex items-center justify-between transition-colors",
+                                !formDate ? "text-[#9CA3AF]" : "text-[#111827]",
+                                meetingMode === 'instant' && "disabled:opacity-50 disabled:cursor-not-allowed"
+                              )}
+                              style={{
+                                backgroundColor: '#F9FAFB',
+                                backgroundImage: 'none',
+                                border: '1px solid #E5E7EB'
+                              }}
+                            >
+                              {meetingMode === 'instant' ? <span>Today</span> : (formDate ? format(formDate, "MMM d, yyyy") : <span>Pick a date</span>)}
+                              <Clock className="w-4 h-4 opacity-50" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0 z-[10000] border-[#E5E7EB] bg-white" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={formDate}
+                              onSelect={(date) => {
+                                if (date) {
+                                  const d = new Date(formDate);
+                                  d.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                                  setFormDate(d);
+                                }
+                              }}
+                              disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                              style={{
+                                '--rdp-cell-size': '2rem',
+                                '--rdp-accent-color': '#3E2723',
+                                '--rdp-background-color': '#ffffff',
+                                color: '#111827',
+                                fontSize: '0.85rem',
+                                padding: '0.5rem',
+                              } as React.CSSProperties}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+
+                      <div className="flex w-full gap-4">
+                        <div className="flex flex-col w-1/2">
+                          <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
+                            Start Time <span className="text-red-500">*</span>
+                          </label>
+                          <Select
+                            disabled={meetingMode === 'instant'}
+                            value={`${formDate.getHours().toString().padStart(2, '0')}:${formDate.getMinutes().toString().padStart(2, '0')}`}
+                            onValueChange={(val) => {
+                              const [h, m] = val.split(':').map(Number);
                               const d = new Date(formDate);
-                              d.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                              d.setHours(h, m);
                               setFormDate(d);
-                            }
-                          }}
-                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                          style={{
-                            '--rdp-cell-size': '2rem',
-                            '--rdp-accent-color': '#3E2723',
-                            '--rdp-background-color': '#ffffff',
-                            color: '#111827',
-                            fontSize: '0.85rem',
-                            padding: '0.5rem',
-                          } as React.CSSProperties}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                            }}
+                          >
+                            <SelectTrigger
+                              className={cn(
+                                "w-full px-3 py-2 rounded-lg text-[14px] border-[#E5E7EB] focus:ring-0 focus:ring-offset-0 transition-colors",
+                                "text-[#111827] bg-[#F9FAFB] disabled:opacity-50 disabled:cursor-not-allowed"
+                              )}
+                            >
+                              <SelectValue placeholder="Select time" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white border-[#E5E7EB] z-[10000]">
+                              <ScrollArea className="h-[15rem]">
+                                {Array.from({ length: 96 }).map((_, i) => {
+                                  const optH = Math.floor(i / 4);
+                                  const optM = (i % 4) * 15;
+                                  const hour = optH.toString().padStart(2, "0");
+                                  const minute = optM.toString().padStart(2, "0");
+                                  const ampm = optH >= 12 ? 'PM' : 'AM';
+                                  const displayHour = optH % 12 || 12;
+                                  const displayTime = `${displayHour}:${minute} ${ampm}`;
+                                  const val = `${hour}:${minute}`;
 
-                  <div className="flex w-full gap-4">
-                    <div className="flex flex-col w-1/2">
-                      <label className="text-[13px] font-bold text-[#374151] mb-1.5 block">
-                        Start Time <span className="text-red-500">*</span>
-                      </label>
-                      <Select
-                        disabled={meetingMode === 'instant'}
-                        value={`${formDate.getHours().toString().padStart(2, '0')}:${formDate.getMinutes().toString().padStart(2, '0')}`}
-                        onValueChange={(val) => {
-                          const [h, m] = val.split(':').map(Number);
-                          const d = new Date(formDate);
-                          d.setHours(h, m);
-                          setFormDate(d);
-                        }}
-                      >
-                        <SelectTrigger className="w-full px-3 py-2 rounded-lg text-[14px] text-[#111827] bg-[#F9FAFB] border-[#E5E7EB] focus:ring-0 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed">
-                          <SelectValue placeholder="Select time" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white border-[#E5E7EB] z-[10000]">
-                          <ScrollArea className="h-[15rem]">
-                            {Array.from({ length: 96 }).map((_, i) => {
-                              const optH = Math.floor(i / 4);
-                              const optM = (i % 4) * 15;
-                              const hour = optH.toString().padStart(2, "0");
-                              const minute = optM.toString().padStart(2, "0");
-                              const ampm = optH >= 12 ? 'PM' : 'AM';
-                              const displayHour = optH % 12 || 12;
-                              const displayTime = `${displayHour}:${minute} ${ampm}`;
-                              const val = `${hour}:${minute}`;
+                                  const now = new Date();
+                                  const isToday = formDate.toDateString() === now.toDateString();
+                                  const isPastTime = isToday && (optH < now.getHours() || (optH === now.getHours() && optM < now.getMinutes()));
 
-                              const now = new Date();
-                              const isToday = formDate.toDateString() === now.toDateString();
-                              const isPastTime = isToday && (optH < now.getHours() || (optH === now.getHours() && optM < now.getMinutes()));
+                                  return (
+                                    <SelectItem
+                                      key={i}
+                                      value={val}
+                                      disabled={isPastTime}
+                                      className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6] data-[disabled]:opacity-40 data-[disabled]:pointer-events-none"
+                                    >
+                                      {displayTime}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </ScrollArea>
+                            </SelectContent>
+                          </Select>
+                        </div>
 
-                              return (
-                                <SelectItem
-                                  key={i}
-                                  value={val}
-                                  disabled={isPastTime}
-                                  className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6] data-[disabled]:opacity-40 data-[disabled]:pointer-events-none"
-                                >
-                                  {displayTime}
-                                </SelectItem>
-                              );
-                            })}
-                          </ScrollArea>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex flex-col w-1/2">
-                      <label className="text-[13px] font-bold text-[#374151] mb-1.5 block">
-                        Duration <span className="text-red-500">*</span>
-                      </label>
-                      <Select
-                        disabled={meetingMode === 'instant'}
-                        value={formDuration.toString()}
-                        onValueChange={(val) => setFormDuration(Number(val))}
-                      >
-                        <SelectTrigger className="w-full px-3 py-2 rounded-lg text-[14px] text-[#111827] bg-[#F9FAFB] border-[#E5E7EB] focus:ring-0 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed">
-                          <SelectValue placeholder="Select duration" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white border-[#E5E7EB] z-[10000]">
-                          <SelectItem value="30" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">30 mins</SelectItem>
-                          <SelectItem value="45" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">45 mins</SelectItem>
-                          <SelectItem value="60" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">1 hour</SelectItem>
-                          <SelectItem value="90" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">1.5 hours</SelectItem>
-                          <SelectItem value="120" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">2 hours</SelectItem>
-                          <SelectItem value="180" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">3 hours</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                        <div className="flex flex-col w-1/2">
+                          <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
+                            Duration <span className="text-red-500">*</span>
+                          </label>
+                          <Select
+                            disabled={meetingMode === 'instant'}
+                            value={formDuration.toString()}
+                            onValueChange={(val) => setFormDuration(Number(val))}
+                          >
+                            <SelectTrigger className="w-full px-3 py-2 rounded-lg text-[14px] text-[#111827] bg-[#F9FAFB] border-[#E5E7EB] focus:ring-0 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed">
+                              <SelectValue placeholder="Select duration" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white border-[#E5E7EB] z-[10000]">
+                              <SelectItem value="30" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">30 mins</SelectItem>
+                              <SelectItem value="45" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">45 mins</SelectItem>
+                              <SelectItem value="60" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">1 hour</SelectItem>
+                              <SelectItem value="90" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">1.5 hours</SelectItem>
+                              <SelectItem value="120" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">2 hours</SelectItem>
+                              <SelectItem value="180" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">3 hours</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -503,7 +532,7 @@ const Home = () => {
                   </button>
                 )}
                 <button
-                  onClick={step === 2 ? handleSubmit : () => setStep(2)}
+                  onClick={step === 2 ? () => handleSubmit(false) : () => setStep(2)}
                   disabled={isCreating || (step === 2 && !formTitle.trim())}
                   className="px-6 py-2.5 rounded-xl text-[14px] font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm"
                   style={{ backgroundColor: '#3E2723' }}
@@ -521,7 +550,7 @@ const Home = () => {
         <CastTalkModal isOpen={step === 3} onClose={() => { setMeetingMode(null); setStep(1); }} maxWidth="max-w-[460px]">
           <div className="flex flex-col font-geist">
             {/* Title */}
-            <h2 className="text-[20px] font-bold text-[#111827] leading-tight font-geist mb-2">
+            <h2 className="text-[20px] font-medium text-[#111827] leading-tight font-geist mb-2">
               Meeting Conflict
             </h2>
 
@@ -531,12 +560,18 @@ const Home = () => {
             </p>
 
             {/* Footer */}
-            <div className="flex justify-end pt-3 border-t border-[#E5E7EB]">
+            <div className="flex justify-end gap-3 pt-3 border-t border-[#E5E7EB]">
               <button
                 onClick={() => setStep(2)}
-                className="bg-[#3E2723] hover:opacity-90 text-white text-[14px] font-bold px-7 py-2.5 rounded-xl transition-all active:scale-[0.98] font-geist"
+                className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white font-geist"
               >
                 Back
+              </button>
+              <button
+                onClick={() => handleSubmit(true)}
+                className="bg-[#3E2723] hover:opacity-90 text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] font-geist"
+              >
+                Continue
               </button>
             </div>
           </div>

@@ -70,7 +70,7 @@ const config = {
         geist: ['var(--font-geist-sans)', 'sans-serif'],
         charlie: ['Charlie Sans', 'sans-serif'],
         sans: ['var(--font-geist-sans)', 'sans-serif'],
-        heading: ['Charlie Sans', 'sans-serif'],
+        heading: ['var(--font-geist-sans)', 'sans-serif'],
       },
       letterSpacing: {
         tightest: '-.06em',

@@ -2,7 +2,7 @@ import { CircleNotch } from '@phosphor-icons/react';
 
 const Loader = () => {
   return (
-    <div className="flex-center h-screen w-full bg-white/50 backdrop-blur-sm fixed inset-0 z-[9999]">
+    <div className="flex-center h-screen w-full bg-[#FCFBFB] fixed inset-0 z-[9999]">
       <div className="flex flex-col items-center gap-4">
         <div className="relative flex-center">
           <div className="absolute size-16 rounded-full border-4 border-primary/10" />

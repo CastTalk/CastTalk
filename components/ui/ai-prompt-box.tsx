@@ -620,6 +620,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
             <AnimatePresence>
               {showSearch && (
                 <motion.span
+                  key="search-label"
                   initial={{ width: 0, opacity: 0 }}
                   animate={{ width: "auto", opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
@@ -656,6 +657,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
             <AnimatePresence>
               {showThink && (
                 <motion.span
+                  key="think-label"
                   initial={{ width: 0, opacity: 0 }}
                   animate={{ width: "auto", opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}

@@ -163,8 +163,7 @@ export async function POST(req: Request) {
                 content: 'You are a chat title generator. Generate an extremely short, concise title (maximum 3 to 5 words) summarizing the essence of the following conversation. Respond ONLY with the title. Do NOT use emojis, quotes, markdown, punctuation, or explanations.',
               },
               { role: 'user', content: textSummary },
-            ],
-            'google/gemini-2.5-flash:free'
+            ]
           );
 
           const finalTitle = generatedTitle.trim().replace(/^["']|["']$/g, '');

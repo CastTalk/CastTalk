@@ -9,6 +9,7 @@ interface CastTalkModalProps {
   onClose: () => void;
   children: ReactNode;
   className?: string;
+  contentClassName?: string;
   maxWidth?: string;
 }
 
@@ -17,6 +18,7 @@ const CastTalkModal = ({
   onClose,
   children,
   className,
+  contentClassName,
   maxWidth = 'max-w-[495px]',
 }: CastTalkModalProps) => {
   if (!isOpen) return null;
@@ -41,7 +43,7 @@ const CastTalkModal = ({
         <NoiseTexture className="opacity-[0.12]" />
 
         {/* Content Box */}
-        <div className="relative z-10 flex flex-col p-6 flex-1 mt-2">
+        <div className={cn("relative z-10 flex flex-col p-6 flex-1 mt-2", contentClassName)}>
           {children}
         </div>
       </div>

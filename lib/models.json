@@ -1,26 +1,15 @@
 {
-  "primaryModelId": "google/gemini-2.5-flash:free",
+  "primaryModelId": "google/gemma-4-31b-it:free",
   "fallbacks": [
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "qwen/qwen-2.5-72b-instruct:free",
-    "deepseek/deepseek-r1:free",
-    "openrouter/owl-alpha"
+    "google/gemma-4-26b-a4b-it:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "openai/gpt-oss-20b:free"
   ],
   "models": [
     {
-      "id": "google/gemini-2.5-flash:free",
-      "name": "Gemini 2.5 Flash (Free)",
-      "description": "Google's ultra-fast model, optimized for speed and structured tasks.",
-      "maxTokens": 1000,
-      "temperature": 0.7,
-      "supportsTools": true,
-      "supportsStructuredOutput": true,
-      "supportsReasoning": false
-    },
-    {
-      "id": "meta-llama/llama-3.3-70b-instruct:free",
-      "name": "Llama 3.3 70B Instruct (Free)",
-      "description": "Meta Llama instruction model with excellent capabilities.",
+      "id": "google/gemma-4-31b-it:free",
+      "name": "Gemma 4 31B Instruct (Free)",
+      "description": "Google's 31B dense multimodal model with native reasoning, tool calling, and structured outputs.",
       "maxTokens": 1000,
       "temperature": 0.7,
       "supportsTools": true,
@@ -28,9 +17,9 @@
       "supportsReasoning": true
     },
     {
-      "id": "qwen/qwen-2.5-72b-instruct:free",
-      "name": "Qwen 2.5 72B Instruct (Free)",
-      "description": "Alibaba Qwen high-performance instruction tuned model.",
+      "id": "google/gemma-4-26b-a4b-it:free",
+      "name": "Gemma 4 26B A4B Instruct (Free)",
+      "description": "Google's Mixture-of-Experts (MoE) multimodal model offering high speed and reasoning capabilities.",
       "maxTokens": 1000,
       "temperature": 0.7,
       "supportsTools": true,
@@ -38,9 +27,9 @@
       "supportsReasoning": true
     },
     {
-      "id": "deepseek/deepseek-r1:free",
-      "name": "DeepSeek R1 (Free)",
-      "description": "DeepSeek reasoning model with chain of thought.",
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "name": "Nemotron 3 Super (Free)",
+      "description": "NVIDIA's 120B parameter MoE model optimized for collaborative agent tasks.",
       "maxTokens": 1000,
       "temperature": 0.7,
       "supportsTools": true,
@@ -48,14 +37,14 @@
       "supportsReasoning": true
     },
     {
-      "id": "openrouter/owl-alpha",
-      "name": "Owl Alpha",
-      "description": "OpenRouter customized routing and fallback model.",
-      "maxTokens": 800,
+      "id": "openai/gpt-oss-20b:free",
+      "name": "GPT-OSS 20B (Free)",
+      "description": "OpenAI's 20B parameter reasoning MoE model optimized for lower-latency agentic tasks.",
+      "maxTokens": 1000,
       "temperature": 0.7,
-      "supportsTools": false,
-      "supportsStructuredOutput": false,
-      "supportsReasoning": false
+      "supportsTools": true,
+      "supportsStructuredOutput": true,
+      "supportsReasoning": true
     }
   ]
 }

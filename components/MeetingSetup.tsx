@@ -6,7 +6,7 @@ import {
   useCall,
   useCallStateHooks,
 } from '@stream-io/video-react-sdk';
-import { Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash, Gear, PencilSimple, Check, Users } from '@phosphor-icons/react';
+import { Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash, Gear, PencilSimple, Check, Users, SpeakerSlash } from '@phosphor-icons/react';
 import { useUser } from '@clerk/nextjs';
 import { Ripple } from './ui/ripple';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
@@ -100,50 +100,71 @@ const DeviceSettingsPanel = () => {
       </div>
 
       {/* Device list */}
-      <div className="flex flex-col px-8 py-8 flex-1 overflow-y-auto no-scrollbar">
-        <div className="flex flex-col gap-2">
-          {deviceList.devices?.map((device, index) => {
-            const isSelected = deviceList.selected === device.deviceId;
-            return (
-              <label
-                key={device.deviceId}
-                className={cn(
-                  "flex items-center gap-4 justify-between p-4 rounded-none cursor-pointer transition-all duration-200 border",
-                  isSelected 
-                    ? "bg-white border-black text-[#110b21] shadow-sm" 
-                    : "bg-white/60 border-slate-300 text-slate-700 hover:bg-white/80"
-                )}
-                style={{ borderWidth: '0.8px' }}
-              >
-                <div className="flex flex-col gap-1 pr-4">
-                  <span className={cn(
-                    "text-sm transition-colors",
-                    isSelected ? "text-black font-bold" : "text-slate-700 font-normal"
+      <div className={cn(
+        "flex flex-col px-8 py-8 flex-1 overflow-y-auto no-scrollbar",
+        (!deviceList.devices || deviceList.devices.length === 0) && "justify-center"
+      )}>
+        {!deviceList.devices || deviceList.devices.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-center p-6 bg-transparent relative z-10">
+            {activeTab === 'camera' ? (
+              <VideoCameraSlash size={36} className="text-slate-400 mb-3" weight="regular" />
+            ) : activeTab === 'microphone' ? (
+              <MicrophoneSlash size={36} className="text-slate-400 mb-3" weight="regular" />
+            ) : (
+              <SpeakerSlash size={36} className="text-slate-400 mb-3" weight="regular" />
+            )}
+            <h3 className="text-sm font-semibold text-slate-800 tracking-tight">
+              No {activeTab} detected
+            </h3>
+            <p className="text-[12px] text-slate-550 mt-1 max-w-[240px] leading-normal">
+              Please connect a {activeTab} or check your browser's permissions.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {deviceList.devices.map((device, index) => {
+              const isSelected = deviceList.selected === device.deviceId;
+              return (
+                <label
+                  key={device.deviceId}
+                  className={cn(
+                    "flex items-center gap-4 justify-between p-4 rounded-none cursor-pointer transition-all duration-200 border",
+                    isSelected 
+                      ? "bg-white border-black text-[#110b21] shadow-sm" 
+                      : "bg-white/60 border-slate-300 text-slate-700 hover:bg-white/80"
+                  )}
+                  style={{ borderWidth: '0.8px' }}
+                >
+                  <div className="flex flex-col gap-1 pr-4">
+                    <span className={cn(
+                      "text-sm transition-colors",
+                      isSelected ? "text-black font-bold" : "text-slate-700 font-normal"
+                    )}>
+                      {device.label || `Default ${activeTab}`}
+                    </span>
+                    <span className="text-[12px] text-slate-500 leading-tight line-clamp-1">
+                      {isSelected ? 'Active Device' : 'Ready to use'}
+                    </span>
+                  </div>
+                  
+                  <div className={cn(
+                    "size-5 rounded-none flex-center border transition-all",
+                    isSelected ? "bg-black border-black text-white" : "border-slate-300 bg-white"
                   )}>
-                    {device.label || `Default ${activeTab}`}
-                  </span>
-                  <span className="text-[12px] text-slate-500 leading-tight line-clamp-1">
-                    {isSelected ? 'Active Device' : 'Ready to use'}
-                  </span>
-                </div>
-                
-                <div className={cn(
-                  "size-5 rounded-none flex-center border transition-all",
-                  isSelected ? "bg-black border-black text-white" : "border-slate-300 bg-white"
-                )}>
-                  {isSelected && <Check weight="bold" size={12} className="text-white" />}
-                </div>
-                <input
-                  type="radio"
-                  name={activeTab}
-                  checked={isSelected}
-                  onChange={() => deviceList.onSelect(device.deviceId)}
-                  className="hidden"
-                />
-              </label>
-            );
-          })}
-        </div>
+                    {isSelected && <Check weight="bold" size={12} className="text-white" />}
+                  </div>
+                  <input
+                    type="radio"
+                    name={activeTab}
+                    checked={isSelected}
+                    onChange={() => deviceList.onSelect(device.deviceId)}
+                    className="hidden"
+                  />
+                </label>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -302,10 +323,6 @@ const MeetingSetup = ({
           
           {/* Overlay Badges */}
           <div className="absolute top-6 left-6 z-20 flex gap-2">
-             <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-none px-3 py-1.5 border border-white/10" style={{ borderWidth: '0.8px' }}>
-                <div className="size-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
-                <span className="text-white text-[10px] font-bold uppercase tracking-widest">Live</span>
-             </div>
              {participantCount > 0 && (
                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-none px-3 py-1.5 border border-white/10" style={{ borderWidth: '0.8px' }}>
                   <Users weight="bold" size={14} className="text-white" />
@@ -341,8 +358,10 @@ const MeetingSetup = ({
           <div className="absolute bottom-6 right-6 z-20 flex gap-2">
             <div 
               className={cn(
-                "size-10 rounded-none flex-center backdrop-blur-md border border-white/10 transition-colors",
-                isMicOn ? "bg-white/20 text-white" : "bg-red-500/80 text-white"
+                "size-10 rounded-none flex-center backdrop-blur-md border transition-all",
+                isMicOn 
+                  ? (isCameraOn ? "bg-white/20 text-white border-white/10" : "bg-slate-900/10 text-slate-800 border-slate-900/10")
+                  : "bg-red-500/80 text-white border-transparent"
               )}
               style={{ borderWidth: '0.8px' }}
             >
@@ -350,8 +369,10 @@ const MeetingSetup = ({
             </div>
             <div 
               className={cn(
-                "size-10 rounded-none flex-center backdrop-blur-md border border-white/10 transition-colors",
-                isCameraOn ? "bg-white/20 text-white" : "bg-red-500/80 text-white"
+                "size-10 rounded-none flex-center backdrop-blur-md border transition-all",
+                isCameraOn 
+                  ? "bg-white/20 text-white border-white/10" 
+                  : "bg-red-500/80 text-white border-transparent"
               )}
               style={{ borderWidth: '0.8px' }}
             >
@@ -401,7 +422,6 @@ const MeetingSetup = ({
 
           {/* Action Button */}
           <Button
-            disabled
             onClick={() => {
               if (typeof window !== 'undefined') {
                 localStorage.setItem('streamDisplayName', displayName);
@@ -409,10 +429,9 @@ const MeetingSetup = ({
               call.join();
               setIsSetupComplete(true);
             }}
-            className="w-full sm:w-auto h-14 px-10 border border-slate-300 bg-slate-300 text-slate-500 rounded-none font-bold text-lg shadow-sm cursor-not-allowed opacity-50"
-            style={{ borderWidth: '0.8px' }}
+            className="w-full sm:w-auto h-14 px-10 bg-slate-900 hover:bg-slate-800 text-white rounded-none font-bold text-lg shadow-md transition-all active:scale-[0.98]"
           >
-            Enter Meeting (Disabled)
+            Enter Meeting
           </Button>
         </div>
       </div>
@@ -423,16 +442,11 @@ const MeetingSetup = ({
           <NoiseTexture className="opacity-[0.12]" />
           
           <SheetHeader className="px-8 pt-10 pb-6 bg-transparent border-none relative z-10">
-            <div className="flex items-center gap-5">
-              <div 
-                className="size-16 rounded-none border border-slate-200 flex-center bg-white shadow-sm text-slate-900"
-                style={{ borderWidth: '0.5px' }}
-              >
-                <Gear weight="bold" size={32} className="text-slate-900" />
-              </div>
-              <div className="flex flex-col text-left">
-                <SheetTitle className="text-2xl text-slate-900 font-bold tracking-tight">Workspace</SheetTitle>
-                <p className="text-sm text-slate-550 mt-1">Configure your audio and video inputs</p>
+            <div className="flex items-center gap-4">
+              <Gear weight="bold" size={32} className="text-slate-900" />
+              <div className="flex flex-col text-left justify-center">
+                <SheetTitle className="text-2xl text-slate-900 font-bold tracking-tight leading-none mb-[5px]">Workspace</SheetTitle>
+                <p className="text-sm text-slate-550 mt-1 leading-tight">Configure your audio and video inputs</p>
               </div>
             </div>
           </SheetHeader>

@@ -122,7 +122,17 @@ export async function DELETE(req: Request) {
     }
 
     // Security Check: Verify schedule belongs to activeUserId
-    const existing = await appwrite.databases.getDocument(DATABASE_ID, COLLECTION_ID, meetingId);
+    let existing;
+    try {
+      existing = await appwrite.databases.getDocument(DATABASE_ID, COLLECTION_ID, meetingId);
+    } catch (err: any) {
+      if (err.code === 404) {
+        // Document already doesn't exist in Appwrite database
+        return NextResponse.json({ success: true, message: 'Schedule does not exist in database' });
+      }
+      throw err;
+    }
+
     if (existing.createdBy !== activeUserId) {
       return NextResponse.json({ error: 'Unauthorized: Schedule belongs to a different user' }, { status: 403 });
     }

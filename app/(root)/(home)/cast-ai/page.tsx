@@ -838,7 +838,14 @@ export default function CastAIPage() {
                       const meetingId = crypto.randomUUID();
                       const call = client.call('default', meetingId);
                       
-                      const startsAt = args.startsAt || new Date().toISOString();
+                      let startsAt = new Date().toISOString();
+                      if (args.startsAt) {
+                        try {
+                          startsAt = new Date(args.startsAt).toISOString();
+                        } catch (e) {
+                          console.error("Invalid startsAt format:", args.startsAt);
+                        }
+                      }
                       const title = args.title || 'AI Scheduled Meeting';
                       const duration = Number(args.duration || 60);
 
@@ -876,11 +883,11 @@ export default function CastAIPage() {
                         minute: '2-digit',
                       });
 
-                      results.push(`**Meeting ${i + 1}: ${title}**\n- **Starts At**: ${formattedDate}\n- **Duration**: ${duration} minutes\n- **Meeting ID**: \`${meetingId}\``);
+                      results.push(`Meeting ${i + 1}: ${title}\n- Starts At: ${formattedDate}\n- Duration: ${duration} minutes\n- Meeting ID: \`${meetingId}\``);
                     } catch (err: any) {
                       console.error(`Failed to create meeting ${i + 1} in Stream:`, err);
                       hasErrors = true;
-                      results.push(`**Meeting ${i + 1} Failed**\nError: ${err.message || err}`);
+                      results.push(`Meeting ${i + 1} Failed\nError: ${err.message || err}`);
                     }
                   } else if (action === 'updateMeeting' && client) {
                     try {
@@ -938,15 +945,15 @@ export default function CastAIPage() {
                         : undefined;
 
                       let details = '';
-                      if (updates?.title) details += `\n- **New Title**: ${updates.title}`;
-                      if (formattedDate) details += `\n- **New Starts At**: ${formattedDate}`;
-                      if (updates?.duration !== undefined) details += `\n- **New Duration**: ${updates.duration} minutes`;
+                      if (updates?.title) details += `\n- New Title: ${updates.title}`;
+                      if (formattedDate) details += `\n- New Starts At: ${formattedDate}`;
+                      if (updates?.duration !== undefined) details += `\n- New Duration: ${updates.duration} minutes`;
 
-                      results.push(`**Meeting Updated Successfully!**\n- **Meeting ID**: \`${meetingId}\`${details}`);
+                      results.push(`Meeting Updated Successfully!\n- Meeting ID: \`${meetingId}\`${details}`);
                     } catch (err: any) {
                       console.error('Failed to update meeting in Stream:', err);
                       hasErrors = true;
-                      results.push(`**Meeting Update Failed**\nError: ${err.message || err}`);
+                      results.push(`Meeting Update Failed\nError: ${err.message || err}`);
                     }
                   }
                 }
@@ -964,7 +971,14 @@ export default function CastAIPage() {
                     const meetingId = crypto.randomUUID();
                     const call = client.call('default', meetingId);
                     
-                    const startsAt = args.startsAt || new Date().toISOString();
+                    let startsAt = new Date().toISOString();
+                    if (args.startsAt) {
+                      try {
+                        startsAt = new Date(args.startsAt).toISOString();
+                      } catch (e) {
+                        console.error("Invalid startsAt format:", args.startsAt);
+                      }
+                    }
                     const title = args.title || 'AI Scheduled Meeting';
                     const duration = Number(args.duration || 60);
 
@@ -1243,6 +1257,7 @@ The event modifications have been successfully saved.`;
                             <AnimatePresence initial={false}>
                               {expandedPlans[msg.id] && (
                                 <motion.div
+                                  key={`expanded-plan-${msg.id}`}
                                   initial={{ height: 0, opacity: 0 }}
                                   animate={{ height: 'auto', opacity: 1 }}
                                   exit={{ height: 0, opacity: 0 }}
@@ -1328,9 +1343,16 @@ The event modifications have been successfully saved.`;
       {/* Floating Convo History Modal (Gemini IDE style) */}
       <AnimatePresence>
         {showHistoryModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            key="history-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
             {/* Backdrop overlay */}
             <motion.div
+              key="history-modal-backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -1340,6 +1362,7 @@ The event modifications have been successfully saved.`;
 
             {/* Modal Content */}
             <motion.div
+              key="history-modal-content"
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -1439,7 +1462,7 @@ The event modifications have been successfully saved.`;
                         if (threads.length === 0) return null;
                         return (
                           <div key={groupName} className="space-y-2">
-                            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-1">{groupName}</h3>
+                            <h3 className="text-xs font-semibold text-slate-400 tracking-wider px-1">{groupName}</h3>
                             <div className="space-y-1">
                               {threads.map((thread) => (
                                 <div
@@ -1484,7 +1507,7 @@ The event modifications have been successfully saved.`;
                 })()}
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
