@@ -8,7 +8,7 @@ export const assessSecurityRisk = (plan: ActionPlanCheck): { riskLevel: 'low' | 
   const { action } = plan;
 
   // High Risk: Destructive deletion actions planned by AI automatically
-  if (action === 'deleteMeeting' || action === 'purgeHistory') {
+  if (action === 'purgeHistory') {
     return {
       riskLevel: 'high',
       block: true, // Auto-block destructive AI actions

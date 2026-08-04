@@ -7,6 +7,7 @@ import HomeCard from './HomeCard';
 import MeetingModal from './MeetingModal';
 import CreateMeetingModal from './CreateMeetingModal';
 import { Call, useStreamVideoClient } from '@stream-io/video-react-sdk';
+import { cn, generateShortMeetingId } from '@/lib/utils';
 import { useUser } from '@clerk/nextjs';
 import Loader from './Loader';
 import { Textarea } from './ui/textarea';
@@ -38,7 +39,7 @@ const MeetingTypeList = () => {
         toast({ title: 'Please select a date and time' });
         return;
       }
-      const id = values.link || crypto.randomUUID();
+      const id = values.link || generateShortMeetingId();
       const call = client.call('default', id);
       if (!call) throw new Error('Failed to create meeting');
       const startsAt =

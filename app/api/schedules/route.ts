@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server';
 import { appwrite } from '@/lib/appwrite';
 import { auth } from '@clerk/nextjs';
 import { Query } from 'node-appwrite';
+import crypto from 'crypto';
+import { getUserEmail, sendScheduledConfirmationEmail, send1HourPrepEmail, sendTomorrowReminderEmail } from '@/lib/mail-templates';
+
+
+
+function getNotificationId(prefix: string, meetingId: string, suffix?: string | number): string {
+  const input = suffix ? `${prefix}_${meetingId}_${suffix}` : `${prefix}_${meetingId}`;
+  return crypto.createHash('md5').update(input).digest('hex');
+}
 
 const DATABASE_ID = 'castdb';
 const COLLECTION_ID = 'schedules';
@@ -43,6 +52,28 @@ export async function POST(req: Request) {
           meetingType
         }
       );
+
+      const formattedTime = new Date(startsAt).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      const timestamp = Date.now();
+      await appwrite.databases.createDocument(
+        DATABASE_ID,
+        'notifications',
+        getNotificationId('resched', meetingId, timestamp),
+        {
+          userId: activeUserId,
+          text: `${title} has been rescheduled to ${formattedTime}.`,
+          read: false,
+          type: 'update',
+          createdAt: new Date().toISOString()
+        }
+      ).catch((e: any) => console.error('[Create Rescheduled Notification Error]:', e));
+
     } catch (err: any) {
       if (err.code === 404) {
         // Document does not exist, create it new
@@ -60,6 +91,75 @@ export async function POST(req: Request) {
             createdBy: activeUserId
           }
         );
+
+        const formattedTime = new Date(startsAt).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+        await appwrite.databases.createDocument(
+          DATABASE_ID,
+          'notifications',
+          getNotificationId('sched', meetingId),
+          {
+            userId: activeUserId,
+            text: `${title} scheduled for ${formattedTime}.`,
+            read: false,
+            type: meetingType === 'instant' ? 'success' : (meetingType === 'ai' ? 'ai' : 'scheduled'),
+            createdAt: new Date().toISOString()
+          }
+        ).catch((e: any) => console.error('[Create Scheduled Notification Error]:', e));
+
+        // Send email notifications
+        getUserEmail(activeUserId)
+          .then(async (userEmail) => {
+            if (!userEmail) return;
+
+            // 1. Send confirmation email
+            await sendScheduledConfirmationEmail({
+              meetingId,
+              title,
+              startsAt,
+              duration: Number(duration),
+              description,
+              recipientEmail: userEmail,
+            }).catch((e: any) => console.error('[Confirmation Email Error]:', e));
+
+            // Calculate diffMins for immediate reminders if scheduled near start time
+            const nowMs = Date.now();
+            const startsAtTime = new Date(startsAt).getTime();
+            const diffMins = (startsAtTime - nowMs) / 60000;
+
+            // 2. If starts in 30-60 mins, send 1-hour prep email immediately
+            if (diffMins > 30 && diffMins <= 60) {
+              await send1HourPrepEmail({
+                meetingId,
+                title,
+                startsAt,
+                duration: Number(duration),
+                description,
+                recipientEmail: userEmail,
+              }).catch((e: any) => console.error('[Immediate 1-Hour Email Error]:', e));
+            }
+
+            // 3. If starts tomorrow (18h to 28h), send tomorrow reminder email immediately
+            if (diffMins > 18 * 60 && diffMins <= 28 * 60) {
+              await sendTomorrowReminderEmail({
+                meetingId,
+                title,
+                startsAt,
+                duration: Number(duration),
+                description,
+                recipientEmail: userEmail,
+              }).catch((e: any) => console.error('[Immediate Tomorrow Email Error]:', e));
+            }
+          })
+          .catch((e: any) => console.error('[Send Scheduled Emails Error]:', e));
+
+
+
       } else {
         throw err;
       }
@@ -139,6 +239,46 @@ export async function DELETE(req: Request) {
 
     // Hard delete schedule from Appwrite database
     await appwrite.databases.deleteDocument(DATABASE_ID, COLLECTION_ID, meetingId);
+
+    const timestamp = Date.now();
+    const startsAtTime = new Date(existing.startsAt).getTime();
+    const isPast = startsAtTime < Date.now();
+    const cancelMsg = isPast
+      ? `${existing.title} has been deleted.`
+      : `${existing.title} has been cancelled.`;
+
+    await appwrite.databases.createDocument(
+      DATABASE_ID,
+      'notifications',
+      getNotificationId('cancel', meetingId, timestamp),
+      {
+        userId: activeUserId,
+        text: cancelMsg,
+        read: false,
+        type: 'cancelled',
+        createdAt: new Date().toISOString()
+      }
+    ).catch((e: any) => console.error('[Create Cancel Notification Error]:', e));
+
+    // Clean up corresponding active/time-based notifications
+    const activeNotifs = [
+      getNotificationId('sched', meetingId),
+      getNotificationId('prep', meetingId),
+      getNotificationId('soon', meetingId),
+      getNotificationId('started', meetingId),
+      getNotificationId('past', meetingId),
+      getNotificationId('done', meetingId)
+    ];
+    await Promise.all(
+      activeNotifs.map(id =>
+        appwrite.databases.deleteDocument(DATABASE_ID, 'notifications', id)
+          .catch((err: any) => {
+            if (err.code !== 404) {
+              console.error('[Clean Up Notification Error]:', err);
+            }
+          })
+      )
+    );
 
     return NextResponse.json({ success: true, message: 'Schedule hard deleted from database' });
   } catch (error: any) {

@@ -6,7 +6,8 @@ import {
   useCall,
   useCallStateHooks,
 } from '@stream-io/video-react-sdk';
-import { Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash, Gear, PencilSimple, Check, Users, SpeakerSlash } from '@phosphor-icons/react';
+import { Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash, Gear, PencilSimple, Check, Users, SpeakerSlash, Hourglass, Lock, ShieldWarning, ArrowLeft, Clock, SpinnerGap } from '@phosphor-icons/react';
+
 import { useUser } from '@clerk/nextjs';
 import { Ripple } from './ui/ripple';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
@@ -14,6 +15,7 @@ import Alert from './Alert';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
 import { NoiseTexture } from './ui/noise-texture';
+import { useToast } from './ui/use-toast';
 
 const DEVICE_PREFS_KEY = '@stream-io/device-preferences';
 
@@ -176,15 +178,18 @@ const MeetingSetup = ({
   setIsSetupComplete: (value: boolean) => void;
 }) => {
   const router = useRouter();
-  const { useCallEndedAt, useCallStartsAt } = useCallStateHooks();
+  const { useCallEndedAt, useCallStartsAt, useParticipants } = useCallStateHooks();
   const callStartsAt = useCallStartsAt();
   const callEndedAt = useCallEndedAt();
+  const participants = useParticipants();
+
   const callTimeNotArrived =
     callStartsAt && new Date(callStartsAt) > new Date();
   const callHasEnded = !!callEndedAt;
 
   const call = useCall();
   const { user } = useUser();
+  const { toast } = useToast();
 
   if (!call) {
     throw new Error(
@@ -197,6 +202,55 @@ const MeetingSetup = ({
   const [displayName, setDisplayName] = useState(user?.fullName || user?.username || 'Guest');
   const [isEditingName, setIsEditingName] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Host Identification & Meeting Security
+  const hostUserId = call.state.createdBy?.id || (call.state.custom as any)?.createdBy;
+  const isHost = Boolean(user?.id && hostUserId === user.id);
+  const isHostInCall = participants.some((p) => p.userId === hostUserId);
+  const meetingType = (call.state.custom as any)?.meetingType || 'general';
+  const isSecureMeeting = meetingType === 'secure' || meetingType === 'private';
+
+  const [isWaitingForAdmission, setIsWaitingForAdmission] = useState(false);
+  const [isDenied, setIsDenied] = useState(false);
+
+  // Listen for host admission/denial custom events
+  useEffect(() => {
+    if (!call || isHost) return;
+
+    const handleCustomEvent = (event: any) => {
+      if (event.custom?.type === 'admit-user' && event.custom?.targetUserId === user?.id) {
+        setIsWaitingForAdmission(false);
+        call.join().then(() => setIsSetupComplete(true)).catch((err) => {
+          console.error('[MeetingSetup] Error joining admitted call:', err);
+        });
+      }
+      if (event.custom?.type === 'deny-user' && event.custom?.targetUserId === user?.id) {
+        setIsWaitingForAdmission(false);
+        setIsDenied(true);
+      }
+    };
+
+    const unsubscribe = call.on('custom', handleCustomEvent);
+    return () => unsubscribe();
+  }, [call, user?.id, isHost, setIsSetupComplete]);
+
+  // Continuously request admission while in waiting room
+  useEffect(() => {
+    if (!isWaitingForAdmission || !call || isHost) return;
+
+    const sendRequest = () => {
+      call.sendCustomEvent({
+        type: 'request-admission',
+        userId: user?.id,
+        userName: displayName,
+        userImage: user?.imageUrl || '',
+      }).catch(console.error);
+    };
+
+    sendRequest();
+    const interval = setInterval(sendRequest, 3000);
+    return () => clearInterval(interval);
+  }, [isWaitingForAdmission, call, user?.id, displayName, isHost]);
 
   useEffect(() => {
     const toggleMic = async () => {
@@ -237,7 +291,7 @@ const MeetingSetup = ({
             console.warn('Camera permission denied by user');
             return;
           }
-          if (err.name === 'NotFoundError') {
+          if (err.name === 'NotFoundError' || err.name === 'NotReadableError') {
             return;
           }
         }
@@ -262,7 +316,69 @@ const MeetingSetup = ({
       />
     );
 
+  if (isDenied) {
+    return (
+      <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f8fafc] p-6 font-heading overflow-hidden relative">
+        <NoiseTexture className="opacity-[0.12]" />
+        <div className="flex flex-col items-center gap-6 max-w-md text-center bg-white p-8 rounded-2xl border border-slate-200 shadow-xl relative z-10">
+          <div className="size-16 rounded-full bg-red-50 flex items-center justify-center text-red-600">
+            <ShieldWarning size={32} weight="fill" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h2>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              The host has declined your request to join this private meeting.
+            </p>
+          </div>
+          <Button
+            onClick={() => router.push('/')}
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-3 font-semibold text-sm"
+          >
+            Return to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isWaitingForAdmission) {
+    return (
+      <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f8fafc] p-6 font-heading overflow-hidden relative">
+        <NoiseTexture className="opacity-[0.12]" />
+        <div className="flex flex-col items-center gap-6 max-w-md text-center bg-white p-8 rounded-2xl border border-slate-200 shadow-xl relative z-10">
+          <div className="relative">
+            <Ripple mainCircleSize={120} numCircles={4} className="opacity-30" />
+            <div className="size-20 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-2xl relative z-10 shadow-lg border-4 border-white overflow-hidden">
+              {user?.imageUrl ? (
+                <img src={user.imageUrl} alt={displayName} className="w-full h-full object-cover" />
+              ) : (
+                displayName[0]
+              )}
+            </div>
+          </div>
+          <div>
+            <div className="inline-flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full text-xs font-semibold mb-3">
+              <SpinnerGap className="animate-spin" size={14} /> Waiting Room
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Asking host to let you in...</h2>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              You are in line for this secure meeting. The host will be notified to admit you shortly.
+            </p>
+          </div>
+          <Button
+            onClick={() => setIsWaitingForAdmission(false)}
+            variant="outline"
+            className="w-full border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl py-3 font-semibold text-sm"
+          >
+            Cancel Request
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   const participantCount = call.state.participants.length;
+
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f8fafc] p-6 font-heading overflow-hidden relative">
@@ -420,19 +536,48 @@ const MeetingSetup = ({
             </button>
           </div>
 
-          {/* Action Button */}
-          <Button
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('streamDisplayName', displayName);
-              }
-              call.join();
-              setIsSetupComplete(true);
-            }}
-            className="w-full sm:w-auto h-14 px-10 bg-slate-900 hover:bg-slate-800 text-white rounded-none font-bold text-lg shadow-md transition-all active:scale-[0.98]"
-          >
-            Enter Meeting
-          </Button>
+          {!isHost && !isHostInCall ? (
+            <div className="flex flex-col items-center gap-2 w-full sm:w-auto">
+              <Button
+                disabled
+                className="w-full sm:w-auto h-14 px-8 bg-slate-200 text-slate-500 rounded-none font-bold text-base shadow-none cursor-not-allowed flex items-center gap-2"
+              >
+                <SpinnerGap className="animate-spin text-slate-500" size={18} />
+                Waiting for host to start...
+              </Button>
+              <p className="text-[11px] text-amber-700 font-medium flex items-center gap-1">
+                <Clock size={13} weight="bold" />
+                The host has not started this meeting yet.
+              </p>
+            </div>
+          ) : (
+            <Button
+              onClick={async () => {
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('streamDisplayName', displayName);
+                }
+                try {
+                  if (!isHost && isSecureMeeting) {
+                    setIsWaitingForAdmission(true);
+                  } else {
+                    await call.join();
+                    setIsSetupComplete(true);
+                  }
+                } catch (err) {
+                  console.error('[MeetingSetup] Failed to join call:', err);
+                  toast({
+                    title: "Failed to join call",
+                    description: err instanceof Error ? err.message : "Unknown error occurred",
+                    variant: "destructive"
+                  });
+                }
+              }}
+              className="w-full sm:w-auto h-14 px-10 bg-slate-900 hover:bg-slate-800 text-white rounded-none font-bold text-lg shadow-md transition-all active:scale-[0.98]"
+            >
+              {isSecureMeeting && !isHost ? 'Request to Join' : 'Enter Meeting'}
+            </Button>
+          )}
+
         </div>
       </div>
 

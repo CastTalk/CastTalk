@@ -520,117 +520,37 @@ function generateFallbackTasks(prompt: string, isCompleted: boolean = false) {
 }
 
 async function generateDynamicTasks(prompt: string, isCompleted: boolean = false) {
-  const step1Status = isCompleted ? 'succeeded' : 'queued';
-  const step1SubStatus = isCompleted ? 'succeeded' : 'queued';
-  
-  const systemPrompt = `You are a precise task planner. Analyze the user's prompt and create a 3-step action plan to accomplish their goal.
-Each step should have 2-3 subtasks. 
-The plan MUST be returned as a JSON array of tasks matching this EXACT schema (NO text, ONLY valid JSON array):
-[
-  {
-    "id": "step-1",
-    "title": "Specific Title for Step 1",
-    "description": "Specific Description",
-    "status": "${step1Status}",
-    "priority": "high",
-    "dependencies": [],
-    "subtasks": [
-      {
-        "id": "step-1.1",
-        "title": "Specific Subtask Title",
-        "description": "Specific Subtask Description",
-        "status": "${step1SubStatus}",
-        "priority": "high",
-        "tools": ["llm-engine"]
-      }
-    ]
-  }
-]
-IMPORTANT RULES:
-1. Make the titles and descriptions highly specific to the user's request context instead of using generic placeholder text. Don't use words like "Identifying parameters" if the user wants to book a meeting, use "Extracting meeting details for [User's Subject]". Use proper casing.
-2. Step 1 (id: "step-1") is for parsing and identifying parameters.
-3. Step 2 (id: "step-2", dependencies: ["step-1"]) is for governance checks, conflict scanning, and validation.
-4. Step 3 (id: "step-3", dependencies: ["step-2"]) is for executing the action.
-5. Provide exactly 3 steps.`;
-
-  try {
-    const rawResult = await fetchOpenRouterCompletion(
-      [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt }
-      ]
-    );
-    
-    let jsonText = rawResult.trim();
-    if (jsonText.startsWith('\`\`\`json') && jsonText.endsWith('\`\`\`')) {
-      jsonText = jsonText.substring(7, jsonText.length - 3).trim();
-    } else if (jsonText.startsWith('\`\`\`') && jsonText.endsWith('\`\`\`')) {
-      jsonText = jsonText.substring(3, jsonText.length - 3).trim();
-    }
-
-    const parsed = JSON.parse(jsonText);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      // Ensure all statuses match the expected shape (prevent broken UI)
-      return parsed.map((step: any) => ({
-        ...step,
-        status: step.id === 'step-1' ? step1Status : 'queued',
-        subtasks: Array.isArray(step.subtasks) ? step.subtasks.map((sub: any) => ({
-          ...sub,
-          status: step.id === 'step-1' ? step1SubStatus : 'queued',
-        })) : []
-      }));
-    }
-  } catch (error) {
-    console.error('Error generating dynamic tasks:', error);
-  }
-
-  // Fallback to the original hardcoded logic if LLM fails
+  // Directly use the local deterministic fallback task generator.
+  // This bypasses the secondary LLM task generation call completely, saving 10-15 seconds of latency.
   return generateFallbackTasks(prompt, isCompleted);
 }
 
 async function classifyMode(userMessage: string): Promise<{ mode: 'chat' | 'deep_search' | 'automate'; confidence: number; reason: string }> {
-  const systemPrompt = `You are a precise, ultra-fast intent classifier.
-Analyze the user's message and determine the mode.
-Options:
-- "automate" if the user wants to MUTATE or CREATE data (e.g. schedule, create, edit, delete, or book a meeting, task, calendar event, reminder, invite someone, or trigger actions). DO NOT use this for simply asking questions about the calendar.
-- "deep_search" if the user requests detailed analysis, deep research, comparisons, audits, explanation of why something happened, or investigation.
-- "chat" for normal conversation, basic questions, general chat, greetings, OR asking about existing data (e.g. "Do I have any meetings today?", "What is my schedule?", "Read my tasks").
+  const lower = userMessage.toLowerCase();
+  
+  const automateKeywords = [
+    'schedule', 'create', 'book', 'setup', 'set up', 'event', 'meeting', 
+    'appointment', 'calendar', 'remind', 'reminder', 'todo', 'to-do', 
+    'task', 'invite', 'call room', 'sync', 'cancel', 'delete', 'reschedule',
+    'update', 'modify', 'change', 'host', 'session', 'plan'
+  ];
+  
+  const searchKeywords = [
+    'analyze', 'analysis', 'deep search', 'research', 'audit', 'investigate', 
+    'investigation', 'explain', 'why', 'insights', 'compare', 'comparison', 
+    'report', 'overview', 'details about'
+  ];
 
-Respond ONLY with a JSON object in the following format:
-{
-  "mode": "automate" | "deep_search" | "chat",
-  "confidence": number (between 0.0 and 1.0),
-  "reason": "short explanation"
-}`;
-
-  try {
-    const rawResult = await fetchOpenRouterCompletion(
-      [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage }
-      ]
-    );
-    
-    let jsonText = rawResult.trim();
-    if (jsonText.startsWith('```json') && jsonText.endsWith('```')) {
-      jsonText = jsonText.substring(7, jsonText.length - 3).trim();
-    } else if (jsonText.startsWith('```') && jsonText.endsWith('```')) {
-      jsonText = jsonText.substring(3, jsonText.length - 3).trim();
-    }
-
-    const parsed = JSON.parse(jsonText);
-    if (parsed && typeof parsed === 'object' && parsed.mode) {
-      return {
-        mode: parsed.mode === 'automate' || parsed.mode === 'deep_search' || parsed.mode === 'chat' ? parsed.mode : 'chat',
-        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 1.0,
-        reason: parsed.reason || ''
-      };
-    }
-  } catch (error) {
-    console.error('Error classifying mode in backend:', error);
+  if (automateKeywords.some(keyword => lower.includes(keyword))) {
+    return { mode: 'automate', confidence: 1.0, reason: 'Local keyword match (automate)' };
+  }
+  if (searchKeywords.some(keyword => lower.includes(keyword))) {
+    return { mode: 'deep_search', confidence: 1.0, reason: 'Local keyword match (deep_search)' };
   }
 
-  return { mode: 'chat', confidence: 1.0, reason: 'Fallback default' };
+  // Fast path: if it doesn't match automate or search keywords, it's almost certainly chat.
+  // We can bypass classification entirely for standard conversational messages to speed up response time.
+  return { mode: 'chat', confidence: 1.0, reason: 'Local bypass' };
 }
 
 export async function POST(req: Request) {

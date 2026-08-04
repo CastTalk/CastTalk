@@ -16,7 +16,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn } from '@/lib/utils';
+import { cn, generateShortMeetingId } from '@/lib/utils';
 import { format } from 'date-fns';
 import CastTalkModal from '@/components/CastTalkModal';
 
@@ -56,7 +56,7 @@ const Home = () => {
     setFormDate(d);
     setFormDuration(60); // Reset duration to 1 hour
     setMeetingType('general');
-    setPreviewId(crypto.randomUUID());
+    setPreviewId(generateShortMeetingId());
     setMeetingMode(mode);
     setStep(1);
     closeDropdown();
@@ -359,15 +359,24 @@ const Home = () => {
 
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
-                      Event Topic <span className="text-red-500">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[13px] font-medium text-[#374151]">
+                        Event Topic <span className="text-red-500">*</span>
+                      </label>
+                      {formTitle.length > 0 && (
+                        <span className={`text-[11px] font-medium transition-colors ${formTitle.length >= 20 ? 'text-red-500 font-semibold' : 'text-slate-400'}`}>
+                          {formTitle.length}/20
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
+                      maxLength={20}
                       value={formTitle}
                       onChange={(e) => setFormTitle(e.target.value)}
                       placeholder="What's your meeting?"
                       className="w-full px-3 py-2 rounded-lg text-[14px] outline-none transition-colors"
+
                       style={{
                         backgroundColor: '#F9FAFB',
                         border: '1px solid #E5E7EB',
@@ -375,6 +384,7 @@ const Home = () => {
                       }}
                     />
                   </div>
+
 
                   {meetingType !== 'general' && (
                     <>

@@ -3,7 +3,7 @@ import { ReactNode } from 'react';
 import AppNavbar from '@/components/AppNavbar';
 
 export const metadata: Metadata = {
-  title: 'CanCast | Premium Video Communications',
+  title: 'CanTalk | Premium Video Communications',
   description: 'Next-generation video collaboration platform for modern teams.',
 };
 

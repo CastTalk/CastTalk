@@ -26,8 +26,8 @@ export const checkPrivacyPolicy = async (req: PolicyRequest): Promise<PolicyResu
     };
   }
 
-  // Strict Policy Check: Destructive deletion queries are blocked
-  if (action.toLowerCase().includes('delete') || action.toLowerCase().includes('purge')) {
+  // Strict Policy Check: Destructive deletion queries are blocked, except deleteMeeting
+  if ((action.toLowerCase().includes('delete') || action.toLowerCase().includes('purge')) && action !== 'deleteMeeting') {
     return {
       allowed: false,
       reason: 'Destructive delete operations are strictly prohibited in the default AI context.',

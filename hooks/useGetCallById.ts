@@ -12,21 +12,34 @@ export const useGetCallById = (id: string | string[]) => {
   useEffect(() => {
     if (!client) return;
     
+    let isCancelled = false;
+
     const loadCall = async () => {
       try {
-        // https://getstream.io/video/docs/react/guides/querying-calls/#filters
-        const { calls } = await client.queryCalls({ filter_conditions: { id } });
+        // Single ID check: use client.call to reference the call directly
+        const callId = Array.isArray(id) ? id[0] : id;
+        const callInstance = client.call('default', callId);
+        
+        // Fetch call details from stream backend
+        await callInstance.get();
 
-        if (calls.length > 0) setCall(calls[0]);
-
-        setIsCallLoading(false);
+        if (!isCancelled) {
+          setCall(callInstance);
+          setIsCallLoading(false);
+        }
       } catch (error) {
-        console.error(error);
-        setIsCallLoading(false);
+        console.error('[useGetCallById] Error:', error);
+        if (!isCancelled) {
+          setIsCallLoading(false);
+        }
       }
     };
 
     loadCall();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [client, id]);
 
   return { call, isCallLoading };

@@ -24,7 +24,7 @@ const Header = () => {
         <div className="size-8 bg-primary rounded-lg flex-center shadow-sm group-hover:rotate-12 transition-transform duration-300">
           <VideoCamera weight="bold" size={18} className="text-white" />
         </div>
-        <span className="text-xl font-bold tracking-tightest text-slate-900">CanCast</span>
+        <span className="text-xl font-bold tracking-tightest text-slate-900">CanTalk</span>
       </Link>
 
       {/* Profile */}
@@ -32,8 +32,8 @@ const Header = () => {
         <DropdownMenu>
           <DropdownMenuTrigger className="outline-none">
             <div className="flex items-center gap-3 p-1 pr-3 rounded-full border border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer">
-              <UserCircle 
-                size={32} 
+              <UserCircle
+                size={32}
                 weight="light"
                 className="text-slate-600"
               />
@@ -50,14 +50,14 @@ const Header = () => {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-slate-50" />
-            <DropdownMenuItem 
+            <DropdownMenuItem
               onClick={() => window.location.href = '/profile'}
               className="flex items-center gap-2 p-2.5 rounded-xl cursor-pointer"
             >
               <UserGear size={18} weight="regular" />
               <span>Profile Settings</span>
             </DropdownMenuItem>
-            <DropdownMenuItem 
+            <DropdownMenuItem
               onClick={() => signOut()}
               className="flex items-center gap-2 p-2.5 rounded-xl text-destructive focus:text-destructive cursor-pointer"
             >

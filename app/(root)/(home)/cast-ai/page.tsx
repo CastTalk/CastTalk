@@ -10,6 +10,7 @@ import { NoiseTexture } from '@/components/ui/noise-texture';
 import { TextAnimate } from '@/components/ui/text-animate';
 import { useStreamVideoClient } from '@stream-io/video-react-sdk';
 import Plan, { Task } from '@/components/ui/agent-plan';
+import CastTalkModal from '@/components/CastTalkModal';
 
 interface Message {
   id: string;
@@ -460,10 +461,92 @@ export default function CastAIPage() {
   const client = useStreamVideoClient();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const streamReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const [showInterruptModal, setShowInterruptModal] = useState<{ targetUrl: string } | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).isAIAutomating = isTyping;
+    }
+  }, [isTyping]);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (isTyping) {
+        window.history.pushState(null, '', window.location.href);
+        setShowInterruptModal({ targetUrl: 'back' });
+      }
+    };
+
+    if (isTyping) {
+      window.history.pushState(null, '', window.location.href);
+      window.addEventListener('popstate', handlePopState);
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isTyping]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isTyping) {
+        e.preventDefault();
+        e.returnValue = "Switching page will interrupt the AI model's automation process.";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isTyping]);
+
+  useEffect(() => {
+    const handleInterruptRequest = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setShowInterruptModal({ targetUrl: customEvent.detail.targetUrl });
+    };
+    window.addEventListener('show-ai-interrupt-modal', handleInterruptRequest);
+    return () => window.removeEventListener('show-ai-interrupt-modal', handleInterruptRequest);
+  }, []);
+
+  const exitAutomation = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    if (streamReaderRef.current) {
+      streamReaderRef.current.cancel().catch(() => {});
+    }
+    setIsTyping(false);
+    
+    const target = showInterruptModal?.targetUrl;
+    setShowInterruptModal(null);
+
+    if (target) {
+      if (target === 'back') {
+        router.back();
+      } else {
+        router.push(target);
+      }
+    }
+  };
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [expandedPlans, setExpandedPlans] = useState<Record<string, boolean>>({});
   const startTimeRef = useRef<number | null>(null);
+
+  const postAINotification = async (text: string) => {
+    try {
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, type: 'ai' })
+      });
+    } catch (err) {
+      console.error('Failed to post AI notification:', err);
+    }
+  };
 
   // Scoped AI Chat History & Floating Modal States
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -664,11 +747,15 @@ export default function CastAIPage() {
       }));
       formattedHistory.push({ role: 'user', content: text });
 
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: formattedHistory,
           isThinking: mode === 'search' || mode === 'think',
@@ -684,6 +771,7 @@ export default function CastAIPage() {
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('Response body has no reader');
+      streamReaderRef.current = reader;
 
       const decoder = new TextDecoder();
       let streamBuffer = '';
@@ -955,13 +1043,37 @@ export default function CastAIPage() {
                       hasErrors = true;
                       results.push(`Meeting Update Failed\nError: ${err.message || err}`);
                     }
+                  } else if (action === 'deleteMeeting' && client) {
+                    try {
+                      const { meetingId } = args;
+                      if (!meetingId) {
+                        throw new Error('Meeting ID is required to delete a meeting.');
+                      }
+                      const call = client.call('default', meetingId);
+                      await call.endCall();
+
+                      const response = await fetch(`/api/schedules?meetingId=${meetingId}`, {
+                        method: 'DELETE'
+                      });
+                      if (!response.ok) {
+                        throw new Error('Failed to delete schedule from database');
+                      }
+
+                      results.push(`Meeting Cancelled Successfully!\n- Meeting ID: \`${meetingId}\``);
+                    } catch (err: any) {
+                      console.error('Failed to delete meeting in Stream:', err);
+                      hasErrors = true;
+                      results.push(`Meeting Cancellation Failed\nError: ${err.message || err}`);
+                    }
                   }
                 }
 
                 if (!hasErrors) {
                   aiText = `CastAI scheduled the meetings successfully!\n\n` + results.join('\n\n') + `\n\nThe events have been successfully scheduled and are now visible on your upcoming calendar dashboard.`;
+                  postAINotification('CastAI completed scheduled actions successfully.');
                 } else {
                   aiText = `CastAI finished executing the scheduled actions with some errors:\n\n` + results.join('\n\n');
+                  postAINotification('CastAI finished automation with some errors.');
                 }
               } else if (eventData.actionPlan) {
                 const { action, arguments: args } = eventData.actionPlan;
@@ -1024,9 +1136,11 @@ export default function CastAIPage() {
 **Meeting ID**: \`${meetingId}\`
 
 The event has been successfully scheduled and is now visible on your upcoming calendar dashboard.`;
+                    postAINotification(`${title} scheduled successfully by CastAI.`);
                   } catch (err: any) {
                     console.error('Failed to create meeting in Stream:', err);
                     aiText = `Error: Action plan approved by Governance, but execution in Stream Client failed: ${err.message || err}`;
+                    postAINotification(`CastAI automation failed: Stream error.`);
                   }
                 } else if (action === 'updateMeeting' && client) {
                   try {
@@ -1093,9 +1207,38 @@ The event has been successfully scheduled and is now visible on your upcoming ca
 **Meeting ID**: \`${meetingId}\`${details}
 
 The event modifications have been successfully saved.`;
+                    postAINotification(`${syncTitle} updated successfully by CastAI.`);
                   } catch (err: any) {
                     console.error('Failed to update meeting in Stream:', err);
                     aiText = `Error: Action plan approved by Governance, but execution in Stream Client failed: ${err.message || err}`;
+                    postAINotification(`CastAI automation failed: Stream error.`);
+                  }
+                } else if (action === 'deleteMeeting' && client) {
+                  try {
+                    const { meetingId } = args;
+                    if (!meetingId) {
+                      throw new Error('Meeting ID is required to delete a meeting.');
+                    }
+                    const call = client.call('default', meetingId);
+                    await call.endCall();
+
+                    const response = await fetch(`/api/schedules?meetingId=${meetingId}`, {
+                      method: 'DELETE'
+                    });
+                    if (!response.ok) {
+                      throw new Error('Failed to delete schedule from database');
+                    }
+
+                    aiText = `CastAI cancelled the meeting successfully!
+
+**Meeting ID**: \`${meetingId}\`
+
+The event has been successfully deleted/cancelled and removed from your dashboard.`;
+                    postAINotification(`Meeting cancelled successfully by CastAI.`);
+                  } catch (err: any) {
+                    console.error('Failed to delete meeting in Stream:', err);
+                    aiText = `Error: Action plan approved by Governance, but execution in Stream Client failed: ${err.message || err}`;
+                    postAINotification(`CastAI automation failed: Stream error.`);
                   }
                 }
               }
@@ -1146,6 +1289,8 @@ The event modifications have been successfully saved.`;
       );
     } finally {
       setIsTyping(false);
+      abortControllerRef.current = null;
+      streamReaderRef.current = null;
     }
   };
 
@@ -1510,6 +1655,38 @@ The event modifications have been successfully saved.`;
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* AI Interrupt Modal */}
+      <CastTalkModal
+        isOpen={!!showInterruptModal}
+        onClose={() => setShowInterruptModal(null)}
+        maxWidth="max-w-[420px]"
+      >
+        <div className="flex flex-col font-geist">
+          <h2 className="text-[20px] font-medium text-[#111827] leading-none mb-2.5">
+            Automation in Progress
+          </h2>
+          <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
+            Switching page will interrupt the AI model's automation process. Exiting now will terminate the active task.
+          </p>
+          <div className="flex justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
+            <button
+              type="button"
+              onClick={() => setShowInterruptModal(null)}
+              className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={exitAutomation}
+              className="px-5 py-2.5 rounded-xl text-[14px] font-bold text-white bg-red-600 hover:bg-red-700 shadow-sm transition-colors"
+            >
+              Exit
+            </button>
+          </div>
+        </div>
+      </CastTalkModal>
     </div>
   );
 }

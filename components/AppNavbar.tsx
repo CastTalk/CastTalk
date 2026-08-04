@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { UserButton, useUser } from '@clerk/nextjs';
-import { Bell, X, Calendar, Brain, Clock } from '@phosphor-icons/react';
+import { Bell, X, Calendar, Brain, Clock, Trash, AndroidLogo } from '@phosphor-icons/react';
 import { Client } from 'appwrite';
 
 const appwriteClient = new Client()
@@ -23,6 +23,15 @@ const AppNavbar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useUser();
+
+  const handleNavigation = (url: string) => {
+    if (typeof window !== 'undefined' && (window as any).isAIAutomating) {
+      const event = new CustomEvent('show-ai-interrupt-modal', { detail: { targetUrl: url } });
+      window.dispatchEvent(event);
+      return;
+    }
+    router.push(url);
+  };
   const [time, setTime] = useState('');
   const [date, setDate] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
@@ -124,6 +133,8 @@ const AppNavbar = () => {
     return () => unsubscribe();
   }, [user?.id]);
 
+
+
   const markAllRead = async () => {
     try {
       await fetch('/api/notifications', {
@@ -155,7 +166,19 @@ const AppNavbar = () => {
       await fetch(`/api/notifications?id=${id}`, {
         method: 'DELETE'
       });
-      setNotifications(prev => prev.filter(n => n.id !== id));
+      // Soft delete locally first
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, type: 'deleted' } : n));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      await fetch('/api/notifications?clearAll=true', {
+        method: 'DELETE'
+      });
+      setNotifications([]);
     } catch (e) {
       console.error(e);
     }
@@ -165,8 +188,12 @@ const AppNavbar = () => {
     switch (type) {
       case 'success':
         return <Calendar size={16} weight="fill" className="text-emerald-600" />;
+      case 'scheduled':
+        return <Calendar size={16} weight="fill" className="text-amber-500" />;
+      case 'cancelled':
+        return <Calendar size={16} weight="fill" className="text-red-600" />;
       case 'ai':
-        return <Brain size={16} weight="fill" className="text-violet-600" />;
+        return <AndroidLogo size={16} weight="fill" className="text-violet-600" />;
       case 'alert':
         return <Clock size={16} weight="fill" className="text-amber-600" />;
       case 'update':
@@ -179,6 +206,8 @@ const AppNavbar = () => {
   const getNotifBg = (type: string) => {
     switch (type) {
       case 'success': return 'bg-emerald-50 border-emerald-100';
+      case 'scheduled': return 'bg-amber-50 border-amber-100';
+      case 'cancelled': return 'bg-red-50 border-red-100';
       case 'ai': return 'bg-violet-50 border-violet-100';
       case 'alert': return 'bg-amber-50 border-amber-100';
       case 'update': return 'bg-blue-50 border-blue-100';
@@ -186,22 +215,24 @@ const AppNavbar = () => {
     }
   };
 
+  const visibleNotifications = notifications.filter(n => n.type !== 'deleted');
+
   return (
     <div className="w-full relative z-40 flex justify-center border-b-2 border-dashed border-[#c4cccc] bg-[#f3f4f6]">
       <header className="flex w-full max-w-[1440px] flex-row justify-between items-center h-[54px] px-4 md:px-6 lg:px-8">
-        <div className="flex items-center h-full cursor-pointer" onClick={() => router.push('/')}>
+        <div className="flex items-center h-full cursor-pointer" onClick={() => handleNavigation('/')}>
           <img src="/logo/logoMain.svg" alt="CastTalk" className="h-8 w-auto" />
         </div>
 
         <nav className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-8 text-[15px] text-slate-800 font-medium">
           <button 
-            onClick={() => router.push('/')} 
+            onClick={() => handleNavigation('/')} 
             className={pathname === '/' ? 'text-black font-semibold' : 'hover:text-black transition-colors'}
           >
             Home
           </button>
           <button 
-            onClick={() => router.push('/upcoming')} 
+            onClick={() => handleNavigation('/upcoming')} 
             className={pathname === '/upcoming' ? 'text-black font-semibold' : 'hover:text-black transition-colors'}
           >
             Schedule
@@ -214,7 +245,7 @@ const AppNavbar = () => {
             Recordings
           </button>
           <button 
-            onClick={() => router.push('/cast-ai')} 
+            onClick={() => handleNavigation('/cast-ai')} 
             className={pathname === '/cast-ai' ? 'text-black font-semibold' : 'hover:text-black transition-colors'}
           >
             CastAI
@@ -228,13 +259,14 @@ const AppNavbar = () => {
           <div className="flex items-center gap-4">
             <div className="notification-container relative flex items-center">
               <button 
-                onClick={() => setShowNotifications(!showNotifications)} 
-                className={`relative rounded-full p-2 transition-colors ${showNotifications ? 'bg-black/5 text-black' : 'hover:bg-black/5 text-slate-800'}`}
+                onClick={() => setShowNotifications(!showNotifications)}                 className={`relative rounded-full p-2 transition-colors ${showNotifications ? 'bg-black/5 text-black' : 'hover:bg-black/5 text-slate-800'}`}
                 title="Notifications"
               >
                 <Bell size={22} weight="regular" />
-                {notifications.some(n => !n.read) && (
-                  <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-rose-500 ring-2 ring-white animate-pulse" />
+                {visibleNotifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute top-0.5 right-0.5 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white ring-2 ring-white">
+                    {visibleNotifications.filter(n => !n.read).length}
+                  </span>
                 )}
               </button>
 
@@ -245,20 +277,30 @@ const AppNavbar = () => {
                       <Bell size={18} weight="fill" className="text-amber-500" />
                       <span className="font-bold text-[15px] text-slate-900">Notifications</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {notifications.some(n => !n.read) && (
+                    <div className="flex items-center gap-3">
+                      {visibleNotifications.some(n => !n.read) && (
                         <button 
                           onClick={markAllRead}
-                          className="text-xs text-slate-500 hover:text-slate-800 font-semibold transition-colors"
+                          className="px-2 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200/60 rounded-md transition-colors"
                         >
                           Mark all read
+                        </button>
+                      )}
+                      {visibleNotifications.length > 0 && visibleNotifications.every(n => n.read) && (
+                        <button 
+                          onClick={clearAllNotifications}
+                          className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 rounded-md transition-colors"
+                          title="Clear all notifications"
+                        >
+                          <Trash size={13} weight="bold" />
+                          <span>Clear all</span>
                         </button>
                       )}
                     </div>
                   </div>
 
                   <div className="max-h-[320px] overflow-y-auto no-scrollbar py-2">
-                    {notifications.length === 0 ? (
+                    {visibleNotifications.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
                         <div className="size-12 rounded-full bg-slate-50 flex items-center justify-center mb-3 border border-slate-100">
                           <Bell size={24} className="text-slate-400" />
@@ -267,17 +309,17 @@ const AppNavbar = () => {
                         <p className="text-xs text-slate-400 mt-1">No new notifications at the moment.</p>
                       </div>
                     ) : (
-                      notifications.map((notif) => (
+                      visibleNotifications.map((notif) => (
                         <div 
                           key={notif.id}
                           onClick={() => !notif.read && markRead(notif.id)}
-                          className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50/80 cursor-pointer border-b border-slate-100 last:border-0 transition-colors"
+                          className="group flex items-start gap-3 px-4 py-3 hover:bg-slate-50/80 cursor-pointer border-b border-slate-100 last:border-0 transition-colors"
                         >
                           <div className={`size-8 rounded-full flex items-center justify-center border shrink-0 ${getNotifBg(notif.type)}`}>
                             {getNotifIcon(notif.type)}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-[13px] leading-normal ${!notif.read ? 'text-slate-900 font-semibold' : 'text-slate-500 font-normal'}`}>
+                          <div className="flex-1 min-w-0 pr-4">
+                            <p className={`text-[12px] leading-normal line-clamp-2 ${!notif.read ? 'text-slate-900 font-medium' : 'text-slate-500 font-normal'}`}>
                               {notif.text}
                             </p>
                             <span className="text-[10px] text-slate-400 mt-1 block">{notif.time}</span>
@@ -288,10 +330,10 @@ const AppNavbar = () => {
                                 e.stopPropagation();
                                 deleteNotification(notif.id);
                               }}
-                              className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition-colors"
+                              className="p-1.5 bg-red-50 hover:bg-red-100 rounded-full text-red-500 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 transition-opacity"
                               title="Delete notification"
                             >
-                              <X size={12} />
+                              <Trash size={12} weight="bold" />
                             </button>
                           </div>
                         </div>

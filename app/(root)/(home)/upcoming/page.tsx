@@ -6,7 +6,7 @@ import { CaretLeft, CaretRight, Trash, Info, Copy, Globe, Lock, X, Clock, Timer,
 import { useGetCalls } from '@/hooks/useGetCalls';
 import { Call, useStreamVideoClient } from '@stream-io/video-react-sdk';
 import { useUser } from '@clerk/nextjs';
-import { cn } from '@/lib/utils';
+import { cn, generateShortMeetingId } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
 import CastTalkModal from '@/components/CastTalkModal';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -191,7 +191,7 @@ export default function SchedulePage() {
     setFormTitle('');
     setFormDesc('');
     setFormDuration(60);
-    setPreviewId(crypto.randomUUID());
+    setPreviewId(generateShortMeetingId());
     setStep(1);
     setMeetingMode('later');
   };
@@ -698,6 +698,8 @@ export default function SchedulePage() {
         const startsAt = new Date(selectedCall.state.startsAt!);
         const end = new Date(startsAt.getTime() + duration * 60000);
         const isFuture = startsAt > new Date();
+        const isEnded = new Date() > end;
+        const isOngoing = !isFuture && !isEnded;
         const meetingType = selectedCall.state.custom?.meetingType || 'general';
         const meetingUrl = `${window.location.origin}/meeting/${selectedCall.id}`;
 
@@ -734,12 +736,12 @@ export default function SchedulePage() {
                   </h2>
                   <div className="shrink-0 mt-1">
                     {meetingType === 'secure' ? (
-                      <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-amber-700">
+                      <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-full text-amber-700">
                         <Lock size={12} weight="fill" />
                         <span className="text-[10px] font-medium uppercase tracking-wider">Secure</span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-700">
+                      <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-700">
                         <Globe size={12} weight="fill" />
                         <span className="text-[10px] font-medium uppercase tracking-wider">General</span>
                       </div>
@@ -748,7 +750,7 @@ export default function SchedulePage() {
                 </div>
                 {/* Date and duration on same row with bullet separator (less gap mt-0.5) */}
                 <p
-                  className="text-[13px] text-slate-500 font-medium mt-0.5 flex items-center gap-2"
+                  className="text-[13px] text-slate-500 font-normal mt-0.5 flex items-center gap-2"
                   style={{ marginBottom: '5px' }}
                 >
                   <span>{dateString}</span>
@@ -759,7 +761,7 @@ export default function SchedulePage() {
 
               {/* Notice */}
               {isFuture ? (
-                <div className="p-3.5 rounded-xl border border-[rgba(62,39,35,0.15)] bg-[#3E2723]/[0.02] flex items-start gap-3">
+                <div className="p-2.5 rounded-xl border border-[rgba(62,39,35,0.15)] bg-[#3E2723]/[0.02] flex items-start gap-3">
                   <div className="size-8 rounded-lg bg-[#3E2723]/5 flex items-center justify-center text-[#3E2723] shrink-0 border border-[rgba(62,39,35,0.1)]">
                     <Info size={16} weight="bold" />
                   </div>
@@ -772,8 +774,22 @@ export default function SchedulePage() {
                     </p>
                   </div>
                 </div>
+              ) : isEnded ? (
+                <div className="p-2.5 rounded-xl border border-red-200 bg-red-50/50 flex items-start gap-3">
+                  <div className="size-8 rounded-lg bg-red-100 flex items-center justify-center text-red-700 shrink-0">
+                    <Info size={16} weight="bold" />
+                  </div>
+                  <div className="flex-1">
+                     <p className="text-[13px] font-medium text-red-800 mb-0.5">
+                      Meeting Ended
+                    </p>
+                    <p className="text-[12px] text-slate-600 font-normal leading-relaxed">
+                      This meeting has ended. You can no longer join this call.
+                    </p>
+                  </div>
+                </div>
               ) : (
-                <div className="p-3.5 rounded-xl border border-green-200 bg-green-50/50 flex items-start gap-3">
+                <div className="p-2.5 rounded-xl border border-green-200 bg-green-50/50 flex items-start gap-3">
                   <div className="size-8 rounded-lg bg-green-100 flex items-center justify-center text-green-700 shrink-0">
                     <Info size={16} weight="bold" />
                   </div>
@@ -790,21 +806,30 @@ export default function SchedulePage() {
 
               {/* Copy Meeting Link */}
               <div>
-                 <label className="text-[13px] font-semibold text-[#374151] mb-1.5 block">
+                 <label className={`text-[13px] font-semibold mb-1.5 block ${isEnded ? 'text-[#374151]/60' : 'text-[#374151]'}`}>
                   Meeting Link
                 </label>
-                <div className="flex items-center gap-2 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-3.5 py-2.5">
-                  <span className="flex-1 text-[13px] text-slate-600 truncate font-medium">{meetingUrl}</span>
-                  <div
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(meetingUrl);
-                      toast({ title: 'Link copied!' });
-                    }}
-                    className="cursor-pointer text-slate-500 hover:text-black transition-colors shrink-0 p-1.5 rounded-lg hover:bg-black/5 flex items-center justify-center active:scale-95 border border-transparent hover:border-slate-200"
-                    title="Copy Link"
-                  >
-                    <Copy size={16} weight="bold" />
-                  </div>
+                <div className={`flex items-center gap-2 border rounded-xl px-3.5 py-2.5 ${isEnded ? 'bg-[#F9FAFB]/50 border-[#E5E7EB]/60 cursor-not-allowed opacity-60' : 'bg-[#F9FAFB] border-[#E5E7EB]'}`}>
+                  <span className={`flex-1 text-[13px] truncate ${isEnded ? 'text-slate-400 font-normal' : 'text-slate-600 font-medium'}`}>{meetingUrl}</span>
+                  {!isEnded ? (
+                    <div
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(meetingUrl);
+                        toast({ title: 'Link copied!' });
+                      }}
+                      className="cursor-pointer text-slate-500 hover:text-black transition-colors shrink-0 p-1.5 rounded-lg hover:bg-black/5 flex items-center justify-center active:scale-95 border border-transparent hover:border-slate-200"
+                      title="Copy Link"
+                    >
+                      <Copy size={16} weight="bold" />
+                    </div>
+                  ) : (
+                    <div
+                      className="text-slate-400 shrink-0 p-1.5 flex items-center justify-center cursor-not-allowed"
+                      title="Meeting Ended"
+                    >
+                      <Copy size={16} weight="regular" />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -819,7 +844,7 @@ export default function SchedulePage() {
                   </button>
                 </div>
 
-                {!isFuture && (
+                {isOngoing && (
                   <div className="flex gap-3">
                     <button
                       onClick={() => {
@@ -830,6 +855,16 @@ export default function SchedulePage() {
                       style={{ backgroundColor: '#3E2723' }}
                     >
                       Join Meeting
+                    </button>
+                  </div>
+                )}
+                {isEnded && (
+                  <div className="flex gap-3">
+                    <button
+                      disabled
+                      className="px-6 py-2.5 rounded-xl text-[14px] font-bold text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed select-none shadow-sm"
+                    >
+                      Meeting Ended
                     </button>
                   </div>
                 )}
@@ -927,15 +962,15 @@ export default function SchedulePage() {
         >
           <div className="flex flex-col font-geist">
             {/* Top Div: Search bar and separator */}
-            <div className="px-5 pt-3.5 pb-3 border-b border-[#3E2723]/15">
+            <div className="px-5 pt-3.5 pb-3 border-b border-[#3E2723]/25">
               <div className="flex items-center gap-3">
-                <MagnifyingGlass size={18} className="text-slate-400 shrink-0" />
+                <MagnifyingGlass size={18} className="text-slate-500 shrink-0" />
                 <input
                   type="text"
                   placeholder="Search meetings..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 bg-transparent border-none text-slate-900 text-sm focus:outline-none placeholder:text-slate-400"
+                  className="flex-1 bg-transparent border-none text-slate-900 text-sm focus:outline-none placeholder:text-slate-500 font-normal"
                 />
               </div>
             </div>
@@ -943,7 +978,7 @@ export default function SchedulePage() {
             {/* Bottom Div: Results list & footer close button */}
             <div className="p-5 pt-4">
               {/* Results Title */}
-              <div className="text-[12px] font-normal text-slate-400 mb-2.5">
+              <div className="text-[12px] font-medium text-slate-500 mb-2.5">
                 Meetings ({selectedCluster.filter(c => {
                   const title = (c.state.custom?.title || '').toLowerCase();
                   const desc = (c.state.custom?.description || '').toLowerCase();
@@ -951,6 +986,8 @@ export default function SchedulePage() {
                   return title.includes(q) || desc.includes(q);
                 }).length})
               </div>
+
+
 
               {/* List scroll area - Hide scrollbar but keep scrollable */}
               <div 
@@ -986,7 +1023,7 @@ export default function SchedulePage() {
                     return (
                       <div 
                         key={call.id} 
-                        className="flex items-center justify-between py-0.5 px-3 rounded-xl hover:bg-[#3E2723]/5 cursor-pointer transition-colors relative group/item"
+                        className="flex items-center justify-between py-1 px-3 rounded-xl hover:bg-[#3E2723]/10 cursor-pointer transition-colors relative group"
                         onClick={() => {
                           setSelectedCall(call);
                           setSelectedCluster(null);
@@ -995,16 +1032,17 @@ export default function SchedulePage() {
                       >
                         {/* Left: Round icon/avatar indicating type */}
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="h-10 w-10 rounded-lg bg-slate-50 border border-[#3E2723]/10 flex items-center justify-center shrink-0">
-                            {isSecure ? <Lock size={18} weight="fill" className="text-amber-700" /> : <Globe size={18} weight="fill" className="text-emerald-700" />}
+                          <div className="h-10 w-10 rounded-lg bg-slate-100 border border-[#3E2723]/20 flex items-center justify-center shrink-0">
+                            {isSecure ? <Lock size={18} weight="fill" className="text-amber-800" /> : <Globe size={18} weight="fill" className="text-emerald-800" />}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <h3 className="font-medium text-[13px] text-slate-800 leading-snug group-hover/item:text-[#3E2723] transition-colors truncate mb-0.5">
+                            <h3 className="font-medium text-[14px] text-slate-800 leading-snug group-hover:text-[#3E2723] transition-colors truncate mb-1">
                               {title}
                             </h3>
-                            <p className="text-[10px] text-slate-400 font-normal mt-0.5 flex items-center gap-1.5">
+
+                            <p className="text-[11px] text-slate-600 font-medium mt-0.5 flex items-center gap-1.5">
                               <span>{formatTime(startsAt)}</span>
-                              <span className="size-1 rounded-full bg-slate-350" />
+                              <span className="size-1 rounded-full bg-slate-400" />
                               <span>{duration} mins</span>
                             </p>
                           </div>
@@ -1013,13 +1051,14 @@ export default function SchedulePage() {
                         {/* Right actions: Delete button */}
                         <div className="flex items-center gap-2 shrink-0">
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setCallToDelete(call);
                               setSelectedCluster(null);
                               setSearchQuery('');
                             }}
-                            className="p-1.5 text-slate-400 hover:text-red-650 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover/item:opacity-100"
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                             title="Cancel Meeting"
                           >
                             <Trash size={18} weight="bold" />
@@ -1027,11 +1066,13 @@ export default function SchedulePage() {
                         </div>
                       </div>
                     );
+
                   })}
               </div>
 
               {/* Footer with a styled Close button matching delete modal close button */}
-              <div className="flex justify-end pt-3.5 border-t border-[#3E2723]/15">
+              <div className="flex justify-end pt-3.5 border-t border-[#3E2723]/25">
+
                 <button
                   type="button"
                   onClick={() => { setSelectedCluster(null); setSearchQuery(''); }}
@@ -1156,15 +1197,24 @@ export default function SchedulePage() {
 
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
-                      Event Topic <span className="text-red-500">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[13px] font-medium text-[#374151]">
+                        Event Topic <span className="text-red-500">*</span>
+                      </label>
+                      {formTitle.length > 0 && (
+                        <span className={`text-[11px] font-medium transition-colors ${formTitle.length >= 20 ? 'text-red-500 font-semibold' : 'text-slate-400'}`}>
+                          {formTitle.length}/20
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
+                      maxLength={20}
                       value={formTitle}
                       onChange={(e) => setFormTitle(e.target.value)}
                       placeholder="What's your meeting?"
                       className="w-full px-3 py-2 rounded-lg text-[14px] outline-none transition-colors"
+
                       style={{
                         backgroundColor: '#F9FAFB',
                         border: '1px solid #E5E7EB',
@@ -1172,6 +1222,7 @@ export default function SchedulePage() {
                       }}
                     />
                   </div>
+
 
                   <div className="flex flex-col w-full">
                     <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">

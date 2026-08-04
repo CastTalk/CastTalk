@@ -29,13 +29,13 @@ const MeetingHeader = () => {
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-4 bg-[#ecedef] border border-black/5 px-5 py-3 rounded-none shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02)]" style={{ borderWidth: '0.5px' }}>
           <div className="size-8 rounded-none bg-primary flex-center shadow-sm">
-             <VideoCamera weight="bold" size={18} className="text-white" />
+            <VideoCamera weight="bold" size={18} className="text-white" />
           </div>
           <div className="flex flex-col">
             <h1 className="text-[14px] font-bold text-slate-900 leading-none mb-0.5">
               {description}
             </h1>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CanCast Session</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CastTalk Session</span>
           </div>
         </div>
       </div>

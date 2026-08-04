@@ -19,8 +19,6 @@ const StreamVideoProvider = ({ children }: { children: ReactNode }) => {
       console.error('Stream API key is missing. Current value:', API_KEY);
       throw new Error('Stream API key is missing');
     }
-
-    console.log('Initializing Stream with API key:', API_KEY?.substring(0, 5) + '...');
     
     const client = new StreamVideoClient({
       apiKey: API_KEY,
