@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { CaretLeft, CaretRight, Trash, Info, Copy, Globe, Lock, X, Clock, Timer, MagnifyingGlass, Sliders } from '@phosphor-icons/react';
 import { useGetCalls } from '@/hooks/useGetCalls';
@@ -14,6 +14,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
+import { Client } from 'appwrite';
 
 const HOUR_HEIGHT = 100;
 const START_HOUR = 0;
@@ -295,7 +296,45 @@ export default function SchedulePage() {
     }
   }, [calls]);
 
-  const allCalls = (localCalls ?? []).filter((call) => !call.state.endedAt);
+  // Appwrite Realtime listener for instant calendar updates on deletion or creation
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const appwriteClient = new Client()
+      .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://syd.cloud.appwrite.io/v1')
+      .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a27f0d9002671523088');
+
+    const unsubscribe = appwriteClient.subscribe(
+      'databases.castdb.collections.schedules.documents',
+      (response) => {
+        const doc = response.payload as any;
+        if (response.events.some(e => e.includes('delete'))) {
+          // Immediately filter out the deleted meeting from local calendar view!
+          setLocalCalls(prev => prev.filter(c => c.id !== doc.meetingId && c.id !== doc.$id));
+          setSelectedCall(prev => (prev && (prev.id === doc.meetingId || prev.id === doc.$id)) ? null : prev);
+        } else if (response.events.some(e => e.includes('create'))) {
+          if (doc.createdBy === user.id && client) {
+            const call = client.call('default', doc.meetingId);
+            call.get().then(() => {
+              setLocalCalls(prev => [call, ...prev.filter(c => c.id !== call.id)]);
+            }).catch(console.error);
+          }
+        }
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user?.id, client]);
+
+  const allCalls = useMemo(() => {
+    const map = new Map<string, Call>();
+    (localCalls ?? []).forEach((c) => {
+      if (c && c.id && !c.state.endedAt) {
+        map.set(c.id, c);
+      }
+    });
+    return Array.from(map.values());
+  }, [localCalls]);
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
   const [selectedCluster, setSelectedCluster] = useState<Call[] | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -748,7 +787,6 @@ export default function SchedulePage() {
                     )}
                   </div>
                 </div>
-                {/* Date and duration on same row with bullet separator (less gap mt-0.5) */}
                 <p
                   className="text-[13px] text-slate-500 font-normal mt-0.5 flex items-center gap-2"
                   style={{ marginBottom: '5px' }}
@@ -1106,7 +1144,10 @@ export default function SchedulePage() {
             </>
           )}
 
-          <div className="relative w-full transition-all duration-300 overflow-hidden h-[300px]">
+          <div className={cn(
+            "relative w-full transition-all duration-300 overflow-hidden",
+            (step === 2 && meetingType === 'general') ? "h-[140px]" : "h-[300px]"
+          )}>
             {/* Step 1: Session Choice */}
             <div className={cn(
               "absolute top-0 left-0 w-full transition-all duration-400 ease-in-out",
@@ -1224,7 +1265,9 @@ export default function SchedulePage() {
                   </div>
 
 
-                  <div className="flex flex-col w-full">
+                  {meetingType !== 'general' && (
+                    <>
+                      <div className="flex flex-col w-full">
                     <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
                       Start Date <span className="text-red-500">*</span>
                     </label>
@@ -1347,9 +1390,11 @@ export default function SchedulePage() {
                       </Select>
                     </div>
                   </div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
+          </div>
+        </div>
           </div>
 
           {step <= 2 && (

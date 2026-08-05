@@ -7,7 +7,7 @@ import { useStreamVideoClient, Call } from '@stream-io/video-react-sdk';
 import {
   ArrowRight, Link as LinkIcon, Plus, X,
   ChatCircle, Clock,
-  Copy, Lock, Globe,
+  Copy, Lock, Globe, CalendarPlus, SpinnerGap, CalendarCheck,
 } from '@phosphor-icons/react';
 import { useToast } from '@/components/ui/use-toast';
 import Loader from '@/components/Loader';
@@ -41,6 +41,25 @@ const Home = () => {
   const [meetingType, setMeetingType] = useState<'general' | 'secure'>('general');
   const [previewId, setPreviewId] = useState('');
   const [meetingLink, setMeetingLink] = useState<string | null>(null);
+
+  // Scheduled meeting join flow state
+  const [showScheduledJoinModal, setShowScheduledJoinModal] = useState(false);
+  const [showNotStartedModal, setShowNotStartedModal] = useState(false);
+  const [scheduledMeetingInfo, setScheduledMeetingInfo] = useState<{
+    meetingId: string;
+    title: string;
+    startsAt: string;
+    duration: number;
+    meetingType: string;
+    alreadyAdded?: boolean;
+    isHost?: boolean;
+  } | null>(null);
+  const [notStartedInfo, setNotStartedInfo] = useState<{
+    title: string;
+    startsAt: string;
+  } | null>(null);
+  const [isJoining, setIsJoining] = useState(false);
+  const [isCheckingSchedule, setIsCheckingSchedule] = useState(false);
 
   const closeDropdown = () => {
     setDropdownClosing(true);
@@ -169,8 +188,82 @@ const Home = () => {
     }
   };
 
-  const joinMeeting = () => {
-    if (linkOrCode) router.push(linkOrCode.includes('http') ? linkOrCode : `/meeting/${linkOrCode}`);
+  const extractMeetingId = (input: string): string => {
+    // Extract meeting ID from URL or use as-is if it's just a code
+    if (input.includes('/meeting/')) {
+      const parts = input.split('/meeting/');
+      return parts[parts.length - 1].replace(/[\/\?#].*/g, '').trim();
+    }
+    return input.trim();
+  };
+
+  const joinMeeting = async () => {
+    if (!linkOrCode) return;
+    const meetingId = extractMeetingId(linkOrCode);
+    if (!meetingId) return;
+
+    try {
+      setIsCheckingSchedule(true);
+      // Check if this is a scheduled meeting
+      const res = await fetch(`/api/schedules/join?meetingId=${encodeURIComponent(meetingId)}`);
+      const data = await res.json();
+
+      if (data.isScheduled && data.isFuture) {
+        if (data.alreadyAdded || data.isHost) {
+          // Already in calendar or user is host but meeting hasn't started yet — show warning modal
+          setNotStartedInfo({
+            title: data.schedule.title,
+            startsAt: data.schedule.startsAt,
+          });
+          setShowNotStartedModal(true);
+        } else {
+          // Show scheduled meeting modal to offer adding to calendar
+          setScheduledMeetingInfo({
+            meetingId: data.schedule.meetingId,
+            title: data.schedule.title,
+            startsAt: data.schedule.startsAt,
+            duration: data.schedule.duration,
+            meetingType: data.schedule.meetingType,
+            alreadyAdded: data.alreadyAdded,
+            isHost: data.isHost,
+          });
+          setShowScheduledJoinModal(true);
+        }
+      } else {
+        // Not a scheduled meeting, or meeting has already started — navigate directly to room
+        router.push(`/meeting/${meetingId}`);
+      }
+    } catch (err) {
+      console.error('[Join Check Error]:', err);
+      // If check fails, fallback to direct navigation
+      router.push(`/meeting/${meetingId}`);
+    } finally {
+      setIsCheckingSchedule(false);
+    }
+  };
+
+  const handleAddToCalendar = async () => {
+    if (!scheduledMeetingInfo) return;
+    const info = scheduledMeetingInfo;
+    try {
+      setIsJoining(true);
+      const res = await fetch('/api/schedules/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meetingId: info.meetingId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: 'Meeting added to your calendar!' });
+      }
+    } catch (err) {
+      console.error('[Add to Calendar Error]:', err);
+      toast({ title: 'Failed to add to calendar' });
+    } finally {
+      setIsJoining(false);
+      setShowScheduledJoinModal(false);
+      setScheduledMeetingInfo(null);
+    }
   };
 
   if (!isLoaded) return <Loader />;
@@ -235,10 +328,10 @@ const Home = () => {
               />
               <button
                 onClick={joinMeeting}
-                disabled={!linkOrCode}
-                className={`absolute right-1 top-1 bottom-1 px-5 rounded-none font-medium transition-colors ${linkOrCode ? 'text-black hover:bg-black/5' : 'text-slate-400 cursor-not-allowed'}`}
+                disabled={!linkOrCode || isCheckingSchedule}
+                className={`absolute right-1 top-1 bottom-1 px-5 rounded-none font-medium transition-colors ${linkOrCode && !isCheckingSchedule ? 'text-black hover:bg-black/5' : 'text-slate-400 cursor-not-allowed'}`}
               >
-                Join
+                {isCheckingSchedule ? <SpinnerGap size={18} className="animate-spin" /> : 'Join'}
               </button>
             </div>
           </div>
@@ -614,6 +707,96 @@ const Home = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Scheduled Meeting Join Modal */}
+      {showScheduledJoinModal && scheduledMeetingInfo && (
+        <CastTalkModal
+          isOpen={showScheduledJoinModal}
+          onClose={() => {
+            setShowScheduledJoinModal(false);
+            setScheduledMeetingInfo(null);
+          }}
+          maxWidth="max-w-[420px]"
+        >
+          <div className="flex flex-col font-geist">
+            <h2 className="text-[20px] font-medium text-[#111827] leading-none mb-2.5">
+              Scheduled Meeting
+            </h2>
+            <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
+              "{scheduledMeetingInfo.title}" is scheduled for {new Date(scheduledMeetingInfo.startsAt).toLocaleString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              })}. Would you like to add it to your calendar?
+            </p>
+            <div className="flex justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowScheduledJoinModal(false);
+                  setScheduledMeetingInfo(null);
+                }}
+                className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleAddToCalendar}
+                disabled={isJoining}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm"
+              >
+                {isJoining ? 'Adding...' : 'Add to calendar'}
+              </button>
+            </div>
+          </div>
+        </CastTalkModal>
+      )}
+
+      {/* Meeting Not Started Warning Modal */}
+      {showNotStartedModal && notStartedInfo && (
+        <CastTalkModal
+          isOpen={showNotStartedModal}
+          onClose={() => {
+            setShowNotStartedModal(false);
+            setNotStartedInfo(null);
+          }}
+          maxWidth="max-w-[420px]"
+        >
+          <div className="flex flex-col font-geist">
+            <h2 className="text-[20px] font-medium text-[#111827] leading-none mb-2.5">
+              Meeting Not Started
+            </h2>
+            <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
+              Your meeting has not started yet. It is scheduled for {new Date(notStartedInfo.startsAt).toLocaleString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              })}.
+            </p>
+            <div className="flex justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNotStartedModal(false);
+                  setNotStartedInfo(null);
+                }}
+                className="bg-[#3E2723] hover:opacity-90 text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] shadow-sm"
+              >
+                Back to Home
+              </button>
+            </div>
+          </div>
+        </CastTalkModal>
       )}
     </>
   );

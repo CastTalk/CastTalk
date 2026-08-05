@@ -260,7 +260,49 @@ export async function DELETE(req: Request) {
       }
     ).catch((e: any) => console.error('[Create Cancel Notification Error]:', e));
 
-    // Clean up corresponding active/time-based notifications
+    // Find and clean up participant schedule entries (copies of this meeting with different createdBy)
+    try {
+      const participantSchedules = await appwrite.databases.listDocuments(
+        DATABASE_ID,
+        COLLECTION_ID,
+        [
+          Query.equal('meetingId', meetingId),
+          Query.notEqual('createdBy', activeUserId),
+          Query.limit(100)
+        ]
+      );
+
+      const participantCancelMsg = isPast
+        ? `${existing.title} has been deleted by the host.`
+        : `${existing.title} has been cancelled by the host.`;
+
+      // Notify each participant and delete their schedule entry
+      await Promise.all(
+        participantSchedules.documents.map(async (doc: any) => {
+          // Create cancellation notification for participant
+          await appwrite.databases.createDocument(
+            DATABASE_ID,
+            'notifications',
+            getNotificationId('cancel', meetingId, `${doc.createdBy}_${timestamp}`),
+            {
+              userId: doc.createdBy,
+              text: participantCancelMsg,
+              read: false,
+              type: 'cancelled',
+              createdAt: new Date().toISOString()
+            }
+          ).catch((e: any) => console.error('[Participant Cancel Notification Error]:', e));
+
+          // Delete participant's schedule entry
+          await appwrite.databases.deleteDocument(DATABASE_ID, COLLECTION_ID, doc.$id)
+            .catch((e: any) => console.error('[Delete Participant Schedule Error]:', e));
+        })
+      );
+    } catch (e: any) {
+      console.error('[Find Participant Schedules Error]:', e);
+    }
+
+    // Clean up corresponding active/time-based notifications for the host
     const activeNotifs = [
       getNotificationId('sched', meetingId),
       getNotificationId('prep', meetingId),
