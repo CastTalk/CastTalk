@@ -22,8 +22,8 @@ export async function getUserEmail(userId: string): Promise<string | null> {
     if (!user) return null;
     const primary = user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId);
     return primary?.emailAddress || user.emailAddresses[0]?.emailAddress || null;
-  } catch (error) {
-    console.error('[getUserEmail Error]:', error);
+  } catch (error: any) {
+    console.warn('[getUserEmail]: Could not fetch user email (network/offline):', error?.message || error);
     return null;
   }
 }
@@ -86,10 +86,10 @@ function renderEmailLayout({
       <td align="left">
         <table width="560" border="0" cellspacing="0" cellpadding="0" style="margin: 0 auto; text-align: left;">
           
-          <!-- Top Left Logo (CID embedded SVG) -->
+          <!-- Top Left Logo -->
           <tr>
             <td align="left" style="padding-bottom: 24px;">
-              <img src="cid:bloomLogo" width="44" height="44" alt="CastTalk Logo" style="display: block; border: 0;" />
+              <img src="${BASE_URL}/logo/Bloom.svg" width="44" height="44" alt="CastTalk Logo" style="display: block; border: 0;" />
             </td>
           </tr>
 

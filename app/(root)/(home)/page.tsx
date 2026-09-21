@@ -146,7 +146,8 @@ const Home = () => {
       const call = client.call('default', previewId);
       if (!call) throw new Error('Failed to create meeting');
       const startsAt = meetingMode === 'instant' ? new Date().toISOString() : formDate.toISOString();
-      await call.getOrCreate({
+      
+      const createCallData = {
         data: {
           starts_at: startsAt,
           custom: {
@@ -156,7 +157,22 @@ const Home = () => {
             duration: formDuration,
           },
         },
-      });
+      };
+
+      // Attempt getOrCreate with automatic retry for resilience against network latency
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          await call.getOrCreate(createCallData);
+          break;
+        } catch (err: any) {
+          console.warn(`[Meeting Create attempt ${attempt + 1} failed]:`, err);
+          if (attempt === 0) {
+            await new Promise((r) => setTimeout(r, 800));
+          } else {
+            throw err;
+          }
+        }
+      }
 
       // Sync manual meeting into Appwrite schedules database
       await fetch('/api/schedules', {

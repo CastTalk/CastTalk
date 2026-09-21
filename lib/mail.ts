@@ -1,6 +1,4 @@
 import nodemailer from 'nodemailer';
-import path from 'path';
-import fs from 'fs';
 
 export const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -22,11 +20,6 @@ export interface SendEmailOptions {
 }
 
 export async function sendEmail({ to, subject, text, html, replyTo, attachments }: SendEmailOptions) {
-  const logoPath = path.join(process.cwd(), 'public', 'logo', 'Bloom.svg');
-  const defaultAttachments = fs.existsSync(logoPath)
-    ? [{ filename: 'Bloom.svg', path: logoPath, cid: 'bloomLogo' }]
-    : [];
-
   const mailOptions = {
     from: process.env.SMTP_FROM_EMAIL || `"CastTalk" <${process.env.SMTP_USER}>`,
     to,
@@ -34,7 +27,7 @@ export async function sendEmail({ to, subject, text, html, replyTo, attachments 
     text,
     html,
     replyTo,
-    attachments: attachments || defaultAttachments,
+    ...(attachments && attachments.length > 0 ? { attachments } : {}),
   };
 
   return await transporter.sendMail(mailOptions);

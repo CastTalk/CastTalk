@@ -1,12 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   VideoPreview,
   useCall,
   useCallStateHooks,
 } from '@stream-io/video-react-sdk';
-import { Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash, Gear, PencilSimple, Check, Users, SpeakerSlash, Hourglass, Lock, ShieldWarning, ArrowLeft, Clock, SpinnerGap } from '@phosphor-icons/react';
+import { Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash, Gear, PencilSimple, Check, Users, SpeakerSlash, Hourglass, Lock, ArrowLeft, Clock, SpinnerGap } from '@phosphor-icons/react';
 
 import { useUser } from '@clerk/nextjs';
 import { Ripple } from './ui/ripple';
@@ -206,33 +206,46 @@ const MeetingSetup = ({
   // Host Identification & Meeting Security
   const hostUserId = call.state.createdBy?.id || (call.state.custom as any)?.createdBy;
   const isHost = Boolean(user?.id && hostUserId === user.id);
-  const isHostInCall = participants.some((p) => p.userId === hostUserId);
   const meetingType = (call.state.custom as any)?.meetingType || 'general';
   const isSecureMeeting = meetingType === 'secure' || meetingType === 'private';
 
   const [isWaitingForAdmission, setIsWaitingForAdmission] = useState(false);
-  const [isDenied, setIsDenied] = useState(false);
+
+  const persistentGuestIdRef = useRef<string>('');
+  if (!persistentGuestIdRef.current) {
+    persistentGuestIdRef.current = user?.id || (typeof window !== 'undefined' ? localStorage.getItem('guestUserId') || '' : '') || `guest_${Math.random().toString(36).substring(2, 9)}`;
+    if (typeof window !== 'undefined' && !localStorage.getItem('guestUserId')) {
+      localStorage.setItem('guestUserId', persistentGuestIdRef.current);
+    }
+  }
+  const effectiveUserId = user?.id || persistentGuestIdRef.current;
 
   // Listen for host admission/denial custom events
   useEffect(() => {
     if (!call || isHost) return;
 
     const handleCustomEvent = (event: any) => {
-      if (event.custom?.type === 'admit-user' && event.custom?.targetUserId === user?.id) {
+      const targetId = event.custom?.targetUserId;
+      if (event.custom?.type === 'admit-user' && (targetId === effectiveUserId || targetId === user?.id)) {
         setIsWaitingForAdmission(false);
         call.join().then(() => setIsSetupComplete(true)).catch((err) => {
           console.error('[MeetingSetup] Error joining admitted call:', err);
         });
       }
-      if (event.custom?.type === 'deny-user' && event.custom?.targetUserId === user?.id) {
+      if (event.custom?.type === 'deny-user' && (targetId === effectiveUserId || targetId === user?.id)) {
         setIsWaitingForAdmission(false);
-        setIsDenied(true);
+        toast({
+          title: "Admission declined by the host",
+          description: "The host has declined your request to join this meeting.",
+          variant: "destructive"
+        });
+        router.push('/');
       }
     };
 
     const unsubscribe = call.on('custom', handleCustomEvent);
     return () => unsubscribe();
-  }, [call, user?.id, isHost, setIsSetupComplete]);
+  }, [call, user?.id, effectiveUserId, isHost, setIsSetupComplete, toast, router]);
 
   // Continuously request admission while in waiting room
   useEffect(() => {
@@ -241,7 +254,7 @@ const MeetingSetup = ({
     const sendRequest = () => {
       call.sendCustomEvent({
         type: 'request-admission',
-        userId: user?.id,
+        userId: effectiveUserId,
         userName: displayName,
         userImage: user?.imageUrl || '',
       }).catch(console.error);
@@ -250,7 +263,7 @@ const MeetingSetup = ({
     sendRequest();
     const interval = setInterval(sendRequest, 3000);
     return () => clearInterval(interval);
-  }, [isWaitingForAdmission, call, user?.id, displayName, isHost]);
+  }, [isWaitingForAdmission, call, effectiveUserId, displayName, isHost]);
 
   useEffect(() => {
     const toggleMic = async () => {
@@ -316,67 +329,6 @@ const MeetingSetup = ({
       />
     );
 
-  if (isDenied) {
-    return (
-      <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f8fafc] p-6 font-heading overflow-hidden relative">
-        <NoiseTexture className="opacity-[0.12]" />
-        <div className="flex flex-col items-center gap-6 max-w-md text-center bg-white p-8 rounded-2xl border border-slate-200 shadow-xl relative z-10">
-          <div className="size-16 rounded-full bg-red-50 flex items-center justify-center text-red-600">
-            <ShieldWarning size={32} weight="fill" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              The host has declined your request to join this private meeting.
-            </p>
-          </div>
-          <Button
-            onClick={() => router.push('/')}
-            className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-3 font-semibold text-sm"
-          >
-            Return to Dashboard
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (isWaitingForAdmission) {
-    return (
-      <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f8fafc] p-6 font-heading overflow-hidden relative">
-        <NoiseTexture className="opacity-[0.12]" />
-        <div className="flex flex-col items-center gap-6 max-w-md text-center bg-white p-8 rounded-2xl border border-slate-200 shadow-xl relative z-10">
-          <div className="relative">
-            <Ripple mainCircleSize={120} numCircles={4} className="opacity-30" />
-            <div className="size-20 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-2xl relative z-10 shadow-lg border-4 border-white overflow-hidden">
-              {user?.imageUrl ? (
-                <img src={user.imageUrl} alt={displayName} className="w-full h-full object-cover" />
-              ) : (
-                displayName[0]
-              )}
-            </div>
-          </div>
-          <div>
-            <div className="inline-flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full text-xs font-semibold mb-3">
-              <SpinnerGap className="animate-spin" size={14} /> Waiting Room
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Asking host to let you in...</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              You are in line for this secure meeting. The host will be notified to admit you shortly.
-            </p>
-          </div>
-          <Button
-            onClick={() => setIsWaitingForAdmission(false)}
-            variant="outline"
-            className="w-full border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl py-3 font-semibold text-sm"
-          >
-            Cancel Request
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   const participantCount = call.state.participants.length;
 
 
@@ -438,7 +390,13 @@ const MeetingSetup = ({
           )}
           
           {/* Overlay Badges */}
-          <div className="absolute top-6 left-6 z-20 flex gap-2">
+          <div className="absolute top-6 left-6 z-20 flex items-center gap-2">
+             {isWaitingForAdmission && (
+               <div className="flex items-center gap-2 bg-amber-500 text-white backdrop-blur-md rounded-none px-3 py-1.5 border border-amber-600 shadow-md">
+                  <SpinnerGap className="animate-spin" size={14} />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Waiting for host</span>
+               </div>
+             )}
              {participantCount > 0 && (
                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-none px-3 py-1.5 border border-white/10" style={{ borderWidth: '0.8px' }}>
                   <Users weight="bold" size={14} className="text-white" />
@@ -448,7 +406,7 @@ const MeetingSetup = ({
           </div>
 
           {/* Editable Name Overlay */}
-          <div className="absolute bottom-6 left-6 flex items-center gap-3 bg-black/50 backdrop-blur-md rounded-none p-2 pl-4 z-20 border border-white/10 transition-all duration-300 hover:bg-black/70" style={{ borderWidth: '0.8px' }}>
+          <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 max-w-[55%] sm:max-w-none flex items-center gap-2 sm:gap-3 bg-black/50 backdrop-blur-md rounded-none p-1.5 sm:p-2 pl-3 sm:pl-4 z-20 border border-white/10 transition-all duration-300 hover:bg-black/70" style={{ borderWidth: '0.8px' }}>
             {isEditingName ? (
               <input
                 type="text"
@@ -457,42 +415,42 @@ const MeetingSetup = ({
                 onBlur={() => setIsEditingName(false)}
                 onKeyDown={(e) => e.key === 'Enter' && setIsEditingName(false)}
                 autoFocus
-                className="bg-transparent text-white text-sm font-semibold outline-none border-none w-32 placeholder:text-white/40"
+                className="bg-transparent text-white text-xs sm:text-sm font-semibold outline-none border-none w-24 sm:w-32 placeholder:text-white/40"
               />
             ) : (
-              <span className="text-white text-sm font-semibold">{displayName}</span>
+              <span className="text-white text-xs sm:text-sm font-semibold truncate">{displayName}</span>
             )}
             <button
               onClick={() => setIsEditingName(!isEditingName)}
-              className="size-8 rounded-none bg-white/10 flex-center text-white hover:bg-white/20 transition-colors"
+              className="size-7 sm:size-8 rounded-none bg-white/10 flex-center text-white hover:bg-white/20 transition-colors shrink-0"
             >
-              <PencilSimple size={16} weight="bold" />
+              <PencilSimple size={14} weight="bold" />
             </button>
           </div>
 
           {/* Setup Status Indicators */}
-          <div className="absolute bottom-6 right-6 z-20 flex gap-2">
+          <div className="absolute bottom-3 right-3 sm:bottom-6 sm:right-6 z-20 flex gap-1.5 sm:gap-2">
             <div 
               className={cn(
-                "size-10 rounded-none flex-center backdrop-blur-md border transition-all",
+                "size-8 sm:size-10 rounded-none flex-center backdrop-blur-md border transition-all",
                 isMicOn 
                   ? (isCameraOn ? "bg-white/20 text-white border-white/10" : "bg-slate-900/10 text-slate-800 border-slate-900/10")
                   : "bg-red-500/80 text-white border-transparent"
               )}
               style={{ borderWidth: '0.8px' }}
             >
-              {isMicOn ? <Microphone size={20} weight="bold" /> : <MicrophoneSlash size={20} weight="bold" />}
+              {isMicOn ? <Microphone size={16} weight="bold" /> : <MicrophoneSlash size={16} weight="bold" />}
             </div>
             <div 
               className={cn(
-                "size-10 rounded-none flex-center backdrop-blur-md border transition-all",
+                "size-8 sm:size-10 rounded-none flex-center backdrop-blur-md border transition-all",
                 isCameraOn 
                   ? "bg-white/20 text-white border-white/10" 
                   : "bg-red-500/80 text-white border-transparent"
               )}
               style={{ borderWidth: '0.8px' }}
             >
-              {isCameraOn ? <VideoCamera size={20} weight="bold" /> : <VideoCameraSlash size={20} weight="bold" />}
+              {isCameraOn ? <VideoCamera size={16} weight="bold" /> : <VideoCameraSlash size={16} weight="bold" />}
             </div>
           </div>
         </div>
@@ -536,47 +494,34 @@ const MeetingSetup = ({
             </button>
           </div>
 
-          {!isHost && !isHostInCall ? (
-            <div className="flex flex-col items-center gap-2 w-full sm:w-auto">
-              <Button
-                disabled
-                className="w-full sm:w-auto h-14 px-8 bg-slate-200 text-slate-500 rounded-none font-bold text-base shadow-none cursor-not-allowed flex items-center gap-2"
-              >
-                <SpinnerGap className="animate-spin text-slate-500" size={18} />
-                Waiting for host to start...
-              </Button>
-              <p className="text-[11px] text-amber-700 font-medium flex items-center gap-1">
-                <Clock size={13} weight="bold" />
-                The host has not started this meeting yet.
-              </p>
-            </div>
-          ) : (
-            <Button
+          <Button
               onClick={async () => {
                 if (typeof window !== 'undefined') {
                   localStorage.setItem('streamDisplayName', displayName);
                 }
-                try {
-                  if (!isHost && isSecureMeeting) {
-                    setIsWaitingForAdmission(true);
-                  } else {
+                
+                const isHostCurrentlyInCall = call.state.participants.some(p => p.userId === hostUserId);
+
+                if (isHost || (!isSecureMeeting && isHostCurrentlyInCall)) {
+                  try {
                     await call.join();
                     setIsSetupComplete(true);
+                  } catch (err) {
+                    console.error('[MeetingSetup] Failed to join call:', err);
+                    toast({
+                      title: "Failed to join call",
+                      description: err instanceof Error ? err.message : "Unknown error occurred",
+                      variant: "destructive"
+                    });
                   }
-                } catch (err) {
-                  console.error('[MeetingSetup] Failed to join call:', err);
-                  toast({
-                    title: "Failed to join call",
-                    description: err instanceof Error ? err.message : "Unknown error occurred",
-                    variant: "destructive"
-                  });
+                } else {
+                  setIsWaitingForAdmission(true);
                 }
               }}
               className="w-full sm:w-auto h-14 px-10 bg-slate-900 hover:bg-slate-800 text-white rounded-none font-bold text-lg shadow-md transition-all active:scale-[0.98]"
             >
-              {isSecureMeeting && !isHost ? 'Request to Join' : 'Enter Meeting'}
+              Enter Meeting
             </Button>
-          )}
 
         </div>
       </div>

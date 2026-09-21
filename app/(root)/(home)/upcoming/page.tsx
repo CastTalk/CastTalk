@@ -304,26 +304,35 @@ export default function SchedulePage() {
       .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://syd.cloud.appwrite.io/v1')
       .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a27f0d9002671523088');
 
-    const unsubscribe = appwriteClient.subscribe(
-      'databases.castdb.collections.schedules.documents',
-      (response) => {
-        const doc = response.payload as any;
-        if (response.events.some(e => e.includes('delete'))) {
-          // Immediately filter out the deleted meeting from local calendar view!
-          setLocalCalls(prev => prev.filter(c => c.id !== doc.meetingId && c.id !== doc.$id));
-          setSelectedCall(prev => (prev && (prev.id === doc.meetingId || prev.id === doc.$id)) ? null : prev);
-        } else if (response.events.some(e => e.includes('create'))) {
-          if (doc.createdBy === user.id && client) {
-            const call = client.call('default', doc.meetingId);
-            call.get().then(() => {
-              setLocalCalls(prev => [call, ...prev.filter(c => c.id !== call.id)]);
-            }).catch(console.error);
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = appwriteClient.subscribe(
+        'databases.castdb.collections.schedules.documents',
+        (response) => {
+          const doc = response.payload as any;
+          if (response.events.some(e => e.includes('delete'))) {
+            // Immediately filter out the deleted meeting from local calendar view!
+            setLocalCalls(prev => prev.filter(c => c.id !== doc.meetingId && c.id !== doc.$id));
+            setSelectedCall(prev => (prev && (prev.id === doc.meetingId || prev.id === doc.$id)) ? null : prev);
+          } else if (response.events.some(e => e.includes('create'))) {
+            if (doc.createdBy === user.id && client) {
+              const call = client.call('default', doc.meetingId);
+              call.get().then(() => {
+                setLocalCalls(prev => [call, ...prev.filter(c => c.id !== call.id)]);
+              }).catch(console.error);
+            }
           }
         }
-      }
-    );
+      );
+    } catch (err) {
+      console.warn('[Upcoming] Appwrite Realtime subscription error:', err);
+    }
 
-    return () => unsubscribe();
+    return () => {
+      try {
+        unsubscribe();
+      } catch {}
+    };
   }, [user?.id, client]);
 
   const allCalls = useMemo(() => {

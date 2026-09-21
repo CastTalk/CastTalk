@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       throw e;
     }
   } catch (error: any) {
-    console.error('[Appwrite Auth Sync Error]:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    console.warn('[Appwrite Auth Sync Warning]: Appwrite unreachable or offline:', error.message || error);
+    return NextResponse.json({ success: false, message: 'Appwrite sync skipped (offline/unreachable)' }, { status: 200 });
   }
 }

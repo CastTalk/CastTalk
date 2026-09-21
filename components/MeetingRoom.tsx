@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   CallParticipantsList,
   CallStatsButton,
@@ -20,8 +20,8 @@ import {
   Users, SquaresFour, GridFour, Monitor,
   CaretUp, CaretDown, Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash,
   ClosedCaptioning, ArrowSquareUp, HandPalm, DotsThreeVertical,
-  PhoneDisconnect, Info, Copy, ChatCircle, Sparkle, ShieldWarning, DotsThree,
-  MagnifyingGlass, UserPlus, Crown, ShieldCheck, PushPin, X
+  Info, Copy, ChatCircle, Sparkle, ShieldWarning, DotsThree,
+  MagnifyingGlass, UserPlus, Crown, ShieldCheck, PushPin, X, UserCircle
 } from '@phosphor-icons/react';
 import {
   DropdownMenu,
@@ -32,13 +32,14 @@ import {
 } from './ui/dropdown-menu';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useToast } from '@/components/ui/use-toast';
+import AcceptCall from '@/components/AcceptCall';
 
 import Loader from './Loader';
 import { cn } from '@/lib/utils';
 import { NoiseTexture } from '@/components/ui/noise-texture';
 import { Ripple } from './ui/ripple';
+import { useTranscription } from '@/hooks/useTranscription';
 
-// RGB to HSL conversion
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   r /= 255; g /= 255; b /= 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -267,7 +268,10 @@ const GoogleMeetPeopleSidebar = ({
   call,
   toast,
   isAllMuted,
-  setIsAllMuted
+  setIsAllMuted,
+  pinnedSessionId,
+  setPinnedSessionId,
+  isHost,
 }: { 
   onClose: () => void; 
   participants: any[]; 
@@ -277,6 +281,9 @@ const GoogleMeetPeopleSidebar = ({
   toast: any;
   isAllMuted: boolean;
   setIsAllMuted: React.Dispatch<React.SetStateAction<boolean>>;
+  pinnedSessionId: string | null;
+  setPinnedSessionId: React.Dispatch<React.SetStateAction<string | null>>;
+  isHost?: boolean;
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isContributorsOpen, setIsContributorsOpen] = useState(true);
@@ -286,25 +293,61 @@ const GoogleMeetPeopleSidebar = ({
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  const localUser = participants.find((p) => p.isLocal);
+  const hostUserId = call?.state?.createdBy?.id || (call?.state?.custom as any)?.createdBy;
+  const isLocalHost = Boolean(
+    isHost ||
+    (localUser?.userId && hostUserId === localUser.userId) ||
+    (call?.state?.createdBy?.id && localUser?.userId === call.state.createdBy.id)
+  );
+
+  const effectiveLocalRole = localUser?.userId ? userRoles[localUser.userId] : undefined;
+  const currentUserRole = effectiveLocalRole || (isLocalHost ? 'Meeting host' : 'Participant');
+
+  // Role permissions hierarchy:
+  // 1. Host: Highest access, can assign roles, Mute All, and remove participants
+  const canAssignRoles = isLocalHost || currentUserRole === 'Meeting host';
+  // 2. Moderator & Host: Can remove participants from meeting
+  const canRemoveParticipants = isLocalHost || currentUserRole === 'Meeting host' || currentUserRole === 'Moderator';
+  // 3. Host only: Can Mute All
+  const canMuteAll = isLocalHost || currentUserRole === 'Meeting host';
+
   const handleMuteAll = async () => {
     const nextState = !isAllMuted;
     setIsAllMuted(nextState);
 
     if (call) {
       try {
-        await call.microphone.disable();
-        await call.sendCustomEvent({ type: 'mute-all-users' });
-        toast({ title: nextState ? "All participants muted" : "Mute all toggled" });
+        if (nextState) {
+          await call.sendCustomEvent({ type: 'mute-all-users' });
+        } else {
+          await call.sendCustomEvent({ type: 'unmute-all-users' });
+        }
+        toast({ title: nextState ? "Muted all participants (Spotlight exempted)" : "Unmuted all participants" });
       } catch (e) {
         console.error(e);
-        toast({ title: "All participants muted" });
+        toast({ title: "Action failed" });
       }
     }
   };
 
   const setRole = (userId: string, role: string) => {
-    setUserRoles((prev) => ({ ...prev, [userId]: role }));
-    toast({ title: `User role updated to ${role}` });
+    setUserRoles((prev) => {
+      const updated = { ...prev, [userId]: role };
+      if (call) {
+        // 1. Sync directly to Stream call server state (persists & syncs automatically)
+        call.update({ custom: { ...(call.state?.custom || {}), userRoles: updated } }).catch(() => {});
+        // 2. Broadcast custom event for immediate instant delivery
+        call.sendCustomEvent({
+          type: 'set-user-role',
+          targetUserId: userId,
+          role: role,
+          roles: updated,
+        }).catch(console.error);
+      }
+      return updated;
+    });
+    toast({ title: `Role updated to ${role}` });
   };
 
   return (
@@ -314,27 +357,29 @@ const GoogleMeetPeopleSidebar = ({
         <h2 className="text-xl font-medium tracking-tight text-white">People</h2>
         <button 
           onClick={onClose} 
-          className="p-1.5 rounded-full hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
+          className="p-1.5 rounded-full hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
         >
           <X size={20} />
         </button>
       </div>
 
-      {/* Action Button: Mute All */}
-      <div className="mb-5">
-        <button 
-          onClick={handleMuteAll}
-          className={cn(
-            "w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full text-xs font-semibold transition-all shadow-sm",
-            isAllMuted 
-              ? "bg-[#ea4335] hover:bg-[#d93025] text-white" 
-              : "bg-[#004a77] hover:bg-[#005999] text-[#c2e7ff]"
-          )}
-        >
-          <MicrophoneSlash size={18} weight="bold" />
-          <span>{isAllMuted ? 'All muted' : 'Mute all'}</span>
-        </button>
-      </div>
+      {/* Action Button: Mute All (Visible exclusively to Host) */}
+      {canMuteAll && (
+        <div className="mb-5">
+          <button 
+            onClick={handleMuteAll}
+            className={cn(
+              "w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full text-xs font-semibold transition-all shadow-sm cursor-pointer",
+              isAllMuted 
+                ? "bg-[#ea4335] hover:bg-[#d93025] text-white" 
+                : "bg-[#004a77] hover:bg-[#005999] text-[#c2e7ff]"
+            )}
+          >
+            <MicrophoneSlash size={18} weight="bold" />
+            <span>{isAllMuted ? 'Unmute all' : 'Mute all (Except Spotlight)'}</span>
+          </button>
+        </div>
+      )}
 
       {/* Search Input */}
       <div className="relative flex items-center bg-[#1e1f21] border border-[#5f6368] focus-within:border-[#8ab4f8] rounded-xl px-3.5 py-2.5 mb-5 transition-colors">
@@ -373,7 +418,8 @@ const GoogleMeetPeopleSidebar = ({
             <div className="flex flex-col divide-y divide-[#3c4043]/30">
               {filteredParticipants.map((p) => {
                 const displayName = p.name || 'Participant';
-                const role = userRoles[p.userId] || (p.isLocal ? 'Meeting host' : 'Participant');
+                const role = userRoles[p.userId] || (p.userId === hostUserId ? 'Meeting host' : 'Participant');
+                const isSpotlight = role === 'Spotlight';
 
                 return (
                   <div key={p.sessionId || p.userId} className="flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors">
@@ -390,63 +436,104 @@ const GoogleMeetPeopleSidebar = ({
                         <span className="text-sm font-medium text-white truncate">
                           {displayName} {p.isLocal ? '(You)' : ''}
                         </span>
-                        <span className="text-xs text-[#9aa0a6] truncate font-normal">
-                          {role}
-                        </span>
+                        <div className="text-xs truncate font-normal mt-0.5">
+                          {role === 'Meeting host' ? (
+                            <span className="text-amber-400 flex items-center gap-1 font-medium">
+                              <Crown size={12} weight="fill" /> Meeting host
+                            </span>
+                          ) : role === 'Moderator' ? (
+                            <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                              <ShieldCheck size={12} weight="fill" /> Moderator
+                            </span>
+                          ) : isSpotlight ? (
+                            <span className="text-purple-400 flex items-center gap-1 font-medium">
+                              <Sparkle size={12} weight="fill" /> Spotlight Presenter
+                            </span>
+                          ) : (
+                            <span className="text-[#9aa0a6]">Participant</span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Right actions: Audio status & Role Management menu */}
+                    {/* Right actions: Dropdown menu */}
                     <div className="flex items-center gap-2 shrink-0">
-                      {/* Audio status indicator pill */}
-                      <div className="size-8 rounded-full bg-[#a8c7fa]/20 text-[#a8c7fa] flex items-center justify-center">
-                        <DotsThree size={16} weight="bold" />
-                      </div>
-
-                      {/* Options dropdown for Moderator / Admin role switching */}
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="p-1.5 rounded-full hover:bg-white/10 text-slate-300 hover:text-white transition-colors outline-none">
+                        <DropdownMenuTrigger className="p-1.5 rounded-full hover:bg-white/10 text-slate-300 hover:text-white transition-colors outline-none cursor-pointer">
                           <DotsThreeVertical size={18} weight="bold" />
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent className="bg-[#202124] border border-[#3c4043] text-white rounded-xl shadow-2xl min-w-[180px] p-1.5 z-50">
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 py-1.5 border-b border-[#3c4043]/50 mb-1">
-                            Assign Role
-                          </div>
+                        <DropdownMenuContent className="bg-[#202124] border border-[#3c4043] text-white rounded-xl shadow-2xl min-w-[200px] p-1.5 z-[120]">
+                          {/* Pin Option for all attendees */}
                           <DropdownMenuItem 
-                            onClick={() => setRole(p.userId, 'Meeting host')}
+                            onClick={() => setPinnedSessionId(pinnedSessionId === p.sessionId ? null : p.sessionId)}
                             className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/10 text-slate-200"
                           >
-                            <Crown size={15} className="text-amber-400" />
-                            <span>Set as Host</span>
+                            <PushPin size={15} className={pinnedSessionId === p.sessionId ? "text-blue-400" : ""} />
+                            <span>{pinnedSessionId === p.sessionId ? 'Unpin from screen' : 'Pin to screen'}</span>
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => setRole(p.userId, 'Moderator')}
-                            className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/10 text-slate-200"
-                          >
-                            <ShieldCheck size={15} className="text-emerald-400" />
-                            <span>Set as Moderator</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => setRole(p.userId, 'Admin')}
-                            className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/10 text-slate-200"
-                          >
-                            <Crown size={15} className="text-blue-400" />
-                            <span>Set as Admin</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => setRole(p.userId, 'Participant')}
-                            className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/10 text-slate-200"
-                          >
-                            <span>Set as Participant</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="bg-[#3c4043]/50 my-1" />
-                          <DropdownMenuItem 
-                            onClick={() => toast({ title: `${displayName} pinned` })}
-                            className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/10 text-slate-200"
-                          >
-                            <PushPin size={15} />
-                            <span>Pin to screen</span>
-                          </DropdownMenuItem>
+
+                          {/* Role Management (HOST ONLY) */}
+                          {canAssignRoles && !p.isLocal && (
+                            <>
+                              <DropdownMenuSeparator className="bg-[#3c4043]/50 my-1" />
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 py-1.5">
+                                Assign Role
+                              </div>
+                              
+                              <DropdownMenuItem 
+                                onClick={() => setRole(p.userId, 'Meeting host')}
+                                className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/10 text-slate-200"
+                              >
+                                <Crown size={15} className="text-amber-400" />
+                                <span>Set as Host</span>
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuItem 
+                                onClick={() => setRole(p.userId, 'Moderator')}
+                                className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/10 text-slate-200"
+                              >
+                                <ShieldCheck size={15} className="text-emerald-400" />
+                                <span>Set as Moderator</span>
+                              </DropdownMenuItem>
+
+                              {/* Spotlight toggle */}
+                              <DropdownMenuItem 
+                                onClick={() => setRole(p.userId, isSpotlight ? 'Participant' : 'Spotlight')}
+                                className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-purple-500/15 text-purple-300"
+                              >
+                                <Sparkle size={15} className="text-purple-400" weight={isSpotlight ? "fill" : "bold"} />
+                                <span>{isSpotlight ? 'Remove Spotlight' : 'Give Spotlight'}</span>
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuItem 
+                                onClick={() => setRole(p.userId, 'Participant')}
+                                className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/10 text-slate-200"
+                              >
+                                <UserCircle size={15} className="text-slate-400" />
+                                <span>Set as Participant</span>
+                              </DropdownMenuItem>
+                            </>
+                          )}
+
+                          {/* Moderator & Host Kick Option */}
+                          {canRemoveParticipants && !p.isLocal && (
+                            <>
+                              <DropdownMenuSeparator className="bg-[#3c4043]/50 my-1" />
+                              <DropdownMenuItem 
+                                onClick={async () => {
+                                  try {
+                                    await call?.removeMembers([p.userId]);
+                                    toast({ title: `${displayName} was removed` });
+                                  } catch (e) {
+                                    toast({ title: `Could not remove ${displayName}`, variant: 'destructive' });
+                                  }
+                                }}
+                                className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-red-500/10 text-red-400"
+                              >
+                                <span className="font-semibold">Remove from meeting</span>
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -473,6 +560,11 @@ const MeetingRoom = () => {
   const [layout, setLayout] = useState<CallLayoutType>('grid');
   const [showParticipants, setShowParticipants] = useState(false);
   const [userRoles, setUserRoles] = useState<Record<string, string>>({});
+  const userRolesRef = useRef<Record<string, string>>(userRoles);
+  useEffect(() => {
+    userRolesRef.current = userRoles;
+  }, [userRoles]);
+  const [pinnedSessionId, setPinnedSessionId] = useState<string | null>(null);
   const [isAllMuted, setIsAllMuted] = useState(false);
   const { useCallCallingState, useCameraState, useMicrophoneState, useScreenShareState, useHasOngoingScreenShare, useLocalParticipant, useParticipants } = useCallStateHooks();
   const participants = useParticipants();
@@ -496,11 +588,110 @@ const MeetingRoom = () => {
   const { toast } = useToast();
   const hasLeftRef = useRef(false);
 
+  // Active captions per participant profile tile: { [userId]: { speaker, text, timestamp } }
+  const [activeCaptions, setActiveCaptions] = useState<
+    Record<string, { speaker: string; text: string; timestamp: number }>
+  >({});
+
+  const customName = typeof window !== 'undefined' ? localStorage.getItem('streamDisplayName') : null;
+  const currentUserId = localParticipant?.userId || user?.id || 'local-user';
+  const displayName = localParticipant?.name || customName || user?.fullName || user?.firstName || 'Participant';
+
+  const lastBroadcastRef = useRef(0);
+
+  // Broadcast and locally display speech segment
+  const handleTranscriptSegment = useCallback(
+    (segment: { text: string; speaker: string; isPartial?: boolean }) => {
+      // Ignore punctuation-only tokens like lone '.' or '...'
+      if (!segment.text || !/[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(segment.text)) {
+        return;
+      }
+      const now = Date.now();
+      // 1. Display on local participant tile with 0ms instant latency
+      setActiveCaptions((prev) => ({
+        ...prev,
+        [currentUserId]: {
+          speaker: segment.speaker || displayName,
+          text: segment.text,
+          timestamp: now,
+        },
+      }));
+
+      // 2. Broadcast in real-time to all call participants via Stream custom event
+      // Throttle partials to at most 1 every 120ms; finals send immediately
+      if (call) {
+        if (!segment.isPartial || now - lastBroadcastRef.current > 120) {
+          lastBroadcastRef.current = now;
+          call
+            .sendCustomEvent({
+              type: 'live-caption',
+              userId: currentUserId,
+              speaker: segment.speaker || displayName,
+              text: segment.text,
+              timestamp: now,
+            })
+            .catch(() => {});
+        }
+      }
+    },
+    [call, currentUserId, displayName]
+  );
+
+  // — Speechmatics real-time transcription (Taglish) —
+  const { isListening, error: transcriptionError, start: startTranscription, stop: stopTranscription } = useTranscription({
+    onTranscript: handleTranscriptSegment,
+  });
+
+  // Start/stop transcription when CC is toggled AND mic is unmuted
+  // When muted in the call, microphone recording is completely halted for privacy & accuracy!
+  useEffect(() => {
+    if (isCcActive && !isMicMuted) {
+      startTranscription(displayName);
+    } else {
+      stopTranscription();
+    }
+  }, [isCcActive, isMicMuted, displayName, startTranscription, stopTranscription]);
+
+  // Alert on transcription errors
+  useEffect(() => {
+    if (transcriptionError && isCcActive) {
+      toast({ title: 'Captions error', description: transcriptionError, variant: 'destructive' });
+    }
+  }, [transcriptionError, isCcActive, toast]);
+
+  // Auto-hide captions after 4.5 seconds of silence
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setActiveCaptions((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [uid, cap] of Object.entries(next)) {
+          if (now - cap.timestamp > 4500) {
+            delete next[uid];
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 500);
+    return () => clearInterval(timer);
+  }, []);
+
+  const toggleCc = () => setIsCcActive((prev) => !prev);
+
+  // Sync userRoles from call state once available
+  useEffect(() => {
+    const roles = (call?.state?.custom as any)?.userRoles;
+    if (roles && Object.keys(roles).length > 0) {
+      setUserRoles(roles);
+    }
+  }, [call?.state?.custom]);
+
   const handleAdmitUser = (targetUserId: string) => {
     if (!call) return;
     call.sendCustomEvent({ type: 'admit-user', targetUserId }).catch(console.error);
     setWaitingQueue((prev) => prev.filter((u) => u.userId !== targetUserId));
-    toast({ title: 'Participant admitted' });
   };
 
   const handleDenyUser = (targetUserId: string) => {
@@ -515,7 +706,6 @@ const MeetingRoom = () => {
       call.sendCustomEvent({ type: 'admit-user', targetUserId: u.userId }).catch(console.error);
     });
     setWaitingQueue([]);
-    toast({ title: 'All participants admitted' });
   };
 
   const playHandRaiseSound = () => {
@@ -565,22 +755,94 @@ const MeetingRoom = () => {
     }
   };
 
-  // Listen to remote hand raise, mute-all, and admission request custom events
+  // Listen to remote hand raise, mute-all, role updates, and admission request custom events
   useEffect(() => {
     if (!call) return;
-    const unsubscribe = call.on('custom', (event: any) => {
+    const currentUserId = localParticipant?.userId || user?.id || 'local-user';
+
+    // 1. Initial check of call.state.custom roles
+    if ((call.state.custom as any)?.userRoles) {
+      setUserRoles((prev) => ({ ...prev, ...(call.state.custom as any).userRoles }));
+    }
+
+    // 2. Request current roles from host on mount as fallback
+    call.sendCustomEvent({ type: 'request-roles' }).catch(() => {});
+
+    // 3. Listen to persistent metadata updates from Stream server
+    const unsubscribeCallUpdated = call.on('call.updated', (event: any) => {
+      const serverRoles = (call.state.custom as any)?.userRoles || event?.call?.custom?.userRoles;
+      if (serverRoles) {
+        setUserRoles((prev) => ({ ...prev, ...serverRoles }));
+      }
+    });
+
+    const unsubscribeCustom = call.on('custom', (event: any) => {
       if (event?.custom?.type === 'request-admission' && isHost) {
-        const { userId, userName, userImage } = event.custom;
-        if (userId) {
+        const { userId, userName, userImage } = event.custom || {};
+        const effectiveId = userId || (userName ? `user_${userName}` : '');
+        if (effectiveId && effectiveId !== user?.id) {
           setWaitingQueue((prev) => {
-            if (prev.some((u) => u.userId === userId)) return prev;
-            return [...prev, { userId, userName: userName || 'Guest', userImage: userImage || '' }];
+            const existingIndex = prev.findIndex(
+              (u) => u.userId === effectiveId || (userName && u.userName === userName)
+            );
+            if (existingIndex !== -1) {
+              const updated = [...prev];
+              updated[existingIndex] = {
+                userId: effectiveId,
+                userName: userName || prev[existingIndex].userName || 'Guest',
+                userImage: userImage || prev[existingIndex].userImage || '',
+              };
+              return updated;
+            }
+            return [
+              ...prev,
+              { userId: effectiveId, userName: userName || 'Guest', userImage: userImage || '' },
+            ];
           });
         }
+      } else if (event?.custom?.type === 'set-user-role') {
+        const { targetUserId, role, roles } = event.custom || {};
+        if (roles) {
+          setUserRoles((prev) => ({ ...prev, ...roles }));
+        } else if (targetUserId && role) {
+          setUserRoles((prev) => ({ ...prev, [targetUserId]: role }));
+        }
+        if (targetUserId === currentUserId) {
+          if (role === 'Spotlight') {
+            toast({ 
+              title: "🌟 Spotlight Presenter Active", 
+              description: "You have been given Spotlight privilege! Your mic is immune to Mute All."
+            });
+          } else {
+            toast({ title: `Your role is now: ${role}` });
+          }
+        }
+      } else if (event?.custom?.type === 'request-roles' && isHost) {
+        call.sendCustomEvent({
+          type: 'sync-roles',
+          roles: userRolesRef.current,
+        }).catch(console.error);
+      } else if (event?.custom?.type === 'sync-roles') {
+        if (event.custom?.roles) {
+          setUserRoles((prev) => ({ ...prev, ...event.custom.roles }));
+        }
       } else if (event?.custom?.type === 'mute-all-users') {
-        call.microphone.disable().catch(() => {});
-        setIsAllMuted(true);
-        toast({ title: "The host muted everyone" });
+        const myEffectiveRole = userRolesRef.current[currentUserId] || (isHost ? 'Meeting host' : 'Participant');
+        const isImmune = isHost || myEffectiveRole === 'Meeting host' || myEffectiveRole === 'Spotlight';
+
+        if (isImmune) {
+          toast({ 
+            title: "Microphone Active (Spotlight / Host)", 
+            description: "You are immune to Mute All as the presenter/host." 
+          });
+        } else {
+          call.microphone.disable().catch(() => {});
+          setIsAllMuted(true);
+          toast({ title: "The host muted everyone (Spotlight presenter active)" });
+        }
+      } else if (event?.custom?.type === 'unmute-all-users') {
+        setIsAllMuted(false);
+        toast({ title: "Microphone restrictions cleared by host" });
       } else if (event?.custom?.type === 'hand-raise') {
         const { isRaised, userId, name } = event.custom;
         if (!userId) return;
@@ -597,12 +859,39 @@ const MeetingRoom = () => {
           }
           return copy;
         });
+      } else if (event?.custom?.type === 'live-caption') {
+        const { userId, speaker, text, timestamp } = event.custom || {};
+        if (userId && text && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(text)) {
+          setActiveCaptions((prev) => ({
+            ...prev,
+            [userId]: {
+              speaker: speaker || 'Participant',
+              text,
+              timestamp: timestamp || Date.now(),
+            },
+          }));
+        }
       }
     });
+
     return () => {
-      unsubscribe();
+      unsubscribeCallUpdated();
+      unsubscribeCustom();
     };
   }, [call, localParticipant?.userId, user?.id, isHost]);
+
+  // Auto-prune already joined participants or host from waiting queue
+  useEffect(() => {
+    setWaitingQueue((prev) =>
+      prev.filter(
+        (u) =>
+          u.userId !== user?.id &&
+          !participants.some(
+            (p) => p.userId === u.userId || (p.name && p.name === u.userName)
+          )
+      )
+    );
+  }, [participants, user?.id]);
 
 
   const raisedHandList = Object.entries(raisedHandsMap).map(([id, data]) => ({ userId: id, ...data }));
@@ -749,28 +1038,34 @@ const MeetingRoom = () => {
       (p) => p.screenShareStream || (p as any).isScreenSharing || p.publishedTracks?.includes(3) || p.publishedTracks?.includes('SCREEN_SHARE' as any)
     ) || (isScreenSharing ? localParticipant : undefined);
 
-    if ((hasOngoingScreenShare || isScreenSharing) && screenShareParticipant) {
-      const presenterName = getParticipantHandName(screenShareParticipant);
+    const pinnedParticipant = participants.find((p) => p.sessionId === pinnedSessionId);
+    const activeMainParticipant = screenShareParticipant || pinnedParticipant;
+    const isPinView = !!pinnedParticipant && !screenShareParticipant;
+
+    if ((hasOngoingScreenShare || isScreenSharing || pinnedParticipant) && activeMainParticipant) {
+      const presenterName = getParticipantHandName(activeMainParticipant);
       const sideCount = participants.length;
 
       const tileSideClass = "w-full aspect-video max-h-[220px] rounded-2xl overflow-hidden relative bg-[#202124] border border-white/5 shadow-md shrink-0";
 
       return (
         <div className="w-full h-full flex gap-4 p-4 min-h-0 bg-transparent relative z-10 justify-center">
-          {/* Left side: Widescreen screen share presentation */}
+          {/* Left side: Widescreen screen share or pinned video presentation */}
           <motion.div 
             layout
+            layoutId={activeMainParticipant.sessionId}
             transition={springTransition}
             className="flex-[2.6] max-w-[70%] max-h-[calc(100vh-160px)] my-auto flex items-center justify-center relative bg-transparent h-full"
           >
             <ParticipantView 
-              participant={screenShareParticipant} 
-              trackType="screenShareTrack"
+              participant={activeMainParticipant} 
+              trackType={screenShareParticipant ? "screenShareTrack" : "videoTrack"}
               VideoPlaceholder={CustomVideoFallback as any}
+              ParticipantViewUI={null}
               className="w-full h-full str-video__video-fit-contain"
             />
 
-            {/* Google Meet Presenting Badge */}
+            {/* Google Meet Presenting / Pinned Badge */}
             <motion.div
               initial={{ y: 20, opacity: 0, scale: 0.9 }}
               animate={{ y: 0, opacity: 1, scale: 1 }}
@@ -778,25 +1073,46 @@ const MeetingRoom = () => {
               className="absolute bottom-4 left-4 z-30 flex items-center gap-2.5 bg-[#202124]/90 backdrop-blur-md border border-white/10 text-white px-3.5 py-2 rounded-full text-xs font-semibold shadow-xl select-none"
             >
               <div className="size-6 rounded-full bg-[#8ab4f8]/20 text-[#8ab4f8] flex items-center justify-center shrink-0">
-                <Monitor size={15} weight="bold" />
+                {screenShareParticipant ? (
+                  <Monitor size={15} weight="bold" />
+                ) : (
+                  <PushPin size={15} weight="bold" />
+                )}
               </div>
               <span className="text-white text-xs font-medium tracking-tight">
-                {presenterName} is presenting
+                {screenShareParticipant ? `${presenterName} is presenting` : `${presenterName} is pinned`}
               </span>
             </motion.div>
+
+            {/* Live Caption Overlay for main presenter / pinned participant */}
+            {isCcActive && activeCaptions[activeMainParticipant.userId]?.text && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(activeCaptions[activeMainParticipant.userId].text) && (
+              <div
+                key={`main-cap-${activeMainParticipant.userId}-${activeCaptions[activeMainParticipant.userId].timestamp}`}
+                className="absolute bottom-16 left-6 right-6 z-40 pointer-events-none flex justify-center"
+              >
+                <div className="max-w-[85%] bg-black/60 border border-white/15 px-3.5 py-1.5 rounded-lg shadow-lg text-center">
+                  <span className="text-blue-400 text-xs font-normal italic font-geist mr-1.5">
+                    {activeCaptions[activeMainParticipant.userId].speaker}:
+                  </span>
+                  <span className="text-white/95 text-xs sm:text-[13px] font-normal italic font-geist leading-relaxed drop-shadow-sm">
+                    {activeCaptions[activeMainParticipant.userId].text}
+                  </span>
+                </div>
+              </div>
+            )}
           </motion.div>
 
           {/* Right side: Vertical grid of participants */}
           <div className="flex-[1] max-w-[27%] min-w-[220px] max-h-[calc(100vh-160px)] my-auto flex flex-col gap-3 shrink-0 overflow-y-auto pr-1 no-scrollbar">
             <AnimatePresence mode="popLayout">
-              {participants.map((p) => (
+              {participants.filter(p => p.sessionId !== activeMainParticipant.sessionId).map((p) => (
                 <motion.div 
                   key={p.sessionId} 
                   layout
+                  layoutId={p.sessionId}
                   initial={{ scale: 0.85, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.85, opacity: 0 }}
-                  whileHover={{ scale: 1.02 }}
                   transition={springTransition}
                   className={cn(tileSideClass, isHandUpForParticipant(p) && "hand-raised-active")}
                 >
@@ -804,10 +1120,17 @@ const MeetingRoom = () => {
                     <ParticipantView 
                       participant={p} 
                       VideoPlaceholder={CustomVideoFallback as any}
+                      ParticipantViewUI={null}
                       className="w-full h-full"
                     />
                   ) : (
                     <CustomVideoFallback participant={p} />
+                  )}
+                  {userRoles[p.userId] === 'Spotlight' && (
+                    <div className="absolute top-2.5 left-2.5 z-30 flex items-center gap-1 bg-purple-600/90 text-white rounded-full px-2 py-0.5 text-[10px] font-bold shadow-md backdrop-blur-sm border border-purple-400/30 select-none pointer-events-none">
+                      <Sparkle size={11} weight="fill" className="text-amber-300" />
+                      <span>Spotlight</span>
+                    </div>
                   )}
                   {!isHandUpForParticipant(p) && (
                     <div className="absolute bottom-3 left-3 z-20 text-white font-semibold text-xs tracking-tight pointer-events-none select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
@@ -819,6 +1142,20 @@ const MeetingRoom = () => {
                       <RaisedHandTileBadge name={getParticipantHandName(p)} />
                     )}
                   </AnimatePresence>
+
+                  {/* Live Caption for side participant tile */}
+                  {isCcActive && activeCaptions[p.userId]?.text && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(activeCaptions[p.userId].text) && (
+                    <div
+                      key={`side-cap-${p.userId}-${activeCaptions[p.userId].timestamp}`}
+                      className="absolute bottom-8 left-2 right-2 z-30 pointer-events-none flex justify-center"
+                    >
+                      <div className="max-w-[95%] bg-black/60 border border-white/15 px-2.5 py-1 rounded-md shadow-md text-center">
+                        <p className="text-white/95 text-[11px] font-normal italic font-geist leading-tight line-clamp-2 drop-shadow-sm">
+                          {activeCaptions[p.userId].text}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -827,18 +1164,18 @@ const MeetingRoom = () => {
       );
     }
 
-    const tileStyle = "aspect-video rounded-2xl overflow-hidden relative bg-[#202124] border border-white/5 shadow-2xl shrink-0";
+    const tileStyle = "rounded-2xl overflow-hidden relative bg-[#202124] border border-white/5 shadow-2xl shrink-0 transition-all";
     let tileClass = "";
 
     const count = participants.length;
     if (count === 1) {
-      tileClass = "w-[88%] md:w-[62%] max-w-[840px] max-h-[calc(100vh-200px)] mx-auto";
+      tileClass = "w-full sm:w-[88%] md:w-[62%] h-[55vh] sm:h-auto aspect-[4/3] sm:aspect-video max-w-[840px] max-h-[calc(100vh-160px)] mx-auto";
     } else if (count === 2) {
-      tileClass = "w-[88%] md:w-[45%] max-w-[620px] max-h-[calc(100vh-200px)]";
+      tileClass = "w-full sm:w-[88%] md:w-[45%] h-[32vh] sm:h-auto aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100vh-160px)]";
     } else if (count === 4) {
-      tileClass = "w-[44%] md:w-[45%] max-w-[620px] max-h-[calc(100vh-200px)]";
+      tileClass = "w-[48%] md:w-[45%] aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100vh-160px)]";
     } else {
-      tileClass = "w-[88%] md:w-[30%] max-w-[420px] max-h-[calc(100vh-200px)]";
+      tileClass = "w-full sm:w-[48%] md:w-[30%] aspect-[4/3] sm:aspect-video max-w-[420px] max-h-[calc(100vh-160px)]";
     }
 
     return (
@@ -849,10 +1186,10 @@ const MeetingRoom = () => {
               <motion.div 
                 key={p.sessionId} 
                 layout
+                layoutId={p.sessionId}
                 initial={{ scale: 0.85, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.85, opacity: 0 }}
-                whileHover={{ scale: 1.01 }}
                 transition={springTransition}
                 className={cn(tileStyle, tileClass, isHandUpForParticipant(p) && "hand-raised-active")}
               >
@@ -860,10 +1197,17 @@ const MeetingRoom = () => {
                   <ParticipantView 
                     participant={p} 
                     VideoPlaceholder={CustomVideoFallback as any}
+                    ParticipantViewUI={null}
                     className="w-full h-full"
                   />
                 ) : (
                   <CustomVideoFallback participant={p} />
+                )}
+                {userRoles[p.userId] === 'Spotlight' && (
+                  <div className="absolute top-3 left-3 z-30 flex items-center gap-1.5 bg-purple-600/90 text-white rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md backdrop-blur-sm border border-purple-400/30 select-none pointer-events-none">
+                    <Sparkle size={12} weight="fill" className="text-amber-300" />
+                    <span>Spotlight</span>
+                  </div>
                 )}
                 {!isHandUpForParticipant(p) && (
                   <div className="absolute bottom-3 left-3 z-20 text-white font-semibold text-xs tracking-tight pointer-events-none select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
@@ -875,6 +1219,20 @@ const MeetingRoom = () => {
                     <RaisedHandTileBadge name={getParticipantHandName(p)} />
                   )}
                 </AnimatePresence>
+
+                {/* Live Caption directly inside participant profile card */}
+                {isCcActive && activeCaptions[p.userId]?.text && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(activeCaptions[p.userId].text) && (
+                  <div
+                    key={`grid-cap-${p.userId}-${activeCaptions[p.userId].timestamp}`}
+                    className="absolute bottom-10 left-3 right-3 sm:left-6 sm:right-6 z-30 pointer-events-none flex justify-center"
+                  >
+                    <div className="max-w-[92%] bg-black/60 border border-white/15 px-3.5 py-1.5 rounded-lg shadow-lg text-center">
+                      <p className="text-white/95 text-xs sm:text-[13px] font-normal italic font-geist leading-snug drop-shadow-sm">
+                        {activeCaptions[p.userId].text}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             ))}
           </AnimatePresence>
@@ -987,6 +1345,17 @@ const MeetingRoom = () => {
         [class*="participant-details__pin"] {
           display: none !important;
         }
+        
+        /* Aggressively hide any menu toggle buttons or dropdowns */
+        .str-video__participant-view *[aria-haspopup="menu"],
+        .str-video__participant-view button[title="More options"],
+        .str-video__menu-toggle-button,
+        .str-video__participant-context-menu {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+          pointer-events: none !important;
+        }
         /* Sidebar styling */
         .str-video__participant-list-container {
           background-color: #202124 !important;
@@ -1007,69 +1376,14 @@ const MeetingRoom = () => {
         }
       `}</style>
 
-      {/* Floating Host Admission Queue Banner */}
-      <AnimatePresence>
-
-        {isHost && waitingQueue.length > 0 && (
-          <motion.div
-            initial={{ y: -60, opacity: 0, scale: 0.9 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: -60, opacity: 0, scale: 0.9 }}
-            transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-slate-900/95 text-white px-5 py-3 rounded-2xl border border-white/10 shadow-2xl backdrop-blur-xl"
-          >
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-9 h-9 rounded-full bg-slate-700 overflow-hidden border border-white/20 flex items-center justify-center font-bold text-xs text-white uppercase shrink-0">
-                  {waitingQueue[0].userImage ? (
-                    <img src={waitingQueue[0].userImage} alt={waitingQueue[0].userName} className="w-full h-full object-cover" />
-                  ) : (
-                    waitingQueue[0].userName[0]
-                  )}
-                </div>
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-slate-900 animate-ping" />
-              </div>
-              <div className="text-left">
-                <p className="text-xs font-semibold text-white">
-                  {waitingQueue[0].userName} <span className="text-slate-400 font-normal">wants to join</span>
-                </p>
-                <p className="text-[10px] text-amber-400 font-medium">Private / Secure Meeting</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleDenyUser(waitingQueue[0].userId)}
-                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 text-xs font-medium transition-colors"
-              >
-                Deny
-              </button>
-              <button
-                onClick={() => handleAdmitUser(waitingQueue[0].userId)}
-                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors shadow-md"
-              >
-                Admit
-              </button>
-              {waitingQueue.length > 1 && (
-                <button
-                  onClick={handleAdmitAll}
-                  className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors"
-                >
-                  Admit All ({waitingQueue.length})
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Top Left: Meeting Time & ID Info */}
-      <div className="absolute top-6 left-6 z-20 flex items-center gap-3 text-white font-medium text-sm select-none">
-
+      <div className="absolute top-3 left-3 sm:top-6 sm:left-6 z-20 flex items-center gap-2 sm:gap-3 text-white font-medium text-xs sm:text-sm select-none">
         <span>{timeStr}</span>
         <span className="w-[1px] h-3.5 bg-[#3c4043]" />
-        <span className="font-normal tracking-wide lowercase text-slate-300">{call?.id}</span>
-        <Info size={16} className="text-slate-400 hover:text-white cursor-pointer ml-1" onClick={async () => {
+        <span className="hidden sm:inline font-normal tracking-wide lowercase text-slate-300">{call?.id}</span>
+        <span className="sm:hidden font-normal tracking-wide lowercase text-slate-300 max-w-[80px] truncate">{call?.id}</span>
+        <Info size={16} className="text-slate-400 hover:text-white cursor-pointer ml-0.5 shrink-0" onClick={async () => {
           const url = typeof window !== 'undefined' ? `${window.location.origin}/meeting/${call?.id}` : '';
           await navigator.clipboard.writeText(url);
           toast({ title: 'Joining info copied!' });
@@ -1077,51 +1391,109 @@ const MeetingRoom = () => {
       </div>
 
       {/* Top Right: User avatar, count, sparkle */}
-      <div className="absolute top-6 right-6 z-20 flex items-center gap-3">
-        {/* Top Right Raised Hands Header Pill */}
+      <div className="absolute top-3 right-3 sm:top-6 sm:right-6 z-20 flex items-center gap-2 sm:gap-3">
+
+
+
+        {/* Admission Request Compact Pill (To the left of participants button) */}
         <AnimatePresence>
-          {raisedHandCount > 0 && (
+          {isHost && waitingQueue
+            .filter((u) => u.userId !== user?.id)
+            .filter(
+              (u) => !participants.some((p) => p.userId === u.userId || (p.name && p.name === u.userName))
+            )
+            .filter(
+              (u, index, self) =>
+                self.findIndex(
+                  (item) => item.userId === u.userId || (item.userName && item.userName === u.userName)
+                ) === index
+            )
+            .map((user) => (
             <motion.div
-              initial={{ scale: 0.8, opacity: 0, x: 20 }}
+              key={user.userId || user.userName}
+              initial={{ scale: 0.85, opacity: 0, x: -20 }}
               animate={{ scale: 1, opacity: 1, x: 0 }}
-              exit={{ scale: 0.8, opacity: 0, x: 20 }}
+              exit={{ scale: 0.85, opacity: 0, x: -20 }}
               transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-              onClick={() => setShowParticipants(true)}
-              className="flex items-center gap-2 bg-[#6fd98b] text-[#04210c] pl-1.5 pr-3.5 py-1 rounded-full text-xs font-semibold shadow-md cursor-pointer hover:bg-[#5cdb87] transition-all select-none"
-              title="View raised hands"
+              className="bg-[#202124] border border-[#3c4043] shadow-lg rounded-xl px-2.5 py-1 flex items-center gap-2.5 text-white h-10 select-none shrink-0"
             >
-              <div className="size-6 rounded-full bg-[#004f21] text-[#6fd98b] flex items-center justify-center shrink-0">
-                <HandPalm size={14} weight="fill" />
+              <div className="flex items-center gap-2">
+                {user.userImage ? (
+                  <img src={user.userImage} alt={user.userName} className="size-6 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="size-6 rounded-full bg-[#155724] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                    {user.userName[0]?.toUpperCase() || 'U'}
+                  </div>
+                )}
+                <div className="flex flex-col leading-tight max-w-[100px] sm:max-w-[130px]">
+                  <span className="font-semibold text-xs truncate text-white">{user.userName}</span>
+                  <span className="text-[10px] text-slate-400 truncate -mt-0.5">wants to join</span>
+                </div>
               </div>
-              <span className="font-semibold text-xs tracking-tight">
-                {raisedHandCount === 1 ? raisedHandList[0].name : `${raisedHandCount} raised hands`}
-              </span>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => handleDenyUser(user.userId)}
+                  className="px-2.5 py-1 text-xs font-medium text-[#8ab4f8] hover:bg-[#8ab4f8]/10 rounded-lg transition-colors"
+                >
+                  Deny
+                </button>
+                <button
+                  onClick={() => handleAdmitUser(user.userId)}
+                  className="px-3 py-1 text-xs font-semibold bg-[#8ab4f8] text-[#202124] hover:bg-[#93baf9] rounded-lg transition-colors shadow-sm"
+                >
+                  Admit
+                </button>
+              </div>
             </motion.div>
-          )}
+          ))}
         </AnimatePresence>
 
-        {/* Host Avatar / People Capsule */}
+        {/* Host/Participant Overlapping Square Avatar Stack */}
         <button 
           onClick={() => setShowParticipants((prev) => !prev)}
           className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-full transition-all bg-[#3c4043]/80 hover:bg-[#4a4f54]",
-            showParticipants && "bg-[#8ab4f8]/20 text-[#8ab4f8] border border-[#8ab4f8]/30"
+            "flex items-center gap-1.5 p-1 rounded-xl transition-all bg-[#3c4043] hover:bg-[#4a4f54] border border-transparent shadow-md select-none",
+            showParticipants && "bg-[#8ab4f8]/20 border-[#8ab4f8]/40"
           )}
+          title="View participants"
         >
-          <div className="size-5 rounded-full bg-[#155724] text-white flex items-center justify-center text-[10px] uppercase font-bold">
-            {call?.state.participants[0]?.name?.[0] || 'U'}
+          <div className="flex items-center -space-x-2.5 overflow-hidden pl-0.5">
+            {participants.slice(0, 4).map((p, index) => {
+              const displayName = p.name || 'Participant';
+              const imageUrl = p.image;
+              const initial = displayName[0]?.toUpperCase() || 'U';
+
+              return (
+                <div
+                  key={p.sessionId || p.userId || index}
+                  className="relative size-7 rounded-lg overflow-hidden border-2 border-[#202124] bg-[#155724] text-white flex items-center justify-center font-bold text-[11px] shrink-0 shadow-sm"
+                  style={{ zIndex: 10 - index }}
+                >
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={displayName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{initial}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          <span className="text-xs font-semibold text-white">
-            {call?.state.participants.length || 1}
+          <span className="text-xs font-bold text-white px-1.5">
+            {participants.length || 1}
           </span>
         </button>
+
         {/* Sparkle icon (visual effects) */}
         <button 
           onClick={() => toast({ title: 'Visual effects are ready' })}
-          className="p-2.5 bg-[#3c4043]/80 hover:bg-[#4a4f54] text-white rounded-full transition-colors flex items-center justify-center h-8 w-8"
+          className="h-10 w-10 bg-[#3c4043] hover:bg-[#4a4f54] text-white rounded-xl transition-colors flex items-center justify-center border border-transparent shadow-md"
           title="Apply visual effects"
         >
-          <Sparkle size={15} weight="bold" />
+          <Sparkle size={18} weight="bold" />
         </button>
       </div>
 
@@ -1129,43 +1501,45 @@ const MeetingRoom = () => {
         <div className="flex w-full h-full min-h-0 items-center justify-center mx-auto rounded-lg overflow-hidden bg-transparent">
           {CallLayout()}
         </div>
-        
-        {/* 1:1 Replica Google Meet People Sidebar Panel */}
-        <AnimatePresence>
-          {showParticipants && (
-            <motion.div
-              initial={{ x: '100%', opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: '100%', opacity: 0 }}
-              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="h-full ml-3 bg-[#202124] border border-[#3c4043] shadow-2xl rounded-2xl w-84 flex flex-col relative overflow-hidden shrink-0 z-30 select-none"
-            >
-              <GoogleMeetPeopleSidebar 
-                onClose={() => setShowParticipants(false)}
-                participants={participants}
-                userRoles={userRoles}
-                setUserRoles={setUserRoles}
-                call={call}
-                toast={toast}
-                isAllMuted={isAllMuted}
-                setIsAllMuted={setIsAllMuted}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
+        
+      {/* 1:1 Replica Google Meet People Sidebar Panel */}
+      <AnimatePresence>
+        {showParticipants && (
+          <motion.div
+            initial={{ x: '100%', opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: '100%', opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute right-4 sm:right-6 top-4 h-[calc(100vh-110px)] bg-[#202124] border border-[#3c4043] shadow-2xl rounded-2xl w-[360px] sm:w-[380px] md:w-[400px] flex flex-col overflow-hidden shrink-0 z-[100] select-none"
+          >
+            <GoogleMeetPeopleSidebar 
+              onClose={() => setShowParticipants(false)}
+              participants={participants}
+              userRoles={userRoles}
+              setUserRoles={setUserRoles}
+              call={call}
+              toast={toast}
+              isAllMuted={isAllMuted}
+              setIsAllMuted={setIsAllMuted}
+              pinnedSessionId={pinnedSessionId}
+              setPinnedSessionId={setPinnedSessionId}
+              isHost={isHost}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* 3. Controls Area - Pinned All The Way Down to Absolute Bottom */}
-      <div className="absolute bottom-4 left-0 right-0 w-full flex justify-between items-center px-8 z-30 bg-transparent select-none">
+      <div className="absolute bottom-2 sm:bottom-4 left-0 right-0 w-full flex justify-between items-center px-2 sm:px-8 z-30 bg-transparent select-none">
         {/* Bottom Left: Spacer (since time & code moved to top left) */}
-        <div className="w-[240px]" />
+        <div className="hidden md:block w-[240px]" />
 
         {/* Bottom Center: Google Meet Controls Dock */}
-        <div className="flex items-center gap-3 relative">
+        <div className="flex items-center gap-2 sm:gap-3 relative mx-auto md:mx-0">
 
-
-          {/* Microphone Combined Pill */}
-          <div className="flex items-center bg-[#3c4043] rounded-xl p-0.5 shadow-md border border-[#3c4043]/10">
+          {/* DESKTOP Microphone Combined Pill */}
+          <div className="hidden md:flex items-center bg-[#3c4043] rounded-xl p-0.5 shadow-md border border-[#3c4043]/10">
             <DropdownMenu>
               <DropdownMenuTrigger className={cn(
                 "p-2 text-white rounded-l-xl outline-none focus:outline-none transition-colors border-r border-[#202124]/30 h-[42px] flex items-center justify-center",
@@ -1204,8 +1578,20 @@ const MeetingRoom = () => {
             </button>
           </div>
 
-          {/* Camera Combined Pill */}
-          <div className="flex items-center bg-[#3c4043] rounded-xl p-0.5 shadow-md border border-[#3c4043]/10">
+          {/* MOBILE Microphone Single Button */}
+          <button
+            onClick={toggleMic}
+            className={cn(
+              "md:hidden size-11 rounded-2xl transition-colors flex items-center justify-center border shadow-md",
+              isMicMuted ? "bg-[#ea4335] text-white border-transparent" : "bg-[#3c4043] text-white border-transparent"
+            )}
+            title={isMicMuted ? "Unmute Mic" : "Mute Mic"}
+          >
+            {isMicMuted ? <MicrophoneSlash size={18} weight="bold" /> : <Microphone size={18} weight="bold" />}
+          </button>
+
+          {/* DESKTOP Camera Combined Pill */}
+          <div className="hidden md:flex items-center bg-[#3c4043] rounded-xl p-0.5 shadow-md border border-[#3c4043]/10">
             <DropdownMenu>
               <DropdownMenuTrigger className={cn(
                 "p-2 text-white rounded-l-xl outline-none focus:outline-none transition-colors border-r border-[#202124]/30 h-[42px] flex items-center justify-center",
@@ -1244,11 +1630,23 @@ const MeetingRoom = () => {
             </button>
           </div>
 
+          {/* MOBILE Camera Single Button */}
+          <button
+            onClick={toggleCamera}
+            className={cn(
+              "md:hidden size-11 rounded-2xl transition-colors flex items-center justify-center border shadow-md",
+              isCameraMuted ? "bg-[#ea4335] text-white border-transparent" : "bg-[#3c4043] text-white border-transparent"
+            )}
+            title={isCameraMuted ? "Turn On Camera" : "Turn Off Camera"}
+          >
+            {isCameraMuted ? <VideoCameraSlash size={18} weight="bold" /> : <VideoCamera size={18} weight="bold" />}
+          </button>
+
           {/* Present Now (Screen Share) */}
           <button
             onClick={toggleScreenShare}
             className={cn(
-              "p-2 rounded-xl transition-colors flex items-center justify-center border shadow-md h-12 w-12",
+              "size-11 sm:size-12 rounded-2xl transition-colors flex items-center justify-center border shadow-md",
               isScreenSharing ? "bg-[#a8c7fa] text-[#041e49] border-transparent hover:bg-[#b8d7fb]" : "bg-[#3c4043] text-white border-transparent hover:bg-[#4a4f54]"
             )}
             title="Present Now"
@@ -1256,11 +1654,11 @@ const MeetingRoom = () => {
             <ArrowSquareUp size={18} weight="bold" />
           </button>
 
-          {/* CC Button */}
+          {/* DESKTOP CC Button */}
           <button
-            onClick={() => setIsCcActive((prev) => !prev)}
+            onClick={toggleCc}
             className={cn(
-              "p-2 rounded-xl transition-colors flex items-center justify-center border shadow-md h-12 w-12",
+              "hidden md:flex p-2 rounded-xl transition-colors items-center justify-center border shadow-md h-12 w-12",
               isCcActive ? "bg-[#a8c7fa] text-[#041e49] border-transparent hover:bg-[#b8d7fb]" : "bg-[#3c4043] text-white border-transparent hover:bg-[#4a4f54]"
             )}
             title="Toggle Captions"
@@ -1272,7 +1670,7 @@ const MeetingRoom = () => {
           <button
             onClick={toggleHandRaise}
             className={cn(
-              "p-2 rounded-xl transition-all flex items-center justify-center border shadow-md h-12 w-12",
+              "size-11 sm:size-12 rounded-2xl transition-all flex items-center justify-center border shadow-md",
               isHandRaised 
                 ? "bg-[#6fd98b] text-[#04210c] hover:bg-[#5cdb87] border-transparent font-bold" 
                 : "bg-[#3c4043] text-white border-transparent hover:bg-[#4a4f54]"
@@ -1282,23 +1680,51 @@ const MeetingRoom = () => {
             <HandPalm size={18} weight={isHandRaised ? "fill" : "bold"} />
           </button>
 
-          {/* More Options */}
+          {/* More Options Menu (Comprehensive on Mobile) */}
           <DropdownMenu>
-            <DropdownMenuTrigger className="p-2 bg-[#3c4043] text-white hover:bg-[#4a4f54] rounded-xl transition-colors border border-transparent outline-none focus:outline-none shadow-md flex items-center justify-center h-12 w-12">
+            <DropdownMenuTrigger className="size-11 sm:size-12 bg-[#3c4043] text-white hover:bg-[#4a4f54] rounded-2xl transition-colors border border-transparent outline-none focus:outline-none shadow-md flex items-center justify-center">
               <DotsThreeVertical size={18} weight="bold" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-[#202124] border border-[#3c4043] text-white rounded-xl shadow-2xl mb-4 min-w-[200px] p-1.5 z-50">
+            <DropdownMenuContent className="bg-[#202124] border border-[#3c4043] text-white rounded-xl shadow-2xl mb-4 min-w-[210px] p-1.5 z-50 font-sans">
               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 py-1.5 border-b border-[#3c4043]/50 mb-1">Meeting Options</div>
+              
+              {/* Mobile-only options: Chat & Host Controls & Captions */}
+              <DropdownMenuItem 
+                onClick={() => toast({ title: 'Chat is currently disabled in this room' })}
+                className="md:hidden flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-200"
+              >
+                <ChatCircle size={16} weight="bold" />
+                <span>In-call Messages</span>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem 
+                onClick={toggleCc}
+                className="md:hidden flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-200"
+              >
+                <ClosedCaptioning size={16} weight="bold" />
+                <span>{isCcActive ? 'Turn Off Captions' : 'Turn On Captions'}</span>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem 
+                onClick={() => toast({ title: 'Host controls are open' })}
+                className="md:hidden flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-200"
+              >
+                <ShieldWarning size={16} weight="bold" />
+                <span>Host Controls</span>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="md:hidden bg-[#3c4043]/50 my-1" />
+
               <DropdownMenuItem 
                 onClick={() => toast({ title: 'Quality Stats is enabled' })}
-                className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-300"
+                className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-300"
               >
                 <span>Call Statistics</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-[#3c4043]/50 my-0.5" />
               <DropdownMenuItem 
                 onClick={() => toast({ title: 'Opening Troubleshooting...' })}
-                className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-300"
+                className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-300"
               >
                 <span>Troubleshooting & Help</span>
               </DropdownMenuItem>
@@ -1308,30 +1734,36 @@ const MeetingRoom = () => {
           {/* Hangup button */}
           <button
             onClick={hangup}
-            className="px-6 bg-[#ea4335] hover:bg-[#d93025] text-white rounded-xl transition-colors flex items-center justify-center shadow-lg active:scale-95 h-12"
+            className="size-11 sm:h-12 sm:px-6 bg-[#ea4335] hover:bg-[#d93025] text-white rounded-2xl transition-colors flex items-center justify-center shadow-lg active:scale-95 shrink-0"
             title="Leave Call"
           >
-            <PhoneDisconnect size={18} weight="bold" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="w-5 h-5 sm:w-6 sm:h-6 text-white shrink-0 pointer-events-none"
+              aria-hidden="true"
+            >
+              <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" />
+            </svg>
           </button>
         </div>
 
-        {/* Bottom Right: GMeet bottom right action icons */}
-        <div className="flex items-center gap-3 w-[240px] justify-end">
+        {/* Bottom Right: Desktop-only GMeet action icons */}
+        <div className="hidden md:flex items-center gap-3 w-[240px] justify-end">
           {/* Chat Icon */}
           <button 
             onClick={() => toast({ title: 'Chat is currently disabled in this room' })}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-[#3c4043] hover:bg-[#4a4f54] text-white transition-colors border border-transparent outline-none focus:outline-none shadow-md"
+            className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#3c4043] hover:bg-[#4a4f54] text-white transition-colors border border-transparent outline-none focus:outline-none shadow-md"
             title="Chat with everyone"
           >
             <ChatCircle weight="bold" size={18} />
           </button>
 
-
-
           {/* Host Lock Settings Icon */}
           <button 
             onClick={() => toast({ title: 'Host controls are open' })}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-[#3c4043] hover:bg-[#4a4f54] text-white transition-colors outline-none focus:outline-none shadow-md"
+            className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#3c4043] hover:bg-[#4a4f54] text-white transition-colors outline-none focus:outline-none shadow-md"
             title="Host controls"
           >
             <ShieldWarning weight="bold" size={18} />

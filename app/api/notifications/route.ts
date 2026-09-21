@@ -319,8 +319,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ notifications });
   } catch (error: any) {
-    console.error('[Get Notifications Error]:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    console.warn('[Get Notifications Warning]: Appwrite unreachable, returning fallback:', error?.message || error);
+    return NextResponse.json({ notifications: [] }, { status: 200 });
   }
 }
 

@@ -20,6 +20,23 @@ const StreamVideoProvider = ({ children }: { children: ReactNode }) => {
       throw new Error('Stream API key is missing');
     }
     
+    const getToken = async () => {
+      try {
+        const token = await tokenProvider(user.id);
+        if (token) return token;
+      } catch (err) {
+        console.warn('[StreamClientProvider] Server action tokenProvider failed, trying API route fallback...', err);
+      }
+
+      const res = await fetch(`/api/stream/token?userId=${encodeURIComponent(user.id)}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to fetch stream token');
+      }
+      const data = await res.json();
+      return data.token;
+    };
+
     const client = new StreamVideoClient({
       apiKey: API_KEY,
       user: {
@@ -27,7 +44,13 @@ const StreamVideoProvider = ({ children }: { children: ReactNode }) => {
         name: user?.fullName || user?.firstName || user?.username || user?.id,
         image: user?.imageUrl,
       },
-      tokenProvider,
+      tokenProvider: getToken,
+      options: {
+        timeout: 30000,
+        axiosRequestConfig: {
+          timeout: 30000,
+        },
+      },
     });
 
     setVideoClient(client);
