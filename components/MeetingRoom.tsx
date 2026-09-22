@@ -39,6 +39,15 @@ import { cn } from '@/lib/utils';
 import { NoiseTexture } from '@/components/ui/noise-texture';
 import { Ripple } from './ui/ripple';
 import { useTranscription } from '@/hooks/useTranscription';
+import GoogleMeetTranscriptsSidebar, { TranscriptItem } from './GoogleMeetTranscriptsSidebar';
+import GoogleMeetCastAISidebar from './GoogleMeetCastAISidebar';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+} from '@/components/ui/drawer';
 
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   r /= 255; g /= 255; b /= 255;
@@ -351,7 +360,7 @@ const GoogleMeetPeopleSidebar = ({
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#202124] text-white p-5 select-none overflow-hidden font-sans">
+    <div className="flex flex-col h-full w-full bg-[#202124] text-white p-5 select-none overflow-hidden font-sans rounded-2xl border border-[#3c4043] shadow-2xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-xl font-medium tracking-tight text-white">People</h2>
@@ -558,7 +567,13 @@ const MeetingRoom = () => {
   const router = useRouter();
   const { user } = useUser();
   const [layout, setLayout] = useState<CallLayoutType>('grid');
-  const [showParticipants, setShowParticipants] = useState(false);
+  const [activeSidebar, setActiveSidebar] = useState<'people' | 'transcripts' | 'ai' | null>(null);
+  const showParticipants = activeSidebar === 'people';
+  const isTranscriptsOpen = activeSidebar === 'transcripts';
+  const isCastAIOpen = activeSidebar === 'ai';
+  const [meetingTranscripts, setMeetingTranscripts] = useState<TranscriptItem[]>([]);
+  const [remoteInterimText, setRemoteInterimText] = useState('');
+  const [remoteInterimSpeaker, setRemoteInterimSpeaker] = useState('');
   const [userRoles, setUserRoles] = useState<Record<string, string>>({});
   const userRolesRef = useRef<Record<string, string>>(userRoles);
   useEffect(() => {
@@ -566,6 +581,14 @@ const MeetingRoom = () => {
   }, [userRoles]);
   const [pinnedSessionId, setPinnedSessionId] = useState<string | null>(null);
   const [isAllMuted, setIsAllMuted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const { useCallCallingState, useCameraState, useMicrophoneState, useScreenShareState, useHasOngoingScreenShare, useLocalParticipant, useParticipants } = useCallStateHooks();
   const participants = useParticipants();
   const cameraState = useCameraState();
@@ -617,7 +640,35 @@ const MeetingRoom = () => {
         },
       }));
 
-      // 2. Broadcast in real-time to all call participants via Stream custom event
+      // 2. Add committed final segments to the meetingTranscripts list
+      if (!segment.isPartial) {
+        setMeetingTranscripts((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.userId === currentUserId && now - last.timestamp < 8000) {
+            const next = [...prev];
+            next[next.length - 1] = {
+              ...last,
+              text: `${last.text} ${segment.text}`,
+              timestamp: now,
+            };
+            return next;
+          }
+          return [
+            ...prev,
+            {
+              id: `t-${currentUserId}-${now}-${Math.random().toString(36).substring(2, 7)}`,
+              userId: currentUserId,
+              speaker: segment.speaker || displayName,
+              text: segment.text,
+              timestamp: now,
+              avatar: user?.imageUrl || localParticipant?.image,
+              isLocal: true,
+            },
+          ];
+        });
+      }
+
+      // 3. Broadcast in real-time to all call participants via Stream custom event
       // Throttle partials to at most 1 every 120ms; finals send immediately
       if (call) {
         if (!segment.isPartial || now - lastBroadcastRef.current > 120) {
@@ -629,18 +680,62 @@ const MeetingRoom = () => {
               speaker: segment.speaker || displayName,
               text: segment.text,
               timestamp: now,
+              isPartial: !!segment.isPartial,
             })
             .catch(() => {});
         }
       }
     },
-    [call, currentUserId, displayName]
+    [call, currentUserId, displayName, user?.imageUrl, localParticipant?.image]
   );
 
   // — Speechmatics real-time transcription (Taglish) —
-  const { isListening, error: transcriptionError, start: startTranscription, stop: stopTranscription } = useTranscription({
+  const { 
+    transcript: localTranscriptLines, 
+    interimText, 
+    isListening, 
+    error: transcriptionError, 
+    start: startTranscription, 
+    stop: stopTranscription 
+  } = useTranscription({
     onTranscript: handleTranscriptSegment,
   });
+
+  const toggleTranscriptsSidebar = useCallback(() => {
+    setActiveSidebar((prev) => {
+      if (prev === 'transcripts') {
+        return null;
+      } else {
+        if (!isCcActive) {
+          setIsCcActive(true);
+        }
+        return 'transcripts';
+      }
+    });
+  }, [isCcActive]);
+
+  const handleStartTranscriptionFromSidebar = useCallback(() => {
+    setIsCcActive(true);
+    if (!isMicMuted) {
+      startTranscription(displayName);
+    }
+  }, [isMicMuted, displayName, startTranscription]);
+
+  const handleStopTranscriptionFromSidebar = useCallback(() => {
+    setIsCcActive(false);
+    stopTranscription();
+  }, [stopTranscription]);
+
+  // Auto-clear remote interim speech after inactivity
+  useEffect(() => {
+    if (remoteInterimText) {
+      const timer = setTimeout(() => {
+        setRemoteInterimText('');
+        setRemoteInterimSpeaker('');
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [remoteInterimText]);
 
   // Start/stop transcription when CC is toggled AND mic is unmuted
   // When muted in the call, microphone recording is completely halted for privacy & accuracy!
@@ -860,7 +955,7 @@ const MeetingRoom = () => {
           return copy;
         });
       } else if (event?.custom?.type === 'live-caption') {
-        const { userId, speaker, text, timestamp } = event.custom || {};
+        const { userId, speaker, text, timestamp, isPartial } = event.custom || {};
         if (userId && text && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(text)) {
           setActiveCaptions((prev) => ({
             ...prev,
@@ -870,6 +965,40 @@ const MeetingRoom = () => {
               timestamp: timestamp || Date.now(),
             },
           }));
+
+          if (isPartial) {
+            setRemoteInterimText(text);
+            setRemoteInterimSpeaker(speaker || 'Participant');
+          } else {
+            setRemoteInterimText('');
+            setRemoteInterimSpeaker('');
+            const remoteP = participants.find((p) => p.userId === userId);
+            const eventTime = timestamp || Date.now();
+            setMeetingTranscripts((prev) => {
+              const last = prev[prev.length - 1];
+              if (last && last.userId === userId && eventTime - last.timestamp < 8000) {
+                const next = [...prev];
+                next[next.length - 1] = {
+                  ...last,
+                  text: `${last.text} ${text}`,
+                  timestamp: eventTime,
+                };
+                return next;
+              }
+              return [
+                ...prev,
+                {
+                  id: `t-${userId}-${eventTime}-${Math.random().toString(36).substring(2, 7)}`,
+                  userId,
+                  speaker: speaker || remoteP?.name || 'Participant',
+                  text,
+                  timestamp: eventTime,
+                  avatar: remoteP?.image,
+                  isLocal: false,
+                },
+              ];
+            });
+          }
         }
       }
     });
@@ -1026,11 +1155,9 @@ const MeetingRoom = () => {
     }
   };
 
-  const springTransition = {
-    type: 'spring' as const,
-    stiffness: 220,
-    damping: 26,
-    mass: 0.8
+  const smoothTransition = {
+    duration: 0.22,
+    ease: [0.16, 1, 0.3, 1] as const,
   };
 
   const CallLayout = () => {
@@ -1052,9 +1179,11 @@ const MeetingRoom = () => {
         <div className="w-full h-full flex gap-4 p-4 min-h-0 bg-transparent relative z-10 justify-center">
           {/* Left side: Widescreen screen share or pinned video presentation */}
           <motion.div 
-            layout
-            layoutId={activeMainParticipant.sessionId}
-            transition={springTransition}
+            layout="position"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={smoothTransition}
             className="flex-[2.6] max-w-[70%] max-h-[calc(100vh-160px)] my-auto flex items-center justify-center relative bg-transparent h-full"
           >
             <ParticipantView 
@@ -1084,22 +1213,6 @@ const MeetingRoom = () => {
               </span>
             </motion.div>
 
-            {/* Live Caption Overlay for main presenter / pinned participant */}
-            {isCcActive && activeCaptions[activeMainParticipant.userId]?.text && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(activeCaptions[activeMainParticipant.userId].text) && (
-              <div
-                key={`main-cap-${activeMainParticipant.userId}-${activeCaptions[activeMainParticipant.userId].timestamp}`}
-                className="absolute bottom-16 left-6 right-6 z-40 pointer-events-none flex justify-center"
-              >
-                <div className="max-w-[85%] bg-black/60 border border-white/15 px-3.5 py-1.5 rounded-lg shadow-lg text-center">
-                  <span className="text-blue-400 text-xs font-normal italic font-geist mr-1.5">
-                    {activeCaptions[activeMainParticipant.userId].speaker}:
-                  </span>
-                  <span className="text-white/95 text-xs sm:text-[13px] font-normal italic font-geist leading-relaxed drop-shadow-sm">
-                    {activeCaptions[activeMainParticipant.userId].text}
-                  </span>
-                </div>
-              </div>
-            )}
           </motion.div>
 
           {/* Right side: Vertical grid of participants */}
@@ -1108,12 +1221,11 @@ const MeetingRoom = () => {
               {participants.filter(p => p.sessionId !== activeMainParticipant.sessionId).map((p) => (
                 <motion.div 
                   key={p.sessionId} 
-                  layout
-                  layoutId={p.sessionId}
-                  initial={{ scale: 0.85, opacity: 0 }}
+                  layout="position"
+                  initial={{ scale: 0.95, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.85, opacity: 0 }}
-                  transition={springTransition}
+                  exit={{ scale: 0.95, opacity: 0 }}
+                  transition={smoothTransition}
                   className={cn(tileSideClass, isHandUpForParticipant(p) && "hand-raised-active")}
                 >
                   {(p.publishedTracks.includes(2) || p.publishedTracks.includes('VIDEO' as any)) ? (
@@ -1143,19 +1255,6 @@ const MeetingRoom = () => {
                     )}
                   </AnimatePresence>
 
-                  {/* Live Caption for side participant tile */}
-                  {isCcActive && activeCaptions[p.userId]?.text && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(activeCaptions[p.userId].text) && (
-                    <div
-                      key={`side-cap-${p.userId}-${activeCaptions[p.userId].timestamp}`}
-                      className="absolute bottom-8 left-2 right-2 z-30 pointer-events-none flex justify-center"
-                    >
-                      <div className="max-w-[95%] bg-black/60 border border-white/15 px-2.5 py-1 rounded-md shadow-md text-center">
-                        <p className="text-white/95 text-[11px] font-normal italic font-geist leading-tight line-clamp-2 drop-shadow-sm">
-                          {activeCaptions[p.userId].text}
-                        </p>
-                      </div>
-                    </div>
-                  )}
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -1169,9 +1268,13 @@ const MeetingRoom = () => {
 
     const count = participants.length;
     if (count === 1) {
-      tileClass = "w-full sm:w-[88%] md:w-[62%] h-[55vh] sm:h-auto aspect-[4/3] sm:aspect-video max-w-[840px] max-h-[calc(100vh-160px)] mx-auto";
+      tileClass = activeSidebar && !isMobile
+        ? "w-full sm:w-[96%] md:w-[92%] lg:w-[88%] max-w-[960px] max-h-[calc(100vh-160px)] aspect-video mr-0 sm:mr-1 ml-auto" 
+        : "w-full sm:w-[88%] md:w-[62%] h-[55vh] sm:h-auto aspect-[4/3] sm:aspect-video max-w-[840px] max-h-[calc(100vh-160px)] mx-auto";
     } else if (count === 2) {
-      tileClass = "w-full sm:w-[88%] md:w-[45%] h-[32vh] sm:h-auto aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100vh-160px)]";
+      tileClass = activeSidebar && !isMobile
+        ? "w-full sm:w-[96%] md:w-[49%] aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100vh-160px)]"
+        : "w-full sm:w-[88%] md:w-[45%] h-[32vh] sm:h-auto aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100vh-160px)]";
     } else if (count === 4) {
       tileClass = "w-[48%] md:w-[45%] aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100vh-160px)]";
     } else {
@@ -1179,18 +1282,17 @@ const MeetingRoom = () => {
     }
 
     return (
-      <div className="w-full h-full flex items-center justify-center bg-transparent relative z-10 p-4">
-        <div className="flex flex-wrap gap-4 items-center justify-center w-full max-h-[calc(100vh-160px)] overflow-y-auto no-scrollbar">
+      <div className={cn("w-full h-full flex items-center justify-center bg-transparent relative z-10", activeSidebar && !isMobile ? "p-1 sm:p-2 pr-0 sm:pr-1" : "p-4")}>
+        <div className={cn("flex flex-wrap items-center justify-center w-full max-h-[calc(100vh-160px)] overflow-y-auto no-scrollbar", activeSidebar && !isMobile ? "gap-2.5 sm:gap-3" : "gap-4")}>
           <AnimatePresence mode="popLayout">
             {participants.map((p) => (
               <motion.div 
                 key={p.sessionId} 
-                layout
-                layoutId={p.sessionId}
-                initial={{ scale: 0.85, opacity: 0 }}
+                layout="position"
+                initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.85, opacity: 0 }}
-                transition={springTransition}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={smoothTransition}
                 className={cn(tileStyle, tileClass, isHandUpForParticipant(p) && "hand-raised-active")}
               >
                 {(p.publishedTracks.includes(2) || p.publishedTracks.includes('VIDEO' as any)) ? (
@@ -1220,19 +1322,6 @@ const MeetingRoom = () => {
                   )}
                 </AnimatePresence>
 
-                {/* Live Caption directly inside participant profile card */}
-                {isCcActive && activeCaptions[p.userId]?.text && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(activeCaptions[p.userId].text) && (
-                  <div
-                    key={`grid-cap-${p.userId}-${activeCaptions[p.userId].timestamp}`}
-                    className="absolute bottom-10 left-3 right-3 sm:left-6 sm:right-6 z-30 pointer-events-none flex justify-center"
-                  >
-                    <div className="max-w-[92%] bg-black/60 border border-white/15 px-3.5 py-1.5 rounded-lg shadow-lg text-center">
-                      <p className="text-white/95 text-xs sm:text-[13px] font-normal italic font-geist leading-snug drop-shadow-sm">
-                        {activeCaptions[p.userId].text}
-                      </p>
-                    </div>
-                  </div>
-                )}
               </motion.div>
             ))}
           </AnimatePresence>
@@ -1391,7 +1480,10 @@ const MeetingRoom = () => {
       </div>
 
       {/* Top Right: User avatar, count, sparkle */}
-      <div className="absolute top-3 right-3 sm:top-6 sm:right-6 z-20 flex items-center gap-2 sm:gap-3">
+      <div className={cn(
+        "absolute top-3 sm:top-6 z-20 flex items-center gap-2 sm:gap-3 transition-all duration-300",
+        activeSidebar && !isMobile ? "right-[390px] sm:right-[405px]" : "right-3 sm:right-6"
+      )}>
 
 
 
@@ -1450,9 +1542,9 @@ const MeetingRoom = () => {
 
         {/* Host/Participant Overlapping Square Avatar Stack */}
         <button 
-          onClick={() => setShowParticipants((prev) => !prev)}
+          onClick={() => setActiveSidebar((prev) => prev === 'people' ? null : 'people')}
           className={cn(
-            "flex items-center gap-1.5 p-1 rounded-xl transition-all bg-[#3c4043] hover:bg-[#4a4f54] border border-transparent shadow-md select-none",
+            "flex items-center gap-1.5 p-1 rounded-xl transition-all bg-[#3c4043] hover:bg-[#4a4f54] border border-transparent shadow-md select-none cursor-pointer",
             showParticipants && "bg-[#8ab4f8]/20 border-[#8ab4f8]/40"
           )}
           title="View participants"
@@ -1487,48 +1579,168 @@ const MeetingRoom = () => {
           </span>
         </button>
 
-        {/* Sparkle icon (visual effects) */}
+        {/* Sparkle icon (CastAI Assistant) */}
         <button 
-          onClick={() => toast({ title: 'Visual effects are ready' })}
-          className="h-10 w-10 bg-[#3c4043] hover:bg-[#4a4f54] text-white rounded-xl transition-colors flex items-center justify-center border border-transparent shadow-md"
-          title="Apply visual effects"
+          onClick={() => setActiveSidebar((prev) => prev === 'ai' ? null : 'ai')}
+          className={cn(
+            "h-10 w-10 rounded-xl transition-all flex items-center justify-center border shadow-md cursor-pointer",
+            isCastAIOpen 
+              ? "bg-[#8ab4f8]/20 text-[#8ab4f8] border-[#8ab4f8]/40" 
+              : "bg-[#3c4043] hover:bg-[#4a4f54] text-white border-transparent"
+          )}
+          title={isCastAIOpen ? "Close CastAI Assistant" : "Open CastAI Assistant"}
         >
-          <Sparkle size={18} weight="bold" />
+          <Sparkle size={18} weight={isCastAIOpen ? "fill" : "bold"} />
         </button>
       </div>
 
-      <div className="relative flex-1 min-h-0 max-h-[calc(100vh-110px)] flex items-center justify-center px-6 md:px-12 pt-14 pb-1 z-10 bg-transparent">
-        <div className="flex w-full h-full min-h-0 items-center justify-center mx-auto rounded-lg overflow-hidden bg-transparent">
-          {CallLayout()}
+      <div className={cn(
+        "relative flex-1 min-h-0 max-h-[calc(100vh-110px)] flex items-center justify-center pt-14 pb-1 z-10 bg-transparent w-full transition-all duration-300",
+        activeSidebar && !isMobile ? "px-2 sm:px-3 md:px-4" : "px-3 sm:px-6 md:px-8"
+      )}>
+        <div className={cn(
+          "flex flex-row w-full h-full min-h-0 items-center justify-center mx-auto rounded-lg overflow-hidden bg-transparent",
+          activeSidebar && !isMobile ? "gap-2 sm:gap-2.5" : "gap-3 sm:gap-4"
+        )}>
+          {/* Main call video area that flex-resizes and shifts smoothly to the left on desktop */}
+          <div className="flex-1 h-full min-w-0 flex items-center justify-center transition-all duration-300">
+            {CallLayout()}
+          </div>
+
+          {/* Desktop Sidebar Area: In the SAME div without higher z-index overlay */}
+          <AnimatePresence>
+            {!isMobile && activeSidebar === 'transcripts' && (
+              <motion.div
+                key="sidebar-transcripts"
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 380, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="hidden md:flex h-full shrink-0 overflow-hidden flex-col py-1"
+              >
+                <div className="w-[360px] sm:w-[380px] h-full">
+                  <GoogleMeetTranscriptsSidebar 
+                    onClose={() => setActiveSidebar(null)}
+                    isListening={isListening}
+                    isMicMuted={isMicMuted}
+                    onStart={handleStartTranscriptionFromSidebar}
+                    onStop={handleStopTranscriptionFromSidebar}
+                    transcripts={meetingTranscripts}
+                    interimText={interimText || remoteInterimText}
+                    activeSpeakerName={interimText ? displayName : remoteInterimSpeaker}
+                    localSpeakerName={displayName}
+                    onOpenCastAI={() => setActiveSidebar('ai')}
+                  />
+                </div>
+              </motion.div>
+            )}
+
+            {!isMobile && activeSidebar === 'ai' && (
+              <motion.div
+                key="sidebar-castai"
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 380, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="hidden md:flex h-full shrink-0 overflow-hidden flex-col py-1"
+              >
+                <div className="w-[360px] sm:w-[380px] h-full">
+                  <GoogleMeetCastAISidebar 
+                    onClose={() => setActiveSidebar(null)}
+                    transcripts={meetingTranscripts}
+                    userName={displayName}
+                    onOpenTranscripts={() => setActiveSidebar('transcripts')}
+                  />
+                </div>
+              </motion.div>
+            )}
+
+            {!isMobile && activeSidebar === 'people' && (
+              <motion.div
+                key="sidebar-people"
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 380, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="hidden md:flex h-full shrink-0 overflow-hidden flex-col py-1"
+              >
+                <div className="w-[360px] sm:w-[380px] h-full">
+                  <GoogleMeetPeopleSidebar 
+                    onClose={() => setActiveSidebar(null)}
+                    participants={participants}
+                    userRoles={userRoles}
+                    setUserRoles={setUserRoles}
+                    call={call}
+                    toast={toast}
+                    isAllMuted={isAllMuted}
+                    setIsAllMuted={setIsAllMuted}
+                    pinnedSessionId={pinnedSessionId}
+                    setPinnedSessionId={setPinnedSessionId}
+                    isHost={isHost}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
-        
-      {/* 1:1 Replica Google Meet People Sidebar Panel */}
-      <AnimatePresence>
-        {showParticipants && (
-          <motion.div
-            initial={{ x: '100%', opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: '100%', opacity: 0 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute right-4 sm:right-6 top-4 h-[calc(100vh-110px)] bg-[#202124] border border-[#3c4043] shadow-2xl rounded-2xl w-[360px] sm:w-[380px] md:w-[400px] flex flex-col overflow-hidden shrink-0 z-[100] select-none"
-          >
-            <GoogleMeetPeopleSidebar 
-              onClose={() => setShowParticipants(false)}
-              participants={participants}
-              userRoles={userRoles}
-              setUserRoles={setUserRoles}
-              call={call}
-              toast={toast}
-              isAllMuted={isAllMuted}
-              setIsAllMuted={setIsAllMuted}
-              pinnedSessionId={pinnedSessionId}
-              setPinnedSessionId={setPinnedSessionId}
-              isHost={isHost}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+
+      {/* Mobile Drawer for Transcripts and People */}
+      <Drawer
+        open={isMobile && Boolean(activeSidebar)}
+        onOpenChange={(open) => {
+          if (!open) setActiveSidebar(null);
+        }}
+      >
+        <DrawerContent className="md:hidden bg-[#202124] border-t border-[#3c4043] text-white p-0 max-h-[85vh] rounded-t-2xl overflow-hidden focus:outline-none">
+          <DrawerHeader className="sr-only">
+            <DrawerTitle>
+              {activeSidebar === 'transcripts' ? 'Transcripts' : activeSidebar === 'ai' ? 'CastAI Assistant' : 'People'}
+            </DrawerTitle>
+            <DrawerDescription>Meeting Panel</DrawerDescription>
+          </DrawerHeader>
+
+          <div className="h-[75vh] w-full overflow-hidden flex flex-col">
+            {activeSidebar === 'transcripts' && (
+              <GoogleMeetTranscriptsSidebar 
+                onClose={() => setActiveSidebar(null)}
+                isListening={isListening}
+                isMicMuted={isMicMuted}
+                onStart={handleStartTranscriptionFromSidebar}
+                onStop={handleStopTranscriptionFromSidebar}
+                transcripts={meetingTranscripts}
+                interimText={interimText || remoteInterimText}
+                activeSpeakerName={interimText ? displayName : remoteInterimSpeaker}
+                localSpeakerName={displayName}
+                onOpenCastAI={() => setActiveSidebar('ai')}
+              />
+            )}
+            {activeSidebar === 'ai' && (
+              <GoogleMeetCastAISidebar 
+                onClose={() => setActiveSidebar(null)}
+                transcripts={meetingTranscripts}
+                userName={displayName}
+                onOpenTranscripts={() => setActiveSidebar('transcripts')}
+              />
+            )}
+            {activeSidebar === 'people' && (
+              <GoogleMeetPeopleSidebar 
+                onClose={() => setActiveSidebar(null)}
+                participants={participants}
+                userRoles={userRoles}
+                setUserRoles={setUserRoles}
+                call={call}
+                toast={toast}
+                isAllMuted={isAllMuted}
+                setIsAllMuted={setIsAllMuted}
+                pinnedSessionId={pinnedSessionId}
+                setPinnedSessionId={setPinnedSessionId}
+                isHost={isHost}
+              />
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
       
       {/* 3. Controls Area - Pinned All The Way Down to Absolute Bottom */}
       <div className="absolute bottom-2 sm:bottom-4 left-0 right-0 w-full flex justify-between items-center px-2 sm:px-8 z-30 bg-transparent select-none">
@@ -1642,28 +1854,51 @@ const MeetingRoom = () => {
             {isCameraMuted ? <VideoCameraSlash size={18} weight="bold" /> : <VideoCamera size={18} weight="bold" />}
           </button>
 
+          {/* DESKTOP Transcribe / CC Combined Dual Pill */}
+          <div className="hidden md:flex items-center bg-[#3c4043] rounded-xl p-0.5 shadow-md border border-[#3c4043]/10">
+            {/* Left: Dynamic Arrow / Caret button to toggle the panel without starting transcription */}
+            <button
+              onClick={() => setActiveSidebar((prev) => prev === 'transcripts' ? null : 'transcripts')}
+              className={cn(
+                "p-2 text-white rounded-l-xl outline-none focus:outline-none transition-colors border-r border-[#202124]/30 h-[42px] min-w-[36px] flex items-center justify-center cursor-pointer",
+                isTranscriptsOpen ? "bg-white/15 text-[#8ab4f8] rounded-l-xl" : "hover:bg-white/10 text-white"
+              )}
+              title={isTranscriptsOpen ? "Hide Transcripts Panel" : "Show Transcripts Panel"}
+            >
+              {isTranscriptsOpen ? (
+                <CaretDown size={14} weight="bold" />
+              ) : (
+                <CaretUp size={14} weight="bold" />
+              )}
+            </button>
+
+            {/* Right: CC Button to toggle voice recording */}
+            <button
+              onClick={() => {
+                setIsCcActive((prev) => !prev);
+              }}
+              className={cn(
+                "p-2 rounded-r-xl transition-colors flex items-center justify-center min-w-[42px] h-[42px] cursor-pointer",
+                isCcActive 
+                  ? "bg-[#a8c7fa] text-[#041e49] hover:bg-[#b8d7fb] rounded-r-xl font-bold" 
+                  : "text-white hover:bg-white/10"
+              )}
+              title={isCcActive ? "Turn Off Captions & Transcription" : "Turn On Captions & Transcription"}
+            >
+              <ClosedCaptioning size={18} weight="bold" />
+            </button>
+          </div>
+
           {/* Present Now (Screen Share) */}
           <button
             onClick={toggleScreenShare}
             className={cn(
-              "size-11 sm:size-12 rounded-2xl transition-colors flex items-center justify-center border shadow-md",
+              "size-11 sm:size-12 rounded-2xl transition-colors flex items-center justify-center border shadow-md cursor-pointer",
               isScreenSharing ? "bg-[#a8c7fa] text-[#041e49] border-transparent hover:bg-[#b8d7fb]" : "bg-[#3c4043] text-white border-transparent hover:bg-[#4a4f54]"
             )}
             title="Present Now"
           >
             <ArrowSquareUp size={18} weight="bold" />
-          </button>
-
-          {/* DESKTOP CC Button */}
-          <button
-            onClick={toggleCc}
-            className={cn(
-              "hidden md:flex p-2 rounded-xl transition-colors items-center justify-center border shadow-md h-12 w-12",
-              isCcActive ? "bg-[#a8c7fa] text-[#041e49] border-transparent hover:bg-[#b8d7fb]" : "bg-[#3c4043] text-white border-transparent hover:bg-[#4a4f54]"
-            )}
-            title="Toggle Captions"
-          >
-            <ClosedCaptioning size={18} weight="bold" />
           </button>
 
           {/* Raise Hand */}
@@ -1680,56 +1915,42 @@ const MeetingRoom = () => {
             <HandPalm size={18} weight={isHandRaised ? "fill" : "bold"} />
           </button>
 
-          {/* More Options Menu (Comprehensive on Mobile) */}
-          <DropdownMenu>
-            <DropdownMenuTrigger className="size-11 sm:size-12 bg-[#3c4043] text-white hover:bg-[#4a4f54] rounded-2xl transition-colors border border-transparent outline-none focus:outline-none shadow-md flex items-center justify-center">
-              <DotsThreeVertical size={18} weight="bold" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-[#202124] border border-[#3c4043] text-white rounded-xl shadow-2xl mb-4 min-w-[210px] p-1.5 z-50 font-sans">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 py-1.5 border-b border-[#3c4043]/50 mb-1">Meeting Options</div>
-              
-              {/* Mobile-only options: Chat & Host Controls & Captions */}
-              <DropdownMenuItem 
-                onClick={() => toast({ title: 'Chat is currently disabled in this room' })}
-                className="md:hidden flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-200"
-              >
-                <ChatCircle size={16} weight="bold" />
-                <span>In-call Messages</span>
-              </DropdownMenuItem>
+          {/* More Options Menu (Mobile Only - Hidden on Desktop) */}
+          <div className="md:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger className="size-11 rounded-2xl bg-[#3c4043] text-white hover:bg-[#4a4f54] transition-colors border border-transparent outline-none focus:outline-none shadow-md flex items-center justify-center">
+                <DotsThreeVertical size={18} weight="bold" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-[#202124] border border-[#3c4043] text-white rounded-xl shadow-2xl mb-4 min-w-[210px] p-1.5 z-50 font-sans">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 py-1.5 border-b border-[#3c4043]/50 mb-1">Meeting Options</div>
+                
+                {/* Mobile-only options: CastAI, Transcripts, Captions */}
+                <DropdownMenuItem 
+                  onClick={() => setActiveSidebar((prev) => prev === 'ai' ? null : 'ai')}
+                  className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-200"
+                >
+                  <Sparkle size={16} weight="bold" className="text-[#8ab4f8]" />
+                  <span>{isCastAIOpen ? 'Close CastAI' : 'Open CastAI'}</span>
+                </DropdownMenuItem>
 
-              <DropdownMenuItem 
-                onClick={toggleCc}
-                className="md:hidden flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-200"
-              >
-                <ClosedCaptioning size={16} weight="bold" />
-                <span>{isCcActive ? 'Turn Off Captions' : 'Turn On Captions'}</span>
-              </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => setActiveSidebar((prev) => prev === 'transcripts' ? null : 'transcripts')}
+                  className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-200"
+                >
+                  <ClosedCaptioning size={16} weight="bold" />
+                  <span>{isTranscriptsOpen ? 'Close Transcripts' : 'Open Transcripts'}</span>
+                </DropdownMenuItem>
 
-              <DropdownMenuItem 
-                onClick={() => toast({ title: 'Host controls are open' })}
-                className="md:hidden flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-200"
-              >
-                <ShieldWarning size={16} weight="bold" />
-                <span>Host Controls</span>
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator className="md:hidden bg-[#3c4043]/50 my-1" />
-
-              <DropdownMenuItem 
-                onClick={() => toast({ title: 'Quality Stats is enabled' })}
-                className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-300"
-              >
-                <span>Call Statistics</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-[#3c4043]/50 my-0.5" />
-              <DropdownMenuItem 
-                onClick={() => toast({ title: 'Opening Troubleshooting...' })}
-                className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-300"
-              >
-                <span>Troubleshooting & Help</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem 
+                  onClick={() => setIsCcActive((prev) => !prev)}
+                  className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-200"
+                >
+                  <ClosedCaptioning size={16} weight="bold" />
+                  <span>{isCcActive ? 'Turn Off Voice Transcription' : 'Turn On Voice Transcription'}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
           {/* Hangup button */}
           <button
@@ -1749,26 +1970,8 @@ const MeetingRoom = () => {
           </button>
         </div>
 
-        {/* Bottom Right: Desktop-only GMeet action icons */}
-        <div className="hidden md:flex items-center gap-3 w-[240px] justify-end">
-          {/* Chat Icon */}
-          <button 
-            onClick={() => toast({ title: 'Chat is currently disabled in this room' })}
-            className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#3c4043] hover:bg-[#4a4f54] text-white transition-colors border border-transparent outline-none focus:outline-none shadow-md"
-            title="Chat with everyone"
-          >
-            <ChatCircle weight="bold" size={18} />
-          </button>
-
-          {/* Host Lock Settings Icon */}
-          <button 
-            onClick={() => toast({ title: 'Host controls are open' })}
-            className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#3c4043] hover:bg-[#4a4f54] text-white transition-colors outline-none focus:outline-none shadow-md"
-            title="Host controls"
-          >
-            <ShieldWarning weight="bold" size={18} />
-          </button>
-        </div>
+        {/* Bottom Right: Spacer (mirrors bottom left to keep center dock controls centered) */}
+        <div className="hidden md:block w-[240px]" />
       </div>
     </section>
   );
