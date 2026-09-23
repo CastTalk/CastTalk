@@ -67,6 +67,7 @@ const config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
+        roobert: ['var(--font-roobert)', 'Roobert TRIAL', 'Roobert', 'sans-serif'],
         geist: ['var(--font-geist-sans)', 'sans-serif'],
         charlie: ['Charlie Sans', 'sans-serif'],
         sans: ['var(--font-geist-sans)', 'sans-serif'],

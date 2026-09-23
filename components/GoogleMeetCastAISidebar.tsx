@@ -196,17 +196,18 @@ export const GoogleMeetCastAISidebar: React.FC<GoogleMeetCastAISidebarProps> = (
             <div 
               key={m.id} 
               className={cn(
-                "flex flex-col max-w-[88%]",
+                "flex flex-col max-w-[88%] min-w-0",
                 m.role === 'user' ? "ml-auto items-end" : "mr-auto items-start"
               )}
             >
               <div 
                 className={cn(
-                  "p-3 rounded-2xl text-xs sm:text-[13px] leading-relaxed break-words shadow-md select-text",
+                  "p-3 rounded-2xl text-xs sm:text-[13px] leading-relaxed break-words overflow-hidden shadow-md select-text",
                   m.role === 'user' 
                     ? "bg-[#1a73e8] text-white rounded-br-sm" 
                     : "bg-[#2d2f34] text-slate-100 rounded-bl-sm border border-white/5"
                 )}
+                style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
               >
                 {cleanText(m.content)}
               </div>

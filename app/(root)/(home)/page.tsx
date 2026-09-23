@@ -289,15 +289,18 @@ const Home = () => {
       <div className="relative flex-1 overflow-hidden">
         <NoiseTexture className="opacity-[0.15]" />
         <div
-          className="absolute inset-0 z-0 pointer-events-none opacity-50"
+          className="absolute inset-0 z-0 pointer-events-none opacity-40"
           style={{
-            backgroundImage: `linear-gradient(to right, #c4cccc 1px, transparent 1px), linear-gradient(to bottom, #c4cccc 1px, transparent 1px)`,
+            backgroundImage: `linear-gradient(to right, rgba(21, 128, 61, 0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(21, 128, 61, 0.12) 1px, transparent 1px)`,
             backgroundSize: '40px 40px',
           }}
         />
         <div className="relative z-10 pt-32 px-4 md:px-6 lg:px-8 flex flex-col">
-          <h1 className="text-5xl md:text-6xl lg:text-[5.5rem] font-geist font-normal leading-[1.05] tracking-tight text-black mb-8 max-w-[1000px]">
-            Video calls and meetings for everyone
+          <h1 className="text-5xl md:text-6xl lg:text-[5.5rem] font-geist font-normal leading-[1.1] tracking-[-1.6px] text-black mb-8 max-w-[1000px]">
+            Video calls and meetings for{' '}
+            <span className="font-normal bg-gradient-to-r from-[#116a32] via-[#16a34a] to-[#3bcf7d] bg-clip-text text-transparent inline-block pb-0.5">
+              everyone
+            </span>
           </h1>
           <p className="text-[1.1rem] md:text-[1.25rem] font-geist text-slate-600 mb-12 max-w-3xl leading-relaxed">
             Connect, collaborate, and celebrate from anywhere with CastTalk
@@ -306,7 +309,7 @@ const Home = () => {
             <div className="relative w-full sm:w-auto">
               <button
                 onClick={() => showDropdown ? closeDropdown() : setShowDropdown(true)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#121212] hover:bg-black text-white px-8 py-3.5 rounded-none text-[17px] !font-normal transition-colors"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#15803d] hover:bg-[#166534] text-white px-8 py-3.5 rounded-none text-[17px] !font-normal transition-colors shadow-sm"
               >
                 New meeting
                 <ArrowRight size={18} weight="regular" />
@@ -340,14 +343,14 @@ const Home = () => {
                 placeholder="Enter a code or link"
                 value={linkOrCode}
                 onChange={(e) => setLinkOrCode(e.target.value)}
-                className="w-full pl-4 pr-20 py-3.5 bg-transparent border border-black text-black rounded-none focus:outline-none focus:ring-1 focus:ring-black transition-all placeholder:text-slate-500"
+                className="w-full pl-4 pr-20 py-3.5 bg-transparent border border-[#15803d] text-black rounded-none focus:outline-none focus:ring-1 focus:ring-[#15803d] transition-all placeholder:text-slate-500"
               />
               <button
                 onClick={joinMeeting}
                 disabled={!linkOrCode || isCheckingSchedule}
-                className={`absolute right-1 top-1 bottom-1 px-5 rounded-none font-medium transition-colors ${linkOrCode && !isCheckingSchedule ? 'text-black hover:bg-black/5' : 'text-slate-400 cursor-not-allowed'}`}
+                className={`absolute right-1 top-1 bottom-1 px-5 rounded-none font-medium transition-colors ${linkOrCode && !isCheckingSchedule ? 'text-[#15803d] hover:bg-[#15803d]/10 font-semibold' : 'text-slate-400 cursor-not-allowed'}`}
               >
-                {isCheckingSchedule ? <SpinnerGap size={18} className="animate-spin" /> : 'Join'}
+                {isCheckingSchedule ? <SpinnerGap size={18} className="animate-spin text-[#15803d]" /> : 'Join'}
               </button>
             </div>
           </div>
@@ -360,14 +363,14 @@ const Home = () => {
             <>
               {/* Step indicator */}
               <div className="flex items-center gap-2 mb-2">
-                <div className={cn("flex-1 h-1.5 rounded-full", step >= 1 ? "bg-[#3E2723]" : "bg-slate-200")} />
-                <div className={cn("flex-1 h-1.5 rounded-full", step >= 2 ? "bg-[#3E2723]" : "bg-slate-200")} />
+                <div className={cn("flex-1 h-1.5 rounded-full", step >= 1 ? "bg-[#15803d]" : "bg-slate-200")} />
+                <div className={cn("flex-1 h-1.5 rounded-full", step >= 2 ? "bg-[#15803d]" : "bg-slate-200")} />
               </div>
               <div className="flex items-center gap-2 mb-6">
-                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 1 ? "text-[#3E2723]" : "text-slate-400")}>
+                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 1 ? "text-[#15803d]" : "text-slate-400")}>
                   Session
                 </div>
-                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 2 ? "text-[#3E2723]" : "text-slate-400")}>
+                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 2 ? "text-[#15803d]" : "text-slate-400")}>
                   Details
                 </div>
               </div>
@@ -535,7 +538,7 @@ const Home = () => {
                               disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                               style={{
                                 '--rdp-cell-size': '2rem',
-                                '--rdp-accent-color': '#3E2723',
+                                '--rdp-accent-color': '#15803d',
                                 '--rdp-background-color': '#ffffff',
                                 color: '#111827',
                                 fontSize: '0.85rem',
@@ -645,7 +648,7 @@ const Home = () => {
                 {step > 1 && (
                   <button
                     onClick={() => setStep(1)}
-                    className="px-5 py-2.5 rounded-xl text-[14px] font-bold bg-[#3E2723]/5 text-[#3E2723] hover:bg-[#3E2723]/10 transition-colors"
+                    className="px-5 py-2.5 rounded-xl text-[14px] font-bold bg-[#15803d]/10 text-[#15803d] hover:bg-[#15803d]/15 transition-colors"
                   >
                     Back
                   </button>
@@ -653,8 +656,7 @@ const Home = () => {
                 <button
                   onClick={step === 2 ? () => handleSubmit(false) : () => setStep(2)}
                   disabled={isCreating || (step === 2 && !formTitle.trim())}
-                  className="px-6 py-2.5 rounded-xl text-[14px] font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm"
-                  style={{ backgroundColor: '#3E2723' }}
+                  className="px-6 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#166534] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm bg-[#15803d]"
                 >
                   {step === 2 ? (isCreating ? 'Creating...' : 'Create Event') : 'Next'}
                 </button>
@@ -688,7 +690,7 @@ const Home = () => {
               </button>
               <button
                 onClick={() => handleSubmit(true)}
-                className="bg-[#3E2723] hover:opacity-90 text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] font-geist"
+                className="bg-[#15803d] hover:bg-[#166534] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] font-geist"
               >
                 Continue
               </button>
@@ -717,7 +719,7 @@ const Home = () => {
             </div>
             <button
               onClick={() => setMeetingLink(null)}
-              className="w-full py-3 bg-[#3E2723] text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
+              className="w-full py-3 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg font-medium transition-colors"
             >
               Done
             </button>
@@ -806,7 +808,7 @@ const Home = () => {
                   setShowNotStartedModal(false);
                   setNotStartedInfo(null);
                 }}
-                className="bg-[#3E2723] hover:opacity-90 text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] shadow-sm"
+                className="bg-[#15803d] hover:bg-[#166534] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] shadow-sm"
               >
                 Back to Home
               </button>

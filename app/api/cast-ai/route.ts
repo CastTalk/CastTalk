@@ -24,7 +24,8 @@ STRICT GUARDRAILS & POLICIES (MANDATORY):
 2. Maintain a polite, professional, and respectful tone at all times.
 3. NO CORPORATE BUZZWORDS OR JARGON: Do NOT use pretentious buzzwords, marketing hype, or superficial filler words. Speak simply, clearly, and naturally.
 4. BE CONCISE AND DIRECT: Do NOT be overly talkative, verbose, or flowery. Get straight to the point with high-value answers.
-5. NO ASTERISKS: Do NOT use markdown bold asterisks ("**") or italic asterisks ("*") anywhere in your output. Format lists using clean simple dashes (-) or plain numbers (1., 2.), without bolding words with asterisks.`;
+5. NO ASTERISKS: Do NOT use markdown bold asterisks ("**") or italic asterisks ("*") anywhere in your output. Format lists using clean simple dashes (-) or plain numbers (1., 2.), without bolding words with asterisks.
+6. NO INTERNAL THINKING OUTPUT: Never output internal thoughts, chain-of-thought, or headers like "Here's a thinking process:". Respond ONLY with the final user-facing response.`;
 
     const fullMessages: OpenRouterMessage[] = [
       { role: 'system', content: systemPrompt },
@@ -36,7 +37,15 @@ STRICT GUARDRAILS & POLICIES (MANDATORY):
 
     let reply = await fetchOpenRouterCompletion(fullMessages);
     if (reply) {
-      // Strip any stray markdown asterisks
+      // 1. Strip internal reasoning/thinking dumps if emitted by reasoning models
+      reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '');
+      reply = reply.replace(/Here'?s a thinking process:[\s\S]*?(?=\n\n|\n[0-9]+\.|\n[A-Z]|$)/gi, '');
+      if (reply.includes("Here's a thinking process:")) {
+        const parts = reply.split(/(?:Here'?s a thinking process:|1\.\s+Analyze User Input:)/i);
+        reply = parts[parts.length - 1];
+      }
+
+      // 2. Strip any stray markdown asterisks
       reply = reply.replace(/\*\*/g, '').replace(/(^|[^\*])\*([^\*]+)\*/g, '$1$2').trim();
     }
     return NextResponse.json({ reply });

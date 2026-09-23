@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { appwrite } from '@/lib/appwrite';
 import { auth } from '@clerk/nextjs';
-import { Query } from 'node-appwrite';
+import { Query, ID } from 'node-appwrite';
 import crypto from 'crypto';
 import { getUserEmail, sendScheduledConfirmationEmail, send1HourPrepEmail, sendTomorrowReminderEmail } from '@/lib/mail-templates';
 
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
         await appwrite.databases.createDocument(
           DATABASE_ID,
           'notifications',
-          getNotificationId('sched', meetingId),
+          ID.unique(),
           {
             userId: activeUserId,
             text: `${title} scheduled for ${formattedTime}.`,

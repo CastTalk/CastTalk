@@ -8,8 +8,41 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
+import localFont from 'next/font/local';
 
 import "./theme.css";
+
+const roobert = localFont({
+  src: [
+    {
+      path: '../public/fonts/roobert-regular-webfont.woff2',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: '../public/fonts/roobert-medium-webfont.woff2',
+      weight: '500',
+      style: 'normal',
+    },
+    {
+      path: '../public/fonts/roobert-semibold-webfont.woff2',
+      weight: '600',
+      style: 'normal',
+    },
+    {
+      path: '../public/fonts/roobert-bold-webfont.woff2',
+      weight: '700',
+      style: 'normal',
+    },
+    {
+      path: '../public/fonts/roobert-bold-webfont.woff2',
+      weight: '800',
+      style: 'normal',
+    },
+  ],
+  variable: '--font-roobert',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: "CastTalk | Premium Video Communications",
@@ -23,7 +56,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" className={`light ${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" className={`light ${roobert.variable} ${GeistSans.variable} ${GeistMono.variable}`}>
       <ClerkProvider
         appearance={{
           layout: {

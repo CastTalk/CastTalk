@@ -645,6 +645,9 @@ const MeetingRoom = () => {
         setMeetingTranscripts((prev) => {
           const last = prev[prev.length - 1];
           if (last && last.userId === currentUserId && now - last.timestamp < 8000) {
+            if (last.text.trim().toLowerCase().endsWith(segment.text.trim().toLowerCase())) {
+              return prev;
+            }
             const next = [...prev];
             next[next.length - 1] = {
               ...last,
@@ -956,6 +959,11 @@ const MeetingRoom = () => {
         });
       } else if (event?.custom?.type === 'live-caption') {
         const { userId, speaker, text, timestamp, isPartial } = event.custom || {};
+        const currentLocalId = localParticipant?.userId || user?.id || 'local-user';
+        
+        // Skip processing own broadcasted captions (already processed locally with 0ms latency)
+        if (userId === currentLocalId) return;
+
         if (userId && text && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(text)) {
           setActiveCaptions((prev) => ({
             ...prev,
@@ -977,6 +985,9 @@ const MeetingRoom = () => {
             setMeetingTranscripts((prev) => {
               const last = prev[prev.length - 1];
               if (last && last.userId === userId && eventTime - last.timestamp < 8000) {
+                if (last.text.trim().toLowerCase().endsWith(text.trim().toLowerCase())) {
+                  return prev;
+                }
                 const next = [...prev];
                 next[next.length - 1] = {
                   ...last,
@@ -1479,11 +1490,8 @@ const MeetingRoom = () => {
         }} />
       </div>
 
-      {/* Top Right: User avatar, count, sparkle */}
-      <div className={cn(
-        "absolute top-3 sm:top-6 z-20 flex items-center gap-2 sm:gap-3 transition-all duration-300",
-        activeSidebar && !isMobile ? "right-[390px] sm:right-[405px]" : "right-3 sm:right-6"
-      )}>
+      {/* Top Right: User avatar, count, sparkle — always fixed to top-right corner */}
+      <div className="absolute top-3 sm:top-6 right-3 sm:right-6 z-20 flex items-center gap-2 sm:gap-3">
 
 
 
