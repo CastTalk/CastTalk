@@ -742,7 +742,7 @@ const Home = () => {
               Scheduled Meeting
             </h2>
             <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
-              "{scheduledMeetingInfo.title}" is scheduled for {new Date(scheduledMeetingInfo.startsAt).toLocaleString('en-US', {
+              &ldquo;{scheduledMeetingInfo.title}&rdquo; is scheduled for {new Date(scheduledMeetingInfo.startsAt).toLocaleString('en-US', {
                 weekday: 'short',
                 month: 'short',
                 day: 'numeric',

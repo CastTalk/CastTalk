@@ -119,7 +119,7 @@ const DeviceSettingsPanel = () => {
               No {activeTab} detected
             </h3>
             <p className="text-[12px] text-slate-550 mt-1 max-w-[240px] leading-normal">
-              Please connect a {activeTab} or check your browser's permissions.
+              Please connect a {activeTab} or check your browser&apos;s permissions.
             </p>
           </div>
         ) : (

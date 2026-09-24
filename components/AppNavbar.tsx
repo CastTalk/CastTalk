@@ -390,7 +390,7 @@ const AppNavbar = () => {
                                   e.stopPropagation();
                                   deleteNotification(notif.id);
                                 }}
-                                className="p-1.5 bg-red-50 hover:bg-red-100 rounded-full text-red-500 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="p-1.5 bg-red-50 hover:bg-red-100 rounded-full text-red-500 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
                                 title="Delete notification"
                               >
                                 <Trash size={12} weight="bold" />

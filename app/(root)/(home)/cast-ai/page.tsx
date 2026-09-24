@@ -1667,7 +1667,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
             Automation in Progress
           </h2>
           <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
-            Switching page will interrupt the AI model's automation process. Exiting now will terminate the active task.
+            Switching page will interrupt the AI model&apos;s automation process. Exiting now will terminate the active task.
           </p>
           <div className="flex justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
             <button
