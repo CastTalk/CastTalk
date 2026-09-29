@@ -210,6 +210,7 @@ const MeetingSetup = ({
   const isSecureMeeting = meetingType === 'secure' || meetingType === 'private';
 
   const [isWaitingForAdmission, setIsWaitingForAdmission] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
 
   const persistentGuestIdRef = useRef<string>('');
   if (!persistentGuestIdRef.current) {
@@ -228,17 +229,25 @@ const MeetingSetup = ({
       const targetId = event.custom?.targetUserId;
       if (event.custom?.type === 'admit-user' && (targetId === effectiveUserId || targetId === user?.id)) {
         setIsWaitingForAdmission(false);
+        setIsJoining(true);
         call.join().then(async () => {
-          // Re-assert device states after join to prevent camera-off-kills-mic bug
-          if (isMicOn) {
-            await call.microphone.enable().catch(() => {});
-          }
-          if (!isCameraOn) {
+          // 1. Configure camera first
+          if (isCameraOn) {
+            await call.camera.enable().catch(() => {});
+          } else {
             await call.camera.disable().catch(() => {});
+          }
+          // 2. Configure & cycle microphone AFTER camera is set
+          if (isMicOn) {
+            await call.microphone.disable().catch(() => {});
+            await call.microphone.enable().catch(() => {});
+          } else {
+            await call.microphone.disable().catch(() => {});
           }
           setIsSetupComplete(true);
         }).catch((err) => {
           console.error('[MeetingSetup] Error joining admitted call:', err);
+          setIsJoining(false);
         });
       }
       if (event.custom?.type === 'deny-user' && (targetId === effectiveUserId || targetId === user?.id)) {
@@ -504,7 +513,10 @@ const MeetingSetup = ({
           </div>
 
           <Button
+              disabled={isJoining}
               onClick={async () => {
+                if (isJoining) return;
+
                 if (typeof window !== 'undefined') {
                   localStorage.setItem('streamDisplayName', displayName);
                 }
@@ -513,26 +525,33 @@ const MeetingSetup = ({
 
                 if (isHost || (!isSecureMeeting && isHostCurrentlyInCall)) {
                   try {
-                    // Join the call, then immediately re-assert mic/camera state
-                    // to fix the camera-off-kills-mic bug (Stream SDK race condition).
+                    setIsJoining(true);
                     await call.join();
 
-                    // Re-assert mic/camera state after join to guarantee tracks
-                    // are properly published, especially when camera is off.
-                    // This is a safety net for the Stream SDK race condition.
-                    if (isMicOn) {
-                      await call.microphone.enable().catch(() => {});
-                    } else {
-                      await call.microphone.disable().catch(() => {});
-                    }
+                    // 1. Configure camera first
                     if (isCameraOn) {
                       await call.camera.enable().catch(() => {});
                     } else {
                       await call.camera.disable().catch(() => {});
                     }
 
+                    // 2. Configure & cycle microphone AFTER camera is settled
+                    // This guarantees mic track is active and publishing even when camera is off
+                    if (isMicOn) {
+                      await call.microphone.disable().catch(() => {});
+                      await call.microphone.enable().catch(() => {});
+                    } else {
+                      await call.microphone.disable().catch(() => {});
+                    }
+
                     setIsSetupComplete(true);
-                  } catch (err) {
+                  } catch (err: any) {
+                    setIsJoining(false);
+                    // If already joined, simply complete setup
+                    if (err?.message?.includes('Already joined')) {
+                      setIsSetupComplete(true);
+                      return;
+                    }
                     console.error('[MeetingSetup] Failed to join call:', err);
                     toast({
                       title: "Failed to join call",

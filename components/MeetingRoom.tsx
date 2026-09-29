@@ -1191,6 +1191,12 @@ const MeetingRoom = () => {
         await call.camera.enable();
       } else {
         await call.camera.disable();
+        // Stream Video SDK / WebRTC: disabling video can desync or pause the audio transceiver track.
+        // If microphone is supposed to be active, cycle the microphone immediately to force track re-binding:
+        if (!isMicMuted) {
+          await call.microphone.disable().catch(() => {});
+          await call.microphone.enable().catch(() => {});
+        }
       }
     } catch (e: any) {
       if (e?.name === 'NotReadableError') return;
@@ -1249,7 +1255,7 @@ const MeetingRoom = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={smoothTransition}
-            className="flex-[2.6] max-w-[70%] max-h-[calc(100vh-160px)] my-auto flex items-center justify-center relative bg-transparent h-full"
+            className="flex-[2.6] max-w-[70%] max-h-[calc(100dvh-140px)] sm:max-h-[calc(100dvh-160px)] my-auto flex items-center justify-center relative bg-transparent h-full"
           >
             <ParticipantView 
               participant={activeMainParticipant} 
@@ -1281,7 +1287,7 @@ const MeetingRoom = () => {
           </motion.div>
 
           {/* Right side: Vertical grid of participants */}
-          <div className="flex-[1] max-w-[27%] min-w-[220px] max-h-[calc(100vh-160px)] my-auto flex flex-col gap-3 shrink-0 overflow-y-auto pr-1 no-scrollbar">
+          <div className="flex-[1] max-w-[27%] min-w-[220px] max-h-[calc(100dvh-140px)] sm:max-h-[calc(100dvh-160px)] my-auto flex flex-col gap-3 shrink-0 overflow-y-auto pr-1 no-scrollbar">
             <AnimatePresence mode="popLayout">
               {participants.filter(p => p.sessionId !== activeMainParticipant.sessionId).map((p) => (
                 <motion.div 
@@ -1334,21 +1340,21 @@ const MeetingRoom = () => {
     const count = participants.length;
     if (count === 1) {
       tileClass = activeSidebar && !isMobile
-        ? "w-full sm:w-[96%] md:w-[92%] lg:w-[88%] max-w-[960px] max-h-[calc(100vh-160px)] aspect-video mr-0 sm:mr-1 ml-auto" 
-        : "w-full sm:w-[88%] md:w-[62%] h-[55vh] sm:h-auto aspect-[4/3] sm:aspect-video max-w-[840px] max-h-[calc(100vh-160px)] mx-auto";
+        ? "w-full sm:w-[96%] md:w-[92%] lg:w-[88%] max-w-[960px] max-h-[calc(100dvh-140px)] aspect-video mr-0 sm:mr-1 ml-auto" 
+        : "w-full sm:w-[88%] md:w-[62%] h-[48dvh] sm:h-auto aspect-[4/3] sm:aspect-video max-w-[840px] max-h-[calc(100dvh-140px)] mx-auto";
     } else if (count === 2) {
       tileClass = activeSidebar && !isMobile
-        ? "w-full sm:w-[96%] md:w-[49%] aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100vh-160px)]"
-        : "w-full sm:w-[88%] md:w-[45%] h-[32vh] sm:h-auto aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100vh-160px)]";
+        ? "w-full sm:w-[96%] md:w-[49%] aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100dvh-140px)]"
+        : "w-[48%] sm:w-[48%] md:w-[45%] max-h-[36dvh] sm:h-auto aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100dvh-140px)]";
     } else if (count === 4) {
-      tileClass = "w-[48%] md:w-[45%] aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100vh-160px)]";
+      tileClass = "w-[48%] md:w-[45%] aspect-[4/3] sm:aspect-video max-w-[620px] max-h-[calc(100dvh-140px)]";
     } else {
-      tileClass = "w-full sm:w-[48%] md:w-[30%] aspect-[4/3] sm:aspect-video max-w-[420px] max-h-[calc(100vh-160px)]";
+      tileClass = "w-full sm:w-[48%] md:w-[30%] aspect-[4/3] sm:aspect-video max-w-[420px] max-h-[calc(100dvh-140px)]";
     }
 
     return (
-      <div className={cn("w-full h-full flex items-center justify-center bg-transparent relative z-10", activeSidebar && !isMobile ? "p-1 sm:p-2 pr-0 sm:pr-1" : "p-4")}>
-        <div className={cn("flex flex-wrap items-center justify-center w-full max-h-[calc(100vh-160px)] overflow-y-auto no-scrollbar", activeSidebar && !isMobile ? "gap-2.5 sm:gap-3" : "gap-4")}>
+      <div className={cn("w-full h-full flex items-center justify-center bg-transparent relative z-10", activeSidebar && !isMobile ? "p-1 sm:p-2 pr-0 sm:pr-1" : "p-2 sm:p-4")}>
+        <div className={cn("flex flex-wrap items-center justify-center w-full max-h-[calc(100dvh-140px)] overflow-y-auto no-scrollbar", activeSidebar && !isMobile ? "gap-2 sm:gap-2.5" : "gap-2.5 sm:gap-4")}>
           <AnimatePresence mode="popLayout">
             {participants.map((p) => (
               <motion.div 
@@ -1396,7 +1402,7 @@ const MeetingRoom = () => {
   };
 
   return (
-    <section className="h-screen w-full overflow-hidden bg-[#121212] text-white flex flex-col font-geist relative select-none">
+    <section className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] overflow-hidden bg-[#121212] text-white flex flex-col font-geist select-none touch-none">
       <style>{`
         /* Stream grid overrides to match Google Meet Dark Theme */
         .str-video__paginated-grid-layout {
@@ -1657,8 +1663,8 @@ const MeetingRoom = () => {
       </div>
 
       <div className={cn(
-        "relative flex-1 min-h-0 max-h-[calc(100vh-110px)] flex items-center justify-center pt-14 pb-1 z-10 bg-transparent w-full transition-all duration-300",
-        activeSidebar && !isMobile ? "px-2 sm:px-3 md:px-4" : "px-3 sm:px-6 md:px-8"
+        "relative flex-1 min-h-0 max-h-[calc(100dvh-68px)] sm:max-h-[calc(100dvh-80px)] flex items-center justify-center pt-12 sm:pt-14 pb-16 sm:pb-20 z-10 bg-transparent w-full transition-all duration-300 overflow-hidden",
+        activeSidebar && !isMobile ? "px-2 sm:px-3 md:px-4" : "px-2 sm:px-6 md:px-8"
       )}>
         <div className={cn(
           "flex flex-row w-full h-full min-h-0 items-center justify-center mx-auto rounded-lg overflow-hidden bg-transparent",
@@ -1805,7 +1811,7 @@ const MeetingRoom = () => {
       </Drawer>
       
       {/* 3. Controls Area - Pinned All The Way Down to Absolute Bottom */}
-      <div className="absolute bottom-2 sm:bottom-4 left-0 right-0 w-full flex justify-between items-center px-2 sm:px-8 z-30 bg-transparent select-none">
+      <div className="absolute bottom-2 sm:bottom-4 left-0 right-0 w-full flex justify-between items-center px-2 sm:px-8 z-30 bg-transparent select-none pb-[env(safe-area-inset-bottom,0px)]">
         {/* Bottom Left: Spacer (since time & code moved to top left) */}
         <div className="hidden md:block w-[240px]" />
 

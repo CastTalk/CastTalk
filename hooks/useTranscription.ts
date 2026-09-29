@@ -206,9 +206,22 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
     setConnectionStatus('disconnected');
   }, [clearTimers, cleanupConnection]);
 
-  // Auto-cleanup on unmount
+  // Auto-cleanup on unmount & page unload
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      isStoppingRef.current = true;
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({ message: 'EndOfStream', last_seq_no: 0 }));
+          wsRef.current.close(1000, 'Page unloaded');
+        } catch {}
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       isStoppingRef.current = true;
       cleanup();
     };
@@ -345,6 +358,16 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
             let lastSpeechTime = 0;
             let isSilentMode = true;
 
+            const safeSend = (data: ArrayBufferLike | ArrayBufferView | string | Blob) => {
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                try {
+                  ws.send(data);
+                } catch {
+                  // Socket closed or closing
+                }
+              }
+            };
+
             workletNode.port.onmessage = (e: MessageEvent<Float32Array>) => {
               if (ws.readyState !== WebSocket.OPEN) return;
 
@@ -381,12 +404,12 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
                   while (preRollChunks.length > 0) {
                     const chunk = preRollChunks.shift()!;
                     const downsampled = downsampleBuffer(chunk, audioCtx.sampleRate, TARGET_SAMPLE_RATE);
-                    ws.send(float32ToPcm16(downsampled));
+                    safeSend(float32ToPcm16(downsampled));
                   }
                 }
                 // Send current chunk immediately
                 const downsampled = downsampleBuffer(samples, audioCtx.sampleRate, TARGET_SAMPLE_RATE);
-                ws.send(float32ToPcm16(downsampled));
+                safeSend(float32ToPcm16(downsampled));
               } else {
                 // In silence/standby: zero audio packets sent to API to save credits!
                 isSilentMode = true;
@@ -492,6 +515,15 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
       ws.onclose = (e) => {
         setIsListening(false);
 
+        // Immediately detach audio worklet callback to stop sending audio to closed socket
+        if (workletNodeRef.current) {
+          try {
+            workletNodeRef.current.port.onmessage = null;
+            workletNodeRef.current.disconnect();
+          } catch {}
+          workletNodeRef.current = null;
+        }
+
         if (isStoppingRef.current) {
           // Intentional stop — don't reconnect
           setConnectionStatus('disconnected');
@@ -504,16 +536,22 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
           return;
         }
 
-        // Unexpected disconnect — attempt auto-reconnect
-        console.warn('[Speechmatics] WebSocket closed unexpectedly:', e.code, e.reason);
-        attemptReconnect();
+        // Error 4005 = Speechmatics quota_exceeded (concurrent session limit)
+        const isQuota4005 = e.code === 4005 || Boolean(e.reason && e.reason.toLowerCase().includes('quota'));
+        if (isQuota4005) {
+          console.warn('[Speechmatics] 4005: Concurrent session limit reached. Backing off 10s...');
+          setError('Speechmatics concurrent session limit reached. Retrying in 10s...');
+        } else {
+          console.warn('[Speechmatics] WebSocket closed unexpectedly:', e.code, e.reason);
+        }
+        attemptReconnect(isQuota4005);
       };
     } catch (err: any) {
       console.error('[useTranscription] connect failed:', err);
 
       if (isReconnect) {
         // Reconnect attempt failed — try again
-        attemptReconnect();
+        attemptReconnect(false);
       } else {
         setError(err.message || 'Failed to start transcription');
         setConnectionStatus('failed');
@@ -527,7 +565,7 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
    * Attempt to reconnect with exponential backoff.
    * Tears down the old connection and schedules a new connect() call.
    */
-  const attemptReconnect = useCallback(() => {
+  const attemptReconnect = useCallback((isQuota: boolean = false) => {
     if (isStoppingRef.current) return;
 
     // Clear old health-check timer
@@ -541,7 +579,7 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
 
     if (attempt > MAX_RECONNECT_ATTEMPTS) {
       console.error(`[Speechmatics] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached — giving up`);
-      setError('Transcription connection lost. Please toggle captions off and on to retry.');
+      setError('Transcription session ended. Toggle Voice Transcription to reconnect.');
       setConnectionStatus('failed');
       isReconnectingRef.current = false;
       cleanupConnection();
@@ -550,10 +588,15 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
 
     isReconnectingRef.current = true;
     setConnectionStatus('reconnecting');
-    setError(null);
+    if (!isQuota) {
+      setError(null);
+    }
 
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-    const delay = BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt - 1);
+    // If quota 4005 error, wait 10s as officially recommended by Speechmatics documentation
+    // Otherwise standard backoff: 1s, 2s, 4s, 8s, 16s
+    const delay = isQuota
+      ? Math.max(10_000, BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt))
+      : BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt - 1);
     console.log(`[Speechmatics] Reconnecting in ${delay}ms (attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS})...`);
 
     // Tear down old connection resources (but keep mic stream if possible)
@@ -562,7 +605,10 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
       wsRef.current = null;
     }
     if (workletNodeRef.current) {
-      try { workletNodeRef.current.disconnect(); } catch { /* ignore */ }
+      try {
+        workletNodeRef.current.port.onmessage = null;
+        workletNodeRef.current.disconnect();
+      } catch { /* ignore */ }
       workletNodeRef.current = null;
     }
     if (audioCtxRef.current) {
