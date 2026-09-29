@@ -228,14 +228,7 @@ const MeetingSetup = ({
       const targetId = event.custom?.targetUserId;
       if (event.custom?.type === 'admit-user' && (targetId === effectiveUserId || targetId === user?.id)) {
         setIsWaitingForAdmission(false);
-        call.join({
-          data: {
-            settings_override: {
-              audio: { default_device: 'speaker', mic_default_on: isMicOn },
-              video: { camera_default_on: isCameraOn },
-            },
-          },
-        }).then(async () => {
+        call.join().then(async () => {
           // Re-assert device states after join to prevent camera-off-kills-mic bug
           if (isMicOn) {
             await call.microphone.enable().catch(() => {});
@@ -520,18 +513,9 @@ const MeetingSetup = ({
 
                 if (isHost || (!isSecureMeeting && isHostCurrentlyInCall)) {
                   try {
-                    // Join with explicit initial device states to prevent the
-                    // camera-off-kills-mic bug. When the SDK joins without these
-                    // flags, disabling the camera before join can interfere with
-                    // the mic track because they share a getUserMedia call internally.
-                    await call.join({
-                      data: {
-                        settings_override: {
-                          audio: { default_device: 'speaker', mic_default_on: isMicOn },
-                          video: { camera_default_on: isCameraOn },
-                        },
-                      },
-                    });
+                    // Join the call, then immediately re-assert mic/camera state
+                    // to fix the camera-off-kills-mic bug (Stream SDK race condition).
+                    await call.join();
 
                     // Re-assert mic/camera state after join to guarantee tracks
                     // are properly published, especially when camera is off.
