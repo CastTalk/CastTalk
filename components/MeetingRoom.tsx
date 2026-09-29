@@ -697,8 +697,12 @@ const MeetingRoom = () => {
     transcript: localTranscriptLines, 
     interimText, 
     isListening, 
+    isPaused: isTranscriptionPaused,
+    connectionStatus: transcriptionStatus,
     error: transcriptionError, 
     start: startTranscription, 
+    pause: pauseTranscription,
+    resume: resumeTranscription,
     stop: stopTranscription 
   } = useTranscription({
     onTranscript: handleTranscriptSegment,
@@ -740,15 +744,40 @@ const MeetingRoom = () => {
     }
   }, [remoteInterimText]);
 
-  // Start/stop transcription when CC is toggled AND mic is unmuted
-  // When muted in the call, microphone recording is completely halted for privacy & accuracy!
+  // Manage transcription lifecycle:
+  // - CC ON → start the WebSocket connection (once)
+  // - CC OFF → fully stop and disconnect
+  // - Mic mute/unmute → pause/resume audio sending (keeps connection alive, saves quota)
   useEffect(() => {
-    if (isCcActive && !isMicMuted) {
+    if (isCcActive) {
+      // Start connection if not already connected
       startTranscription(displayName);
     } else {
+      // CC turned off — full disconnect
       stopTranscription();
     }
-  }, [isCcActive, isMicMuted, displayName, startTranscription, stopTranscription]);
+  }, [isCcActive, displayName, startTranscription, stopTranscription]);
+
+  // Pause/resume audio when mic is muted/unmuted (connection stays alive)
+  useEffect(() => {
+    if (!isCcActive) return; // Don't touch anything if CC is off
+    if (isMicMuted) {
+      pauseTranscription();
+    } else {
+      resumeTranscription();
+    }
+  }, [isCcActive, isMicMuted, pauseTranscription, resumeTranscription]);
+
+  // Show reconnection status to user
+  useEffect(() => {
+    if (transcriptionStatus === 'reconnecting' && isCcActive) {
+      toast({ title: 'Captions reconnecting...', description: 'Attempting to restore transcription connection' });
+    }
+    if (transcriptionStatus === 'connected' && isCcActive) {
+      // Only show "restored" toast after a reconnection, not initial connection
+      // We check if there was a previous error that was cleared
+    }
+  }, [transcriptionStatus, isCcActive, toast]);
 
   // Alert on transcription errors
   useEffect(() => {
@@ -1114,6 +1143,31 @@ const MeetingRoom = () => {
 
   // for more detail about types of CallingState see: https://getstream.io/video/docs/react/ui-cookbook/ringing-call/#incoming-call-panel
   const callingState = useCallCallingState();
+
+  // Safety net: after joining, re-assert mic state to fix the camera-off-kills-mic bug.
+  // When a user joins with camera off, the Stream SDK can sometimes leave the mic
+  // track in a broken state where isMute=false but audio is not actually published.
+  // This runs once after CallingState.JOINED and forces the mic to re-enable.
+  const hasReassertedMicRef = useRef(false);
+  useEffect(() => {
+    if (callingState !== CallingState.JOINED || hasReassertedMicRef.current || !call) return;
+    hasReassertedMicRef.current = true;
+
+    // Small delay to let Stream SDK fully initialize tracks after join
+    const timer = setTimeout(async () => {
+      try {
+        if (!micState.isMute) {
+          // Mic should be on — cycle it to ensure the track is alive and publishing
+          await call.microphone.disable();
+          await call.microphone.enable();
+        }
+      } catch (e) {
+        console.warn('[MeetingRoom] Mic re-assertion failed:', e);
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [callingState, call, micState.isMute]);
 
   if (callingState !== CallingState.JOINED) return <Loader />;
 

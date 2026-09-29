@@ -228,7 +228,23 @@ const MeetingSetup = ({
       const targetId = event.custom?.targetUserId;
       if (event.custom?.type === 'admit-user' && (targetId === effectiveUserId || targetId === user?.id)) {
         setIsWaitingForAdmission(false);
-        call.join().then(() => setIsSetupComplete(true)).catch((err) => {
+        call.join({
+          data: {
+            settings_override: {
+              audio: { default_device: 'speaker', mic_default_on: isMicOn },
+              video: { camera_default_on: isCameraOn },
+            },
+          },
+        }).then(async () => {
+          // Re-assert device states after join to prevent camera-off-kills-mic bug
+          if (isMicOn) {
+            await call.microphone.enable().catch(() => {});
+          }
+          if (!isCameraOn) {
+            await call.camera.disable().catch(() => {});
+          }
+          setIsSetupComplete(true);
+        }).catch((err) => {
           console.error('[MeetingSetup] Error joining admitted call:', err);
         });
       }
@@ -245,7 +261,7 @@ const MeetingSetup = ({
 
     const unsubscribe = call.on('custom', handleCustomEvent);
     return () => unsubscribe();
-  }, [call, user?.id, effectiveUserId, isHost, setIsSetupComplete, toast, router]);
+  }, [call, user?.id, effectiveUserId, isHost, setIsSetupComplete, toast, router, isMicOn, isCameraOn]);
 
   // Continuously request admission while in waiting room
   useEffect(() => {
@@ -504,7 +520,33 @@ const MeetingSetup = ({
 
                 if (isHost || (!isSecureMeeting && isHostCurrentlyInCall)) {
                   try {
-                    await call.join();
+                    // Join with explicit initial device states to prevent the
+                    // camera-off-kills-mic bug. When the SDK joins without these
+                    // flags, disabling the camera before join can interfere with
+                    // the mic track because they share a getUserMedia call internally.
+                    await call.join({
+                      data: {
+                        settings_override: {
+                          audio: { default_device: 'speaker', mic_default_on: isMicOn },
+                          video: { camera_default_on: isCameraOn },
+                        },
+                      },
+                    });
+
+                    // Re-assert mic/camera state after join to guarantee tracks
+                    // are properly published, especially when camera is off.
+                    // This is a safety net for the Stream SDK race condition.
+                    if (isMicOn) {
+                      await call.microphone.enable().catch(() => {});
+                    } else {
+                      await call.microphone.disable().catch(() => {});
+                    }
+                    if (isCameraOn) {
+                      await call.camera.enable().catch(() => {});
+                    } else {
+                      await call.camera.disable().catch(() => {});
+                    }
+
                     setIsSetupComplete(true);
                   } catch (err) {
                     console.error('[MeetingSetup] Failed to join call:', err);
