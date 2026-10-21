@@ -331,7 +331,7 @@ const AppNavbar = () => {
                 </button>
 
                 {showNotifications && (
-                  <div className="absolute right-0 top-[42px] w-[360px] bg-white/95 backdrop-blur-md text-slate-800 rounded-2xl shadow-xl border border-slate-200/80 z-50 animate-slide-down overflow-hidden">
+                  <div className="absolute right-0 top-[42px] w-[calc(100vw-2rem)] sm:w-[360px] max-w-[360px] bg-white/95 backdrop-blur-md text-slate-800 rounded-2xl shadow-xl border border-slate-200/80 z-50 animate-slide-down overflow-hidden" style={{ right: 'min(0px, calc(-1 * (100vw - 100%)))' }}>
                     <div className="flex items-center justify-between p-4 border-b border-slate-100">
                       <div className="flex items-center gap-2">
                         <Bell size={18} weight="fill" className="text-[#15803d]" />

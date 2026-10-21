@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { StreamCall, StreamTheme } from '@stream-io/video-react-sdk';
 import { useParams } from 'next/navigation';
@@ -15,6 +15,8 @@ const MeetingPage = () => {
   const { isLoaded, user } = useUser();
   const { call, isCallLoading } = useGetCallById(id);
   const [isSetupComplete, setIsSetupComplete] = useState(false);
+  // Persist lobby device state so MeetingRoom can respect the user's pre-join choices
+  const lobbyStateRef = useRef<{ isMicOn: boolean; isCameraOn: boolean }>({ isMicOn: true, isCameraOn: true });
 
   if (!isLoaded || isCallLoading) return <Loader />;
 
@@ -35,9 +37,15 @@ const MeetingPage = () => {
         <StreamTheme>
 
         {!isSetupComplete ? (
-          <MeetingSetup setIsSetupComplete={setIsSetupComplete} />
+          <MeetingSetup
+            setIsSetupComplete={setIsSetupComplete}
+            onLobbyStateChange={(mic, cam) => { lobbyStateRef.current = { isMicOn: mic, isCameraOn: cam }; }}
+          />
         ) : (
-          <MeetingRoom />
+          <MeetingRoom
+            lobbyMicOn={lobbyStateRef.current.isMicOn}
+            lobbyCameraOn={lobbyStateRef.current.isCameraOn}
+          />
         )}
         </StreamTheme>
       </StreamCall>

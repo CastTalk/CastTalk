@@ -174,8 +174,10 @@ const DeviceSettingsPanel = () => {
 
 const MeetingSetup = ({
   setIsSetupComplete,
+  onLobbyStateChange,
 }: {
   setIsSetupComplete: (value: boolean) => void;
+  onLobbyStateChange?: (micOn: boolean, cameraOn: boolean) => void;
 }) => {
   const router = useRouter();
   const { useCallEndedAt, useCallStartsAt, useParticipants } = useCallStateHooks();
@@ -197,8 +199,31 @@ const MeetingSetup = ({
     );
   }
 
-  const [isMicOn, setIsMicOn] = useState(true);
-  const [isCameraOn, setIsCameraOn] = useState(true);
+  const [isMicOn, setIsMicOnRaw] = useState(true);
+  const [isCameraOn, setIsCameraOnRaw] = useState(true);
+
+  // Wrap setters to always propagate lobby state to parent
+  const setIsMicOn = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsMicOnRaw((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      // We need the camera state too — read from the latest value via a callback trick
+      setIsCameraOnRaw((camPrev) => {
+        onLobbyStateChange?.(next, camPrev);
+        return camPrev; // don't change camera state
+      });
+      return next;
+    });
+  };
+  const setIsCameraOn = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsCameraOnRaw((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      setIsMicOnRaw((micPrev) => {
+        onLobbyStateChange?.(micPrev, next);
+        return micPrev; // don't change mic state
+      });
+      return next;
+    });
+  };
   const [displayName, setDisplayName] = useState(user?.fullName || user?.username || 'Guest');
   const [isEditingName, setIsEditingName] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -237,9 +262,12 @@ const MeetingSetup = ({
           } else {
             await call.camera.disable().catch(() => {});
           }
-          // 2. Configure & cycle microphone AFTER camera is set
+          // 2. Wait for SDK to settle after camera config
+          await new Promise((r) => setTimeout(r, 300));
+          // 3. Configure & cycle microphone AFTER camera is set
           if (isMicOn) {
             await call.microphone.disable().catch(() => {});
+            await new Promise((r) => setTimeout(r, 100));
             await call.microphone.enable().catch(() => {});
           } else {
             await call.microphone.disable().catch(() => {});
@@ -535,10 +563,15 @@ const MeetingSetup = ({
                       await call.camera.disable().catch(() => {});
                     }
 
-                    // 2. Configure & cycle microphone AFTER camera is settled
-                    // This guarantees mic track is active and publishing even when camera is off
+                    // 2. Wait for SDK to settle after camera config (especially important when camera is off)
+                    await new Promise((r) => setTimeout(r, 300));
+
+                    // 3. Configure & cycle microphone AFTER camera is settled
+                    // Triple-cycle to ensure the audio track is bound and publishing
+                    // even when camera is off (Stream SDK WebRTC transceiver can desync)
                     if (isMicOn) {
                       await call.microphone.disable().catch(() => {});
+                      await new Promise((r) => setTimeout(r, 100));
                       await call.microphone.enable().catch(() => {});
                     } else {
                       await call.microphone.disable().catch(() => {});

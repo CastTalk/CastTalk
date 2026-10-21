@@ -623,13 +623,11 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
   }, [connect, cleanupConnection]);
 
   const start = useCallback(async (speakerName?: string) => {
-    // If already connected, just resume if paused
+    // If already connected, just update the speaker name.
+    // Do NOT auto-resume — the caller (MeetingRoom) manages pause/resume
+    // based on the mic mute state to prevent capturing voice when mic is off.
     if (isListening && wsRef.current?.readyState === WebSocket.OPEN) {
       speakerNameRef.current = speakerName || 'You';
-      if (isPausedRef.current) {
-        isPausedRef.current = false;
-        setIsPaused(false);
-      }
       return;
     }
 

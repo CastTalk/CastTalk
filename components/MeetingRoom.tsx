@@ -561,7 +561,7 @@ const pendingLeaves = new Map<string, NodeJS.Timeout>();
 
 type CallLayoutType = 'grid' | 'fullscreen';
 
-const MeetingRoom = () => {
+const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?: boolean; lobbyCameraOn?: boolean }) => {
   const searchParams = useSearchParams();
   const isPersonalRoom = !!searchParams.get('personal');
   const router = useRouter();
@@ -748,14 +748,26 @@ const MeetingRoom = () => {
   // - CC ON → start the WebSocket connection (once)
   // - CC OFF → fully stop and disconnect
   // - Mic mute/unmute → pause/resume audio sending (keeps connection alive, saves quota)
+  //
+  // IMPORTANT: When transcription is started while mic is muted, we must immediately
+  // pause audio capture so the user's voice is NOT transcribed. The user should only
+  // see other participants' transcripts when their own mic is off.
   useEffect(() => {
     if (isCcActive) {
       // Start connection if not already connected
-      startTranscription(displayName);
+      startTranscription(displayName).then(() => {
+        // After starting, if mic is currently muted, immediately pause audio capture.
+        // This prevents the transcription engine from capturing the user's voice
+        // through its own MediaStream even though the Stream SDK mic is muted.
+        if (isMicMuted) {
+          pauseTranscription();
+        }
+      });
     } else {
       // CC turned off — full disconnect
       stopTranscription();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCcActive, displayName, startTranscription, stopTranscription]);
 
   // Pause/resume audio when mic is muted/unmuted (connection stays alive)
@@ -1144,30 +1156,41 @@ const MeetingRoom = () => {
   // for more detail about types of CallingState see: https://getstream.io/video/docs/react/ui-cookbook/ringing-call/#incoming-call-panel
   const callingState = useCallCallingState();
 
-  // Safety net: after joining, re-assert mic state to fix the camera-off-kills-mic bug.
+  // Safety net: after joining, re-assert mic & camera state to fix the camera-off-kills-mic bug
+  // and the lobby-toggle-not-persisting bug.
   // When a user joins with camera off, the Stream SDK can sometimes leave the mic
   // track in a broken state where isMute=false but audio is not actually published.
-  // This runs once after CallingState.JOINED and forces the mic to re-enable.
+  // This runs once after CallingState.JOINED and forces the correct device state.
   const hasReassertedMicRef = useRef(false);
   useEffect(() => {
     if (callingState !== CallingState.JOINED || hasReassertedMicRef.current || !call) return;
     hasReassertedMicRef.current = true;
 
-    // Small delay to let Stream SDK fully initialize tracks after join
+    // Longer delay to let Stream SDK fully initialize tracks after join
     const timer = setTimeout(async () => {
       try {
-        if (!micState.isMute) {
+        // Respect the lobby choice: if user toggled mic off in lobby, ensure it stays off
+        if (!lobbyMicOn) {
+          await call.microphone.disable().catch(() => {});
+        } else {
           // Mic should be on — cycle it to ensure the track is alive and publishing
-          await call.microphone.disable();
-          await call.microphone.enable();
+          // even when camera is off (WebRTC transceiver desync fix)
+          await call.microphone.disable().catch(() => {});
+          await new Promise((r) => setTimeout(r, 150));
+          await call.microphone.enable().catch(() => {});
+        }
+
+        // Also respect lobby camera choice
+        if (!lobbyCameraOn) {
+          await call.camera.disable().catch(() => {});
         }
       } catch (e) {
         console.warn('[MeetingRoom] Mic re-assertion failed:', e);
       }
-    }, 1500);
+    }, 2000);
 
     return () => clearTimeout(timer);
-  }, [callingState, call, micState.isMute]);
+  }, [callingState, call, lobbyMicOn, lobbyCameraOn]);
 
   if (callingState !== CallingState.JOINED) return <Loader />;
 
@@ -1191,12 +1214,15 @@ const MeetingRoom = () => {
         await call.camera.enable();
       } else {
         await call.camera.disable();
-        // Stream Video SDK / WebRTC: disabling video can desync or pause the audio transceiver track.
-        // If microphone is supposed to be active, cycle the microphone immediately to force track re-binding:
-        if (!isMicMuted) {
-          await call.microphone.disable().catch(() => {});
-          await call.microphone.enable().catch(() => {});
-        }
+      }
+      // Stream Video SDK / WebRTC: toggling video (either direction) can desync the audio transceiver track.
+      // Always cycle the microphone after any camera toggle to force track re-binding.
+      // Small delay to let the SDK settle after the camera state change.
+      await new Promise((r) => setTimeout(r, 200));
+      if (!isMicMuted) {
+        await call.microphone.disable().catch(() => {});
+        await new Promise((r) => setTimeout(r, 100));
+        await call.microphone.enable().catch(() => {});
       }
     } catch (e: any) {
       if (e?.name === 'NotReadableError') return;
