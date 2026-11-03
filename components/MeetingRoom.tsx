@@ -738,16 +738,78 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
     }
   }, [remoteInterimText]);
 
-  // Manage transcription lifecycle. Captions ON means "show me the meeting's captions":
-  // - Other participants' captions arrive over Stream custom events and are shown
-  //   whenever CC is on, regardless of our own mic.
-  // - Our OWN Speechmatics session only runs while CC is on AND our mic is on. With
-  //   the mic off nothing captures our voice, and we don't hold one of the account's
-  //   concurrent real-time sessions just to read other people's captions.
+  // Captions are a meeting-wide request, like Google Meet. Each device can only
+  // transcribe its own mic, so when anyone turns CC on, that request is announced
+  // to the call ('captions-demand') and every participant with an unmuted mic
+  // transcribes themselves and broadcasts the text. Requests are re-announced
+  // every 10s (late joiners pick them up) and expire after 25s without a heartbeat.
+  const [remoteCaptionDemand, setRemoteCaptionDemand] = useState<Record<string, { name: string; lastSeen: number }>>({});
+  // Refs let the long-lived custom event listener read current values
+  const isCcActiveRef = useRef(isCcActive);
+  const remoteCaptionDemandRef = useRef(remoteCaptionDemand);
+  useEffect(() => {
+    isCcActiveRef.current = isCcActive;
+    remoteCaptionDemandRef.current = remoteCaptionDemand;
+  }, [isCcActive, remoteCaptionDemand]);
+
+  const sendCaptionDemand = useCallback(
+    (on: boolean) => {
+      call?.sendCustomEvent({ type: 'captions-demand', userId: currentUserId, name: displayName, on }).catch(() => {});
+    },
+    [call, currentUserId, displayName]
+  );
+  const sendCaptionDemandRef = useRef(sendCaptionDemand);
+  useEffect(() => {
+    sendCaptionDemandRef.current = sendCaptionDemand;
+  }, [sendCaptionDemand]);
+
+  const wasCcActiveRef = useRef(false);
+  useEffect(() => {
+    if (!call) return;
+    if (!isCcActive) {
+      // Only announce "off" if we had announced "on" before
+      if (wasCcActiveRef.current) sendCaptionDemand(false);
+      wasCcActiveRef.current = false;
+      return;
+    }
+    wasCcActiveRef.current = true;
+    sendCaptionDemand(true);
+    const heartbeat = setInterval(() => sendCaptionDemand(true), 10_000);
+    return () => clearInterval(heartbeat);
+  }, [call, isCcActive, sendCaptionDemand]);
+
+  // Once joined, ask whether anyone already has captions on
+  const localSessionId = localParticipant?.sessionId;
+  useEffect(() => {
+    if (!localSessionId) return;
+    call?.sendCustomEvent({ type: 'captions-demand-query' }).catch(() => {});
+  }, [call, localSessionId]);
+
+  // Expire requests from people who left or stopped sending heartbeats
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setRemoteCaptionDemand((prev) => {
+        const now = Date.now();
+        const next = Object.fromEntries(
+          Object.entries(prev).filter(([, d]) => now - d.lastSeen < 25_000)
+        );
+        return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+      });
+    }, 5_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const captionsOnInMeeting = isCcActive || Object.keys(remoteCaptionDemand).length > 0;
+
+  // Manage our own transcription session:
+  // - It runs only while captions are on in the meeting AND our mic is on. With the
+  //   mic off nothing captures our voice, and we don't hold one of the account's
+  //   concurrent real-time sessions (the plan allows 2) just to read captions.
+  // - Other participants' captions arrive over Stream custom events regardless.
   // - Transcription reads the call's own mic stream instead of opening a second
   //   capture, which on phones can silence the mic published to the call.
   const micStream = micState.mediaStream;
-  const shouldTranscribeSelf = isCcActive && !isMicMuted && !!micStream;
+  const shouldTranscribeSelf = captionsOnInMeeting && !isMicMuted && !!micStream;
   useEffect(() => {
     if (shouldTranscribeSelf) {
       // No-op if a session on this stream is already running (only updates the name)
@@ -759,21 +821,17 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
 
   // Show reconnection status to user
   useEffect(() => {
-    if (transcriptionStatus === 'reconnecting' && isCcActive) {
+    if (transcriptionStatus === 'reconnecting' && shouldTranscribeSelf) {
       toast({ title: 'Captions reconnecting...', description: 'Attempting to restore transcription connection' });
     }
-    if (transcriptionStatus === 'connected' && isCcActive) {
-      // Only show "restored" toast after a reconnection, not initial connection
-      // We check if there was a previous error that was cleared
-    }
-  }, [transcriptionStatus, isCcActive, toast]);
+  }, [transcriptionStatus, shouldTranscribeSelf, toast]);
 
   // Alert on transcription errors
   useEffect(() => {
-    if (transcriptionError && isCcActive) {
+    if (transcriptionError && captionsOnInMeeting) {
       toast({ title: 'Captions error', description: transcriptionError, variant: 'destructive' });
     }
-  }, [transcriptionError, isCcActive, toast]);
+  }, [transcriptionError, captionsOnInMeeting, toast]);
 
   // Auto-hide captions after 4.5 seconds of silence
   useEffect(() => {
@@ -794,7 +852,15 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
     return () => clearInterval(timer);
   }, []);
 
-  const toggleCc = () => setIsCcActive((prev) => !prev);
+  const toggleCc = () => {
+    const next = !isCcActive;
+    setIsCcActive(next);
+    // Confirm the new state — on phones the button is small and easy to misread
+    toast({
+      title: next ? 'Captions on' : 'Captions off',
+      description: next ? "Everyone's speech will appear in Transcripts." : undefined,
+    });
+  };
 
   // Sync userRoles from call state once available
   useEffect(() => {
@@ -975,6 +1041,28 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
           }
           return copy;
         });
+      } else if (event?.custom?.type === 'captions-demand') {
+        const { userId, name, on } = event.custom || {};
+        if (!userId || userId === currentUserId) return;
+        if (on && !remoteCaptionDemandRef.current[userId] && !isCcActiveRef.current) {
+          toast({
+            title: `${name || 'A participant'} turned on captions`,
+            description: 'What you say while your mic is on will be transcribed.',
+          });
+        }
+        setRemoteCaptionDemand((prev) => {
+          if (!on) {
+            if (!prev[userId]) return prev;
+            const next = { ...prev };
+            delete next[userId];
+            return next;
+          }
+          return { ...prev, [userId]: { name: name || 'Participant', lastSeen: Date.now() } };
+        });
+      } else if (event?.custom?.type === 'captions-demand-query') {
+        if (isCcActiveRef.current) {
+          sendCaptionDemandRef.current(true);
+        }
       } else if (event?.custom?.type === 'live-caption') {
         const { userId, speaker, text, timestamp, isPartial } = event.custom || {};
         const currentLocalId = localParticipant?.userId || user?.id || 'local-user';
@@ -1682,7 +1770,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
                 <div className="w-[360px] sm:w-[380px] h-full">
                   <GoogleMeetTranscriptsSidebar 
                     onClose={() => setActiveSidebar(null)}
-                    isListening={isCcActive}
+                    isListening={captionsOnInMeeting}
                     isMicMuted={isMicMuted}
                     onStart={handleStartTranscriptionFromSidebar}
                     onStop={handleStopTranscriptionFromSidebar}
@@ -1765,7 +1853,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
             {activeSidebar === 'transcripts' && (
               <GoogleMeetTranscriptsSidebar 
                 onClose={() => setActiveSidebar(null)}
-                isListening={isCcActive}
+                isListening={captionsOnInMeeting}
                 isMicMuted={isMicMuted}
                 onStart={handleStartTranscriptionFromSidebar}
                 onStop={handleStopTranscriptionFromSidebar}
@@ -1915,6 +2003,23 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
             {isCameraMuted ? <VideoCameraSlash size={18} weight="bold" /> : <VideoCamera size={18} weight="bold" />}
           </button>
 
+          {/* MOBILE Captions Button — on/off state visible without opening a menu.
+              The dot means someone else has captions on (you're being transcribed). */}
+          <button
+            onClick={toggleCc}
+            aria-pressed={isCcActive}
+            className={cn(
+              "md:hidden relative size-11 rounded-2xl transition-colors flex items-center justify-center border shadow-md",
+              isCcActive ? "bg-[#a8c7fa] text-[#041e49] border-transparent" : "bg-[#3c4043] text-white border-transparent"
+            )}
+            title={isCcActive ? "Turn Off Captions" : "Turn On Captions"}
+          >
+            <ClosedCaptioning size={18} weight={isCcActive ? "fill" : "bold"} />
+            {!isCcActive && captionsOnInMeeting && (
+              <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-[#8ab4f8]" />
+            )}
+          </button>
+
           {/* DESKTOP Transcribe / CC Combined Dual Pill */}
           <div className="hidden md:flex items-center bg-[#3c4043] rounded-xl p-0.5 shadow-md border border-[#3c4043]/10">
             {/* Left: Dynamic Arrow / Caret button to toggle the panel without starting transcription */}
@@ -1935,9 +2040,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
 
             {/* Right: CC Button to toggle voice recording */}
             <button
-              onClick={() => {
-                setIsCcActive((prev) => !prev);
-              }}
+              onClick={toggleCc}
               className={cn(
                 "p-2 rounded-r-xl transition-colors flex items-center justify-center min-w-[42px] h-[42px] cursor-pointer",
                 isCcActive 
@@ -1950,11 +2053,11 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
             </button>
           </div>
 
-          {/* Present Now (Screen Share) */}
+          {/* Present Now (Screen Share) — in the More menu on mobile to make room for Captions */}
           <button
             onClick={toggleScreenShare}
             className={cn(
-              "size-11 sm:size-12 rounded-2xl transition-colors flex items-center justify-center border shadow-md cursor-pointer",
+              "hidden md:flex size-11 sm:size-12 rounded-2xl transition-colors items-center justify-center border shadow-md cursor-pointer",
               isScreenSharing ? "bg-[#a8c7fa] text-[#041e49] border-transparent hover:bg-[#b8d7fb]" : "bg-[#3c4043] text-white border-transparent hover:bg-[#4a4f54]"
             )}
             title="Present Now"
@@ -2002,12 +2105,12 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
                   <span>{isTranscriptsOpen ? 'Close Transcripts' : 'Open Transcripts'}</span>
                 </DropdownMenuItem>
 
-                <DropdownMenuItem 
-                  onClick={() => setIsCcActive((prev) => !prev)}
+                <DropdownMenuItem
+                  onClick={toggleScreenShare}
                   className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-200"
                 >
-                  <ClosedCaptioning size={16} weight="bold" />
-                  <span>{isCcActive ? 'Turn Off Voice Transcription' : 'Turn On Voice Transcription'}</span>
+                  <ArrowSquareUp size={16} weight="bold" />
+                  <span>{isScreenSharing ? 'Stop Presenting' : 'Present Now'}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -312,9 +312,19 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
       const audioCtx = new AudioContext();
       audioCtxRef.current = audioCtx;
       // Contexts created outside a user gesture start "suspended" on mobile — the
-      // worklet would then never receive audio.
+      // worklet would then never receive audio. Transcription can start without a tap
+      // (e.g. another participant turned captions on), so if resume() is refused,
+      // retry on the user's next tap or key press.
       if (audioCtx.state === 'suspended') {
         await audioCtx.resume().catch(() => {});
+      }
+      if (audioCtx.state === 'suspended') {
+        const resumeOnGesture = () => {
+          if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        };
+        ['pointerdown', 'touchend', 'keydown'].forEach((type) =>
+          document.addEventListener(type, resumeOnGesture, { once: true, capture: true })
+        );
       }
 
       const workletBlobUrl = URL.createObjectURL(
