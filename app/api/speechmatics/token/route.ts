@@ -8,8 +8,10 @@ import { NextResponse } from 'next/server';
  *
  * The temporary key is scoped to real-time transcription only and
  * expires after the TTL (default 60 minutes).
+ *
+ * Every caller gets its own key, so participants transcribing at the same
+ * time never share one session credential.
  */
-let cachedToken: { jwt: string; expiresAt: number } | null = null;
 
 export async function POST() {
   const apiKey = process.env.SPEECHMATICS_API_KEY;
@@ -19,11 +21,6 @@ export async function POST() {
       { error: 'SPEECHMATICS_API_KEY is not configured' },
       { status: 500 }
     );
-  }
-
-  // Reuse cached token if it has at least 10 minutes remaining
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 10 * 60 * 1000) {
-    return NextResponse.json({ jwt: cachedToken.jwt });
   }
 
   try {
@@ -49,13 +46,6 @@ export async function POST() {
     }
 
     const data = await res.json();
-
-    if (data.key_value) {
-      cachedToken = {
-        jwt: data.key_value,
-        expiresAt: Date.now() + 3600 * 1000,
-      };
-    }
 
     // Response shape: { key_value: "...", ... }
     return NextResponse.json({ jwt: data.key_value });

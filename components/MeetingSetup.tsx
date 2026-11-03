@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   VideoPreview,
@@ -37,10 +37,12 @@ const DeviceSettingsPanel = () => {
   const selectMic = async (deviceId: string) => {
     if (!call) return;
     try {
+      // Switching devices must not turn on a mic the user has turned off
+      const wasOn = call.microphone.state.status === 'enabled';
       await call.microphone.disable();
       await call.microphone.select(deviceId);
-      await call.microphone.enable();
-      updatePrefs({ mic: { selectedDeviceId: deviceId, muted: false } });
+      if (wasOn) await call.microphone.enable();
+      updatePrefs({ mic: { selectedDeviceId: deviceId, muted: !wasOn } });
     } catch (e) {
       console.warn('Failed to select mic', e);
     }
@@ -49,10 +51,12 @@ const DeviceSettingsPanel = () => {
   const selectCamera = async (deviceId: string) => {
     if (!call) return;
     try {
+      // Switching devices must not turn on a camera the user has turned off
+      const wasOn = call.camera.state.status === 'enabled';
       await call.camera.disable();
       await call.camera.select(deviceId);
-      await call.camera.enable();
-      updatePrefs({ camera: { selectedDeviceId: deviceId, muted: false } });
+      if (wasOn) await call.camera.enable();
+      updatePrefs({ camera: { selectedDeviceId: deviceId, muted: !wasOn } });
     } catch (e) {
       console.warn('Failed to select camera', e);
     }
@@ -199,31 +203,54 @@ const MeetingSetup = ({
     );
   }
 
-  const [isMicOn, setIsMicOnRaw] = useState(true);
-  const [isCameraOn, setIsCameraOnRaw] = useState(true);
+  const [isMicOn, setIsMicOn] = useState(true);
+  const [isCameraOn, setIsCameraOn] = useState(true);
 
-  // Wrap setters to always propagate lobby state to parent
-  const setIsMicOn = (val: boolean | ((prev: boolean) => boolean)) => {
-    setIsMicOnRaw((prev) => {
-      const next = typeof val === 'function' ? val(prev) : val;
-      // We need the camera state too — read from the latest value via a callback trick
-      setIsCameraOnRaw((camPrev) => {
-        onLobbyStateChange?.(next, camPrev);
-        return camPrev; // don't change camera state
-      });
-      return next;
+  // Propagate lobby state to the parent so MeetingRoom can respect it after join
+  useEffect(() => {
+    onLobbyStateChange?.(isMicOn, isCameraOn);
+  }, [isMicOn, isCameraOn, onLobbyStateChange]);
+
+  // Device operations are serialized through one queue, and each step applies the
+  // LATEST toggle state at the moment it runs. Stream's enable()/disable() are not
+  // mutually exclusive: a slow enable() (permission prompt, getUserMedia on phones)
+  // could resolve after a later disable() and switch the device back on, so the
+  // user joined with a mic/camera they had turned off in the lobby.
+  const desiredDevicesRef = useRef({ mic: isMicOn, camera: isCameraOn });
+  desiredDevicesRef.current = { mic: isMicOn, camera: isCameraOn };
+  const deviceQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const applyDeviceState = useCallback((kind: 'mic' | 'camera') => {
+    deviceQueueRef.current = deviceQueueRef.current.then(async () => {
+      const wantOn = desiredDevicesRef.current[kind];
+      const manager = kind === 'mic' ? call.microphone : call.camera;
+      try {
+        if (wantOn) {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const hasDevice = devices.some((d) => d.kind === (kind === 'mic' ? 'audioinput' : 'videoinput'));
+          // Re-read: the user may have toggled off while devices were enumerated
+          if (hasDevice && desiredDevicesRef.current[kind]) {
+            await manager.enable();
+          }
+        } else {
+          await manager.disable();
+        }
+      } catch (err) {
+        if (err instanceof Error && ['NotAllowedError', 'PermissionDeniedError', 'NotFoundError', 'NotReadableError'].includes(err.name)) {
+          console.warn(`[MeetingSetup] ${kind} unavailable:`, err.name);
+          return;
+        }
+        console.error(`[MeetingSetup] Error toggling ${kind}:`, err);
+      }
     });
-  };
-  const setIsCameraOn = (val: boolean | ((prev: boolean) => boolean)) => {
-    setIsCameraOnRaw((prev) => {
-      const next = typeof val === 'function' ? val(prev) : val;
-      setIsMicOnRaw((micPrev) => {
-        onLobbyStateChange?.(micPrev, next);
-        return micPrev; // don't change mic state
-      });
-      return next;
-    });
-  };
+    return deviceQueueRef.current;
+  }, [call]);
+
+  // Apply the lobby choice to the call's devices after joining
+  const applyLobbyDevices = useCallback(async () => {
+    await applyDeviceState('camera');
+    await applyDeviceState('mic');
+  }, [applyDeviceState]);
   const [displayName, setDisplayName] = useState(user?.fullName || user?.username || 'Guest');
   const [isEditingName, setIsEditingName] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -256,22 +283,7 @@ const MeetingSetup = ({
         setIsWaitingForAdmission(false);
         setIsJoining(true);
         call.join().then(async () => {
-          // 1. Configure camera first
-          if (isCameraOn) {
-            await call.camera.enable().catch(() => {});
-          } else {
-            await call.camera.disable().catch(() => {});
-          }
-          // 2. Wait for SDK to settle after camera config
-          await new Promise((r) => setTimeout(r, 300));
-          // 3. Configure & cycle microphone AFTER camera is set
-          if (isMicOn) {
-            await call.microphone.disable().catch(() => {});
-            await new Promise((r) => setTimeout(r, 100));
-            await call.microphone.enable().catch(() => {});
-          } else {
-            await call.microphone.disable().catch(() => {});
-          }
+          await applyLobbyDevices();
           setIsSetupComplete(true);
         }).catch((err) => {
           console.error('[MeetingSetup] Error joining admitted call:', err);
@@ -291,7 +303,7 @@ const MeetingSetup = ({
 
     const unsubscribe = call.on('custom', handleCustomEvent);
     return () => unsubscribe();
-  }, [call, user?.id, effectiveUserId, isHost, setIsSetupComplete, toast, router, isMicOn, isCameraOn]);
+  }, [call, user?.id, effectiveUserId, isHost, setIsSetupComplete, toast, router, applyLobbyDevices]);
 
   // Continuously request admission while in waiting room
   useEffect(() => {
@@ -312,53 +324,12 @@ const MeetingSetup = ({
   }, [isWaitingForAdmission, call, effectiveUserId, displayName, isHost]);
 
   useEffect(() => {
-    const toggleMic = async () => {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const hasMic = devices.some(device => device.kind === 'audioinput');
-        
-        if (isMicOn && hasMic) {
-          await call.microphone.enable();
-        } else {
-          await call.microphone.disable();
-        }
-      } catch (err) {
-        if (err instanceof Error && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
-          console.warn('Microphone permission denied by user');
-          return;
-        }
-        console.error('Error toggling microphone:', err);
-      }
-    };
-    toggleMic();
-  }, [isMicOn, call]);
+    applyDeviceState('mic');
+  }, [isMicOn, applyDeviceState]);
 
   useEffect(() => {
-    const toggleCamera = async () => {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const hasCamera = devices.some(device => device.kind === 'videoinput');
-
-        if (isCameraOn && hasCamera) {
-          await call.camera.enable();
-        } else {
-          await call.camera.disable();
-        }
-      } catch (err) {
-        if (err instanceof Error) {
-          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            console.warn('Camera permission denied by user');
-            return;
-          }
-          if (err.name === 'NotFoundError' || err.name === 'NotReadableError') {
-            return;
-          }
-        }
-        console.error('Error toggling camera:', err);
-      }
-    };
-    toggleCamera();
-  }, [isCameraOn, call]);
+    applyDeviceState('camera');
+  }, [isCameraOn, applyDeviceState]);
 
   if (callTimeNotArrived)
     return (
@@ -555,28 +526,7 @@ const MeetingSetup = ({
                   try {
                     setIsJoining(true);
                     await call.join();
-
-                    // 1. Configure camera first
-                    if (isCameraOn) {
-                      await call.camera.enable().catch(() => {});
-                    } else {
-                      await call.camera.disable().catch(() => {});
-                    }
-
-                    // 2. Wait for SDK to settle after camera config (especially important when camera is off)
-                    await new Promise((r) => setTimeout(r, 300));
-
-                    // 3. Configure & cycle microphone AFTER camera is settled
-                    // Triple-cycle to ensure the audio track is bound and publishing
-                    // even when camera is off (Stream SDK WebRTC transceiver can desync)
-                    if (isMicOn) {
-                      await call.microphone.disable().catch(() => {});
-                      await new Promise((r) => setTimeout(r, 100));
-                      await call.microphone.enable().catch(() => {});
-                    } else {
-                      await call.microphone.disable().catch(() => {});
-                    }
-
+                    await applyLobbyDevices();
                     setIsSetupComplete(true);
                   } catch (err: any) {
                     setIsJoining(false);

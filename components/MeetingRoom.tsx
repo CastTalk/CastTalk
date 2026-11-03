@@ -12,6 +12,7 @@ import {
   ScreenShareButton,
   useCall,
   ParticipantView,
+  ParticipantsAudio,
 } from '@stream-io/video-react-sdk';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
@@ -672,9 +673,11 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
       }
 
       // 3. Broadcast in real-time to all call participants via Stream custom event
-      // Throttle partials to at most 1 every 120ms; finals send immediately
+      // Throttle partials to at most 1 every 300ms; finals send immediately.
+      // Every speaker broadcasts their own captions, so this rate multiplies by the
+      // number of people talking — keep it well under Stream's custom event limits.
       if (call) {
-        if (!segment.isPartial || now - lastBroadcastRef.current > 120) {
+        if (!segment.isPartial || now - lastBroadcastRef.current > 300) {
           lastBroadcastRef.current = now;
           call
             .sendCustomEvent({
@@ -694,15 +697,10 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
 
   // — Speechmatics real-time transcription (Taglish) —
   const { 
-    transcript: localTranscriptLines, 
     interimText, 
-    isListening, 
-    isPaused: isTranscriptionPaused,
     connectionStatus: transcriptionStatus,
     error: transcriptionError, 
     start: startTranscription, 
-    pause: pauseTranscription,
-    resume: resumeTranscription,
     stop: stopTranscription 
   } = useTranscription({
     onTranscript: handleTranscriptSegment,
@@ -723,15 +721,11 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
 
   const handleStartTranscriptionFromSidebar = useCallback(() => {
     setIsCcActive(true);
-    if (!isMicMuted) {
-      startTranscription(displayName);
-    }
-  }, [isMicMuted, displayName, startTranscription]);
+  }, []);
 
   const handleStopTranscriptionFromSidebar = useCallback(() => {
     setIsCcActive(false);
-    stopTranscription();
-  }, [stopTranscription]);
+  }, []);
 
   // Auto-clear remote interim speech after inactivity
   useEffect(() => {
@@ -744,41 +738,24 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
     }
   }, [remoteInterimText]);
 
-  // Manage transcription lifecycle:
-  // - CC ON → start the WebSocket connection (once)
-  // - CC OFF → fully stop and disconnect
-  // - Mic mute/unmute → pause/resume audio sending (keeps connection alive, saves quota)
-  //
-  // IMPORTANT: When transcription is started while mic is muted, we must immediately
-  // pause audio capture so the user's voice is NOT transcribed. The user should only
-  // see other participants' transcripts when their own mic is off.
+  // Manage transcription lifecycle. Captions ON means "show me the meeting's captions":
+  // - Other participants' captions arrive over Stream custom events and are shown
+  //   whenever CC is on, regardless of our own mic.
+  // - Our OWN Speechmatics session only runs while CC is on AND our mic is on. With
+  //   the mic off nothing captures our voice, and we don't hold one of the account's
+  //   concurrent real-time sessions just to read other people's captions.
+  // - Transcription reads the call's own mic stream instead of opening a second
+  //   capture, which on phones can silence the mic published to the call.
+  const micStream = micState.mediaStream;
+  const shouldTranscribeSelf = isCcActive && !isMicMuted && !!micStream;
   useEffect(() => {
-    if (isCcActive) {
-      // Start connection if not already connected
-      startTranscription(displayName).then(() => {
-        // After starting, if mic is currently muted, immediately pause audio capture.
-        // This prevents the transcription engine from capturing the user's voice
-        // through its own MediaStream even though the Stream SDK mic is muted.
-        if (isMicMuted) {
-          pauseTranscription();
-        }
-      });
+    if (shouldTranscribeSelf) {
+      // No-op if a session on this stream is already running (only updates the name)
+      startTranscription(displayName, micStream);
     } else {
-      // CC turned off — full disconnect
       stopTranscription();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCcActive, displayName, startTranscription, stopTranscription]);
-
-  // Pause/resume audio when mic is muted/unmuted (connection stays alive)
-  useEffect(() => {
-    if (!isCcActive) return; // Don't touch anything if CC is off
-    if (isMicMuted) {
-      pauseTranscription();
-    } else {
-      resumeTranscription();
-    }
-  }, [isCcActive, isMicMuted, pauseTranscription, resumeTranscription]);
+  }, [shouldTranscribeSelf, micStream, displayName, startTranscription, stopTranscription]);
 
   // Show reconnection status to user
   useEffect(() => {
@@ -1156,38 +1133,27 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
   // for more detail about types of CallingState see: https://getstream.io/video/docs/react/ui-cookbook/ringing-call/#incoming-call-panel
   const callingState = useCallCallingState();
 
-  // Safety net: after joining, re-assert mic & camera state to fix the camera-off-kills-mic bug
-  // and the lobby-toggle-not-persisting bug.
-  // When a user joins with camera off, the Stream SDK can sometimes leave the mic
-  // track in a broken state where isMute=false but audio is not actually published.
-  // This runs once after CallingState.JOINED and forces the correct device state.
-  const hasReassertedMicRef = useRef(false);
+  // Safety net for the lobby choice: a slow enable() that was still in flight from the
+  // lobby can finish after join and switch a device back on. Once joined, wait for any
+  // pending device operation and switch off whatever the user turned off in the lobby.
+  const hasEnforcedLobbyRef = useRef(false);
   useEffect(() => {
-    if (callingState !== CallingState.JOINED || hasReassertedMicRef.current || !call) return;
-    hasReassertedMicRef.current = true;
+    if (callingState !== CallingState.JOINED || hasEnforcedLobbyRef.current || !call) return;
+    hasEnforcedLobbyRef.current = true;
+    if (lobbyMicOn && lobbyCameraOn) return;
 
-    // Longer delay to let Stream SDK fully initialize tracks after join
     const timer = setTimeout(async () => {
       try {
-        // Respect the lobby choice: if user toggled mic off in lobby, ensure it stays off
-        if (!lobbyMicOn) {
-          await call.microphone.disable().catch(() => {});
-        } else {
-          // Mic should be on — cycle it to ensure the track is alive and publishing
-          // even when camera is off (WebRTC transceiver desync fix)
-          await call.microphone.disable().catch(() => {});
-          await new Promise((r) => setTimeout(r, 150));
-          await call.microphone.enable().catch(() => {});
+        if (!lobbyMicOn && call.microphone.state.status !== 'disabled') {
+          await call.microphone.disable();
         }
-
-        // Also respect lobby camera choice
-        if (!lobbyCameraOn) {
-          await call.camera.disable().catch(() => {});
+        if (!lobbyCameraOn && call.camera.state.status !== 'disabled') {
+          await call.camera.disable();
         }
       } catch (e) {
-        console.warn('[MeetingRoom] Mic re-assertion failed:', e);
+        console.warn('[MeetingRoom] Failed to enforce lobby device state:', e);
       }
-    }, 2000);
+    }, 1000);
 
     return () => clearTimeout(timer);
   }, [callingState, call, lobbyMicOn, lobbyCameraOn]);
@@ -1210,19 +1176,11 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
   const toggleCamera = async () => {
     if (!call) return;
     try {
+      // Camera and microphone are independent; never touch the mic here.
       if (isCameraMuted) {
         await call.camera.enable();
       } else {
         await call.camera.disable();
-      }
-      // Stream Video SDK / WebRTC: toggling video (either direction) can desync the audio transceiver track.
-      // Always cycle the microphone after any camera toggle to force track re-binding.
-      // Small delay to let the SDK settle after the camera state change.
-      await new Promise((r) => setTimeout(r, 200));
-      if (!isMicMuted) {
-        await call.microphone.disable().catch(() => {});
-        await new Promise((r) => setTimeout(r, 100));
-        await call.microphone.enable().catch(() => {});
       }
     } catch (e: any) {
       if (e?.name === 'NotReadableError') return;
@@ -1288,6 +1246,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
               trackType={screenShareParticipant ? "screenShareTrack" : "videoTrack"}
               VideoPlaceholder={CustomVideoFallback as any}
               ParticipantViewUI={null}
+              muteAudio
               className="w-full h-full str-video__video-fit-contain"
             />
 
@@ -1330,6 +1289,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
                       participant={p} 
                       VideoPlaceholder={CustomVideoFallback as any}
                       ParticipantViewUI={null}
+                      muteAudio
                       className="w-full h-full"
                     />
                   ) : (
@@ -1397,6 +1357,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
                     participant={p} 
                     VideoPlaceholder={CustomVideoFallback as any}
                     ParticipantViewUI={null}
+                    muteAudio
                     className="w-full h-full"
                   />
                 ) : (
@@ -1429,6 +1390,12 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
 
   return (
     <section className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] overflow-hidden bg-[#121212] text-white flex flex-col font-geist select-none touch-none">
+      {/* Remote audio for EVERY participant, independent of their video tile.
+          ParticipantView only plays audio for tiles it renders, and camera-off
+          participants are drawn with CustomVideoFallback instead — so anyone with
+          their camera off used to be silent to everyone else even with the mic on.
+          All tiles pass muteAudio so nobody is played twice (e.g. pinned + side tile). */}
+      <ParticipantsAudio participants={participants} />
       <style>{`
         /* Stream grid overrides to match Google Meet Dark Theme */
         .str-video__paginated-grid-layout {
@@ -1715,7 +1682,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
                 <div className="w-[360px] sm:w-[380px] h-full">
                   <GoogleMeetTranscriptsSidebar 
                     onClose={() => setActiveSidebar(null)}
-                    isListening={isListening}
+                    isListening={isCcActive}
                     isMicMuted={isMicMuted}
                     onStart={handleStartTranscriptionFromSidebar}
                     onStop={handleStopTranscriptionFromSidebar}
@@ -1798,7 +1765,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
             {activeSidebar === 'transcripts' && (
               <GoogleMeetTranscriptsSidebar 
                 onClose={() => setActiveSidebar(null)}
-                isListening={isListening}
+                isListening={isCcActive}
                 isMicMuted={isMicMuted}
                 onStart={handleStartTranscriptionFromSidebar}
                 onStop={handleStopTranscriptionFromSidebar}

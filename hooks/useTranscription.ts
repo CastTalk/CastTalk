@@ -12,10 +12,17 @@ import { useState, useRef, useCallback, useEffect } from 'react';
  *   4. Captures mic audio via AudioWorklet, converts to PCM16 @ 16kHz, sends as binary
  *   5. Receives AddPartialTranscript (interim) and AddTranscript (final) messages
  *
+ * Audio source:
+ *   - Pass the call's own microphone MediaStream to start() so we never open a
+ *     second capture of the mic. A second getUserMedia() can mute the published
+ *     WebRTC track on mobile browsers (iOS Safari only allows one active capture).
+ *   - Falls back to getUserMedia() when no stream is provided.
+ *
  * Resilience features:
+ *   - One session at a time: overlapping start() calls never open parallel sockets
  *   - Auto-reconnect with exponential backoff on unexpected disconnects (up to 5 retries)
- *   - Periodic health-check polling to detect dead WebSocket connections early
- *   - Pause/resume for mic mute without tearing down the connection
+ *   - Health check that only fires when audio was sent but never acknowledged
+ *     (silence is expected to be quiet because of VAD, and is not treated as dead)
  *   - Connection state tracking (connected, reconnecting, failed)
  */
 
@@ -39,19 +46,22 @@ interface UseTranscriptionReturn {
   interimText: string;
   /** Whether the transcription engine is actively listening */
   isListening: boolean;
-  /** Whether audio sending is paused (mic muted but connection alive) */
+  /** Whether audio sending is paused (connection alive) */
   isPaused: boolean;
   /** Connection status for UI feedback */
   connectionStatus: ConnectionStatus;
   /** Any error that occurred */
   error: string | null;
-  /** Start transcription — requests mic permission + connects WebSocket */
-  start: (speakerName?: string) => Promise<void>;
-  /** Pause audio sending — keeps WebSocket alive (use for mic mute) */
+  /**
+   * Start transcription. Safe to call repeatedly: if a session is already running on
+   * the same stream it only updates the speaker name. A different stream restarts it.
+   */
+  start: (speakerName?: string, mediaStream?: MediaStream) => Promise<void>;
+  /** Pause audio sending — keeps WebSocket alive */
   pause: () => void;
-  /** Resume audio sending — resumes from pause (use for mic unmute) */
+  /** Resume audio sending — resumes from pause */
   resume: () => void;
-  /** Stop transcription — disconnects WebSocket + releases mic */
+  /** Stop transcription — disconnects WebSocket + releases owned mic capture */
   stop: () => void;
 }
 
@@ -108,6 +118,9 @@ function downsampleBuffer(
   return result;
 }
 
+const hasLiveAudio = (stream: MediaStream | null | undefined) =>
+  !!stream && stream.getAudioTracks().some((t) => t.readyState === 'live');
+
 const TARGET_SAMPLE_RATE = 16000;
 
 // Speechmatics WebSocket URL — eu2 region
@@ -116,8 +129,10 @@ const SM_WS_BASE = 'wss://eu2.rt.speechmatics.com/v2';
 // Reconnection config
 const MAX_RECONNECT_ATTEMPTS = 5;
 const BASE_RECONNECT_DELAY_MS = 1000; // 1s, 2s, 4s, 8s, 16s exponential backoff
-const HEALTH_CHECK_INTERVAL_MS = 15_000; // Check connection health every 15s
-const LAST_MESSAGE_TIMEOUT_MS = 45_000; // Consider connection dead if no message for 45s
+const HEALTH_CHECK_INTERVAL_MS = 5_000;
+// Speechmatics acknowledges every audio chunk with AudioAdded. If audio has been
+// sent and nothing came back for this long, the socket is dead.
+const ACK_TIMEOUT_MS = 15_000;
 
 export function useTranscription(options?: UseTranscriptionOptions): UseTranscriptionReturn {
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
@@ -134,21 +149,27 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
 
   const wsRef = useRef<WebSocket | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // True when streamRef was opened by this hook (we must stop it); false when it
+  // belongs to the call's microphone (we must never stop it).
+  const ownsStreamRef = useRef(false);
+  const externalStreamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const speakerNameRef = useRef('You');
   const isStoppingRef = useRef(false);
   const isPausedRef = useRef(false);
 
+  // Session bookkeeping
+  const isActiveRef = useRef(false); // a session is connecting, open or reconnecting
+  const generationRef = useRef(0); // bumped on every stop; stale async work checks it
+  const seqNoRef = useRef(0);
+  const awaitingAckSinceRef = useRef(0);
+
   // Reconnection state
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const healthCheckTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastMessageTimeRef = useRef(0);
-  const isReconnectingRef = useRef(false);
-
-  // Accumulate final transcript text for the current "utterance"
-  const finalAccRef = useRef('');
+  const attemptReconnectRef = useRef<(isQuota?: boolean) => void>(() => {});
 
   /** Clear all timers */
   const clearTimers = useCallback(() => {
@@ -162,44 +183,55 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
     }
   }, []);
 
-  /** Tear down WebSocket + audio pipeline (without triggering reconnect) */
-  const cleanupConnection = useCallback(() => {
-    // Close WebSocket
-    if (wsRef.current) {
+  /** Close the socket + audio graph. Detaches handlers first so no reconnect is triggered. */
+  const teardownSocketAndAudio = useCallback(() => {
+    const ws = wsRef.current;
+    wsRef.current = null;
+    if (ws) {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.onclose = null;
       try {
-        if (wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ message: 'EndOfStream', last_seq_no: 0 }));
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ message: 'EndOfStream', last_seq_no: seqNoRef.current }));
         }
-        wsRef.current.close();
+        ws.close(1000);
       } catch { /* ignore */ }
-      wsRef.current = null;
     }
 
-    // Disconnect AudioWorklet
     if (workletNodeRef.current) {
-      try { workletNodeRef.current.disconnect(); } catch { /* ignore */ }
+      try {
+        workletNodeRef.current.port.onmessage = null;
+        workletNodeRef.current.disconnect();
+      } catch { /* ignore */ }
       workletNodeRef.current = null;
     }
 
-    // Close AudioContext
     if (audioCtxRef.current) {
       try { audioCtxRef.current.close(); } catch { /* ignore */ }
       audioCtxRef.current = null;
     }
-
-    // Stop mic tracks
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
   }, []);
+
+  /** Tear down WebSocket + audio pipeline + owned mic capture (without triggering reconnect) */
+  const cleanupConnection = useCallback(() => {
+    teardownSocketAndAudio();
+
+    // Only stop mic tracks we opened ourselves — never the call's microphone
+    if (streamRef.current && ownsStreamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+    }
+    streamRef.current = null;
+    ownsStreamRef.current = false;
+  }, [teardownSocketAndAudio]);
 
   /** Full cleanup — tears down everything and resets all state */
   const cleanup = useCallback(() => {
     clearTimers();
     cleanupConnection();
+    isActiveRef.current = false;
     reconnectAttemptRef.current = 0;
-    isReconnectingRef.current = false;
     setIsListening(false);
     setIsPaused(false);
     isPausedRef.current = false;
@@ -210,12 +242,7 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
   useEffect(() => {
     const handleBeforeUnload = () => {
       isStoppingRef.current = true;
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        try {
-          wsRef.current.send(JSON.stringify({ message: 'EndOfStream', last_seq_no: 0 }));
-          wsRef.current.close(1000, 'Page unloaded');
-        } catch {}
-      }
+      teardownSocketAndAudio();
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -223,19 +250,22 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       isStoppingRef.current = true;
+      generationRef.current += 1;
       cleanup();
     };
-  }, [cleanup]);
+  }, [cleanup, teardownSocketAndAudio]);
 
   /**
-   * Core connection logic — extracted so it can be called by both
-   * start() (initial) and the auto-reconnect mechanism.
+   * Core connection logic — called by both start() (initial) and the
+   * auto-reconnect mechanism.
    */
-  const connect = useCallback(async (speakerName: string, isReconnect: boolean = false) => {
+  const connect = useCallback(async (isReconnect: boolean = false) => {
+    const generation = generationRef.current;
+    const isStale = () => generation !== generationRef.current || isStoppingRef.current;
+
     if (!isReconnect) {
       setError(null);
       setInterimText('');
-      finalAccRef.current = '';
     }
 
     setConnectionStatus(isReconnect ? 'reconnecting' : 'connecting');
@@ -249,10 +279,17 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
       }
       const { jwt } = await tokenRes.json();
       if (!jwt) throw new Error('No JWT returned from token endpoint');
+      if (isStale()) return;
 
-      // 2. Request mic access (reuse existing stream during reconnect if possible)
-      let stream = streamRef.current;
-      if (!stream || stream.getTracks().every(t => t.readyState === 'ended')) {
+      // 2. Resolve the audio source: the call's mic stream if provided, else our own capture
+      let stream: MediaStream;
+      if (hasLiveAudio(externalStreamRef.current)) {
+        stream = externalStreamRef.current!;
+        streamRef.current = stream;
+        ownsStreamRef.current = false;
+      } else if (ownsStreamRef.current && hasLiveAudio(streamRef.current)) {
+        stream = streamRef.current!;
+      } else {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
@@ -261,18 +298,35 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
             channelCount: 1,
           },
         });
+        if (isStale()) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         streamRef.current = stream;
+        ownsStreamRef.current = true;
       }
 
-      // 3. Set up AudioContext + AudioWorklet for PCM capture
-      const audioCtx = new AudioContext({ sampleRate: 48000 });
+      // 3. Set up AudioContext + AudioWorklet for PCM capture.
+      // Use the device's native sample rate (forcing 48kHz breaks on some phones/Firefox);
+      // downsampleBuffer converts to 16kHz below.
+      const audioCtx = new AudioContext();
       audioCtxRef.current = audioCtx;
+      // Contexts created outside a user gesture start "suspended" on mobile — the
+      // worklet would then never receive audio.
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume().catch(() => {});
+      }
 
       const workletBlobUrl = URL.createObjectURL(
         new Blob([WORKLET_CODE], { type: 'application/javascript' })
       );
       await audioCtx.audioWorklet.addModule(workletBlobUrl);
       URL.revokeObjectURL(workletBlobUrl);
+      if (isStale()) {
+        try { audioCtx.close(); } catch { /* ignore */ }
+        if (audioCtxRef.current === audioCtx) audioCtxRef.current = null;
+        return;
+      }
 
       const source = audioCtx.createMediaStreamSource(stream);
       const workletNode = new AudioWorkletNode(audioCtx, 'pcm-capture-processor');
@@ -284,6 +338,8 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
       // 4. Open WebSocket to Speechmatics
       const ws = new WebSocket(`${SM_WS_BASE}?jwt=${jwt}`);
       wsRef.current = ws;
+      seqNoRef.current = 0;
+      awaitingAckSinceRef.current = 0;
 
       ws.onopen = () => {
         // Send StartRecognition config
@@ -307,10 +363,10 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
       };
 
       ws.onmessage = (event) => {
-        if (isStoppingRef.current) return;
+        if (isStoppingRef.current || wsRef.current !== ws) return;
 
-        // Track last message time for health-check polling
-        lastMessageTimeRef.current = Date.now();
+        // Any message from the server proves the socket is alive
+        awaitingAckSinceRef.current = 0;
 
         try {
           const msg = JSON.parse(event.data as string);
@@ -318,7 +374,6 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
           if (msg.message === 'RecognitionStarted') {
             // Successfully connected — reset reconnect state
             reconnectAttemptRef.current = 0;
-            isReconnectingRef.current = false;
             setIsListening(true);
             setConnectionStatus('connected');
             setError(null);
@@ -327,24 +382,21 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
               console.log('[Speechmatics] Reconnected successfully');
             }
 
-            // Start health-check polling
+            // Health check: socket closed, or audio sent but never acknowledged
             if (healthCheckTimerRef.current) clearInterval(healthCheckTimerRef.current);
             healthCheckTimerRef.current = setInterval(() => {
-              const now = Date.now();
-              const lastMsg = lastMessageTimeRef.current;
+              if (wsRef.current !== ws) return;
 
-              // Check if WebSocket is still actually open
-              if (wsRef.current?.readyState !== WebSocket.OPEN) {
+              if (ws.readyState !== WebSocket.OPEN) {
                 console.warn('[Speechmatics] Health check: WebSocket not open, triggering reconnect');
-                attemptReconnect();
+                attemptReconnectRef.current();
                 return;
               }
 
-              // Check if we've received any message recently
-              // (Speechmatics sends periodic messages even during silence)
-              if (lastMsg > 0 && (now - lastMsg) > LAST_MESSAGE_TIMEOUT_MS) {
-                console.warn('[Speechmatics] Health check: No message for', Math.round((now - lastMsg) / 1000), 's — triggering reconnect');
-                attemptReconnect();
+              const pendingSince = awaitingAckSinceRef.current;
+              if (pendingSince > 0 && Date.now() - pendingSince > ACK_TIMEOUT_MS) {
+                console.warn('[Speechmatics] Health check: audio not acknowledged — triggering reconnect');
+                attemptReconnectRef.current();
               }
             }, HEALTH_CHECK_INTERVAL_MS);
 
@@ -358,21 +410,21 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
             let lastSpeechTime = 0;
             let isSilentMode = true;
 
-            const safeSend = (data: ArrayBufferLike | ArrayBufferView | string | Blob) => {
-              if (ws && ws.readyState === WebSocket.OPEN) {
-                try {
-                  ws.send(data);
-                } catch {
-                  // Socket closed or closing
-                }
+            const sendAudio = (chunk: Float32Array) => {
+              if (ws.readyState !== WebSocket.OPEN) return;
+              try {
+                ws.send(float32ToPcm16(downsampleBuffer(chunk, audioCtx.sampleRate, TARGET_SAMPLE_RATE)));
+                seqNoRef.current += 1;
+                if (!awaitingAckSinceRef.current) awaitingAckSinceRef.current = Date.now();
+              } catch {
+                // Socket closed or closing
               }
             };
 
             workletNode.port.onmessage = (e: MessageEvent<Float32Array>) => {
               if (ws.readyState !== WebSocket.OPEN) return;
 
-              // When paused (mic muted), don't send any audio to Speechmatics
-              // The WebSocket stays alive, we just skip sending packets
+              // When paused, don't send any audio to Speechmatics
               if (isPausedRef.current) return;
 
               const samples = e.data;
@@ -399,17 +451,14 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
 
               if (isSpeaking) {
                 if (isSilentMode) {
-                  // Waking up from silence: flush pre-roll chunks first
+                  // Waking up from silence: flush pre-roll chunks (includes the current one)
                   isSilentMode = false;
                   while (preRollChunks.length > 0) {
-                    const chunk = preRollChunks.shift()!;
-                    const downsampled = downsampleBuffer(chunk, audioCtx.sampleRate, TARGET_SAMPLE_RATE);
-                    safeSend(float32ToPcm16(downsampled));
+                    sendAudio(preRollChunks.shift()!);
                   }
+                } else {
+                  sendAudio(samples);
                 }
-                // Send current chunk immediately
-                const downsampled = downsampleBuffer(samples, audioCtx.sampleRate, TARGET_SAMPLE_RATE);
-                safeSend(float32ToPcm16(downsampled));
               } else {
                 // In silence/standby: zero audio packets sent to API to save credits!
                 isSilentMode = true;
@@ -424,7 +473,7 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
               .trim();
 
             // Ignore punctuation-only tokens like lone '.' or '...'
-            if (partialText && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(partialText)) {
+            if (partialText && /[a-zA-Z0-9À-ɏḀ-ỿ]/.test(partialText)) {
               setInterimText(partialText);
               optionsRef.current?.onTranscript?.({
                 text: partialText,
@@ -442,7 +491,7 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
               .trim();
 
             // Ignore punctuation-only tokens like lone '.' or '...'
-            if (finalText && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(finalText)) {
+            if (finalText && /[a-zA-Z0-9À-ɏḀ-ỿ]/.test(finalText)) {
               setInterimText('');
               // Notify callback
               optionsRef.current?.onTranscript?.({
@@ -450,11 +499,6 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
                 speaker: speakerNameRef.current,
                 isPartial: false,
               });
-
-              // Append space-separated to our accumulated text
-              finalAccRef.current = finalAccRef.current
-                ? `${finalAccRef.current} ${finalText}`
-                : finalText;
 
               setTranscript((prev) => {
                 const lastLine = prev[prev.length - 1];
@@ -485,9 +529,6 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
                   },
                 ];
               });
-
-              // Clear interim since it's now committed
-              setInterimText('');
             }
           }
 
@@ -513,26 +554,13 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
       };
 
       ws.onclose = (e) => {
+        // Ignore close events from a socket we've already replaced
+        if (wsRef.current !== ws) return;
         setIsListening(false);
 
-        // Immediately detach audio worklet callback to stop sending audio to closed socket
-        if (workletNodeRef.current) {
-          try {
-            workletNodeRef.current.port.onmessage = null;
-            workletNodeRef.current.disconnect();
-          } catch {}
-          workletNodeRef.current = null;
-        }
-
-        if (isStoppingRef.current) {
-          // Intentional stop — don't reconnect
-          setConnectionStatus('disconnected');
-          return;
-        }
-
-        if (e.code === 1000) {
-          // Normal close — don't reconnect
-          setConnectionStatus('disconnected');
+        if (isStoppingRef.current || e.code === 1000) {
+          // Intentional stop or normal close — don't reconnect
+          cleanup();
           return;
         }
 
@@ -544,22 +572,22 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
         } else {
           console.warn('[Speechmatics] WebSocket closed unexpectedly:', e.code, e.reason);
         }
-        attemptReconnect(isQuota4005);
+        attemptReconnectRef.current(isQuota4005);
       };
     } catch (err: any) {
+      if (isStale()) return;
       console.error('[useTranscription] connect failed:', err);
 
       if (isReconnect) {
         // Reconnect attempt failed — try again
-        attemptReconnect(false);
+        attemptReconnectRef.current(false);
       } else {
         setError(err.message || 'Failed to start transcription');
-        setConnectionStatus('failed');
         cleanup();
+        setConnectionStatus('failed');
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cleanup, cleanupConnection]);
+  }, [cleanup]);
 
   /**
    * Attempt to reconnect with exponential backoff.
@@ -567,8 +595,9 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
    */
   const attemptReconnect = useCallback((isQuota: boolean = false) => {
     if (isStoppingRef.current) return;
+    // A reconnect is already scheduled — don't stack a second one
+    if (reconnectTimerRef.current) return;
 
-    // Clear old health-check timer
     if (healthCheckTimerRef.current) {
       clearInterval(healthCheckTimerRef.current);
       healthCheckTimerRef.current = null;
@@ -579,14 +608,13 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
 
     if (attempt > MAX_RECONNECT_ATTEMPTS) {
       console.error(`[Speechmatics] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached — giving up`);
+      cleanup();
       setError('Transcription session ended. Toggle Voice Transcription to reconnect.');
       setConnectionStatus('failed');
-      isReconnectingRef.current = false;
-      cleanupConnection();
       return;
     }
 
-    isReconnectingRef.current = true;
+    setIsListening(false);
     setConnectionStatus('reconnecting');
     if (!isQuota) {
       setError(null);
@@ -599,78 +627,66 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
       : BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt - 1);
     console.log(`[Speechmatics] Reconnecting in ${delay}ms (attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS})...`);
 
-    // Tear down old connection resources (but keep mic stream if possible)
-    if (wsRef.current) {
-      try { wsRef.current.close(); } catch { /* ignore */ }
-      wsRef.current = null;
-    }
-    if (workletNodeRef.current) {
-      try {
-        workletNodeRef.current.port.onmessage = null;
-        workletNodeRef.current.disconnect();
-      } catch { /* ignore */ }
-      workletNodeRef.current = null;
-    }
-    if (audioCtxRef.current) {
-      try { audioCtxRef.current.close(); } catch { /* ignore */ }
-      audioCtxRef.current = null;
-    }
+    // Tear down old connection resources (keeps the mic stream)
+    teardownSocketAndAudio();
 
+    const generation = generationRef.current;
     reconnectTimerRef.current = setTimeout(() => {
-      if (isStoppingRef.current) return;
-      connect(speakerNameRef.current, true);
+      reconnectTimerRef.current = null;
+      if (isStoppingRef.current || generation !== generationRef.current) return;
+      connect(true);
     }, delay);
-  }, [connect, cleanupConnection]);
+  }, [connect, cleanup, teardownSocketAndAudio]);
 
-  const start = useCallback(async (speakerName?: string) => {
-    // If already connected, just update the speaker name.
-    // Do NOT auto-resume — the caller (MeetingRoom) manages pause/resume
-    // based on the mic mute state to prevent capturing voice when mic is off.
-    if (isListening && wsRef.current?.readyState === WebSocket.OPEN) {
-      speakerNameRef.current = speakerName || 'You';
-      return;
-    }
+  useEffect(() => {
+    attemptReconnectRef.current = attemptReconnect;
+  }, [attemptReconnect]);
 
-    // If currently reconnecting, don't start a parallel connection
-    if (isReconnectingRef.current) {
-      speakerNameRef.current = speakerName || 'You';
-      return;
-    }
+  const stop = useCallback(() => {
+    isStoppingRef.current = true;
+    generationRef.current += 1;
+    cleanup();
+    setInterimText('');
+  }, [cleanup]);
 
+  const start = useCallback(async (speakerName?: string, mediaStream?: MediaStream) => {
     speakerNameRef.current = speakerName || 'You';
+    const nextStream = mediaStream ?? null;
+
+    // Already running on the same audio source — just keep the new speaker name.
+    // This guard is what prevents duplicate Speechmatics sessions (each one counts
+    // against the account's concurrent-session limit).
+    if (isActiveRef.current && externalStreamRef.current === nextStream) {
+      return;
+    }
+
+    // Audio source changed (e.g. mic device switched) — restart cleanly
+    if (isActiveRef.current) {
+      stop();
+    }
+
+    externalStreamRef.current = nextStream;
+    isActiveRef.current = true;
     isStoppingRef.current = false;
     isPausedRef.current = false;
     setIsPaused(false);
     reconnectAttemptRef.current = 0;
 
-    await connect(speakerName || 'You', false);
-  }, [isListening, connect]);
+    await connect(false);
+  }, [connect, stop]);
 
-  /**
-   * Pause audio sending — keeps WebSocket connection alive.
-   * Use when mic is muted to avoid burning quota on silence
-   * and to avoid the costly reconnection cycle.
-   */
+  /** Pause audio sending — keeps WebSocket connection alive. */
   const pause = useCallback(() => {
     isPausedRef.current = true;
     setIsPaused(true);
     setInterimText('');
   }, []);
 
-  /**
-   * Resume audio sending after a pause.
-   * Use when mic is unmuted.
-   */
+  /** Resume audio sending after a pause. */
   const resume = useCallback(() => {
     isPausedRef.current = false;
     setIsPaused(false);
   }, []);
-
-  const stop = useCallback(() => {
-    isStoppingRef.current = true;
-    cleanup();
-    setInterimText('');
-  }, [cleanup]);
 
   return { transcript, interimText, isListening, isPaused, connectionStatus, error, start, pause, resume, stop };
 }
