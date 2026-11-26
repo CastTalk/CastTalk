@@ -14,7 +14,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
-import { Client } from 'appwrite';
 
 const HOUR_HEIGHT = 100;
 const START_HOUR = 0;
@@ -296,42 +295,46 @@ export default function SchedulePage() {
     }
   }, [calls]);
 
-  // Appwrite Realtime listener for instant calendar updates on deletion or creation
+  // Pick up meetings created elsewhere (CastAI, another tab) when this tab is shown
+  // again. This replaces a browser-side Appwrite Realtime subscription on the whole
+  // schedules collection, which required public read access and streamed every
+  // user's schedules to every browser. Cancels on this page are already applied
+  // optimistically by the cancel handler.
+  const localCallIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!user?.id) return;
+    localCallIdsRef.current = new Set(localCalls.map((c) => c.id));
+  }, [localCalls]);
 
-    const appwriteClient = new Client()
-      .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://syd.cloud.appwrite.io/v1')
-      .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a27f0d9002671523088');
+  useEffect(() => {
+    if (!user?.id || !client) return;
+    let cancelled = false;
 
-    let unsubscribe = () => {};
-    try {
-      unsubscribe = appwriteClient.subscribe(
-        'databases.castdb.collections.schedules.documents',
-        (response) => {
-          const doc = response.payload as any;
-          if (response.events.some(e => e.includes('delete'))) {
-            // Immediately filter out the deleted meeting from local calendar view!
-            setLocalCalls(prev => prev.filter(c => c.id !== doc.meetingId && c.id !== doc.$id));
-            setSelectedCall(prev => (prev && (prev.id === doc.meetingId || prev.id === doc.$id)) ? null : prev);
-          } else if (response.events.some(e => e.includes('create'))) {
-            if (doc.createdBy === user.id && client) {
-              const call = client.call('default', doc.meetingId);
-              call.get().then(() => {
-                setLocalCalls(prev => [call, ...prev.filter(c => c.id !== call.id)]);
-              }).catch(console.error);
-            }
-          }
-        }
-      );
-    } catch (err) {
-      console.warn('[Upcoming] Appwrite Realtime subscription error:', err);
-    }
-
-    return () => {
+    const syncNewSchedules = async () => {
       try {
-        unsubscribe();
-      } catch {}
+        const res = await fetch('/api/schedules');
+        if (!res.ok) return;
+        const { schedules = [] } = await res.json();
+        const missingIds: string[] = schedules
+          .map((s: any) => s.meetingId)
+          .filter((id: string | undefined): id is string => !!id && !localCallIdsRef.current.has(id));
+        for (const meetingId of missingIds) {
+          const call = client.call('default', meetingId);
+          await call.get();
+          if (cancelled) return;
+          setLocalCalls((prev) => (prev.some((c) => c.id === call.id) ? prev : [call, ...prev]));
+        }
+      } catch (err) {
+        console.warn('[Upcoming] Schedule sync failed:', err);
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void syncNewSchedules();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [user?.id, client]);
 

@@ -5,25 +5,27 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 /**
  * Speechmatics real-time transcription hook for Taglish (Tagalog + English).
  *
- * Uses the raw WebSocket protocol (no SDK dependency):
- *   1. Fetches a temporary JWT from our server route
- *   2. Opens a WebSocket to wss://eu2.rt.speechmatics.com/v2
- *   3. Sends StartRecognition with language "tl" (Tagalog & English bilingual pack)
- *   4. Captures mic audio via AudioWorklet, converts to PCM16 @ 16kHz, sends as binary
- *   5. Receives AddPartialTranscript (interim) and AddTranscript (final) messages
+ * Uses the raw WebSocket protocol (no SDK dependency).
  *
- * Audio source:
- *   - Pass the call's own microphone MediaStream to start() so we never open a
- *     second capture of the mic. A second getUserMedia() can mute the published
- *     WebRTC track on mobile browsers (iOS Safari only allows one active capture).
- *   - Falls back to getUserMedia() when no stream is provided.
+ * Sessions are opened on demand. The Speechmatics account allows only a few
+ * concurrent real-time sessions across ALL meetings, so holding one open for
+ * every unmuted participant breaks as soon as a third person joins. Instead:
+ *   - start() only "arms" the hook: it taps the mic stream and runs a local voice
+ *     detector. No Speechmatics session is open yet.
+ *   - When the user starts talking, a session is opened. Audio captured while it
+ *     connects (plus ~0.5s of pre-roll before speech was detected) is buffered and
+ *     sent once recognition starts, so the first words are not lost.
+ *   - After IDLE_CLOSE_MS of silence the session is closed gracefully, freeing the
+ *     slot for whoever speaks next.
+ *   - If the account limit is hit (4005), the hook waits quietly and retries on the
+ *     next speech instead of looping reconnects and error toasts.
  *
- * Resilience features:
- *   - One session at a time: overlapping start() calls never open parallel sockets
- *   - Auto-reconnect with exponential backoff on unexpected disconnects (up to 5 retries)
- *   - Health check that only fires when audio was sent but never acknowledged
- *     (silence is expected to be quiet because of VAD, and is not treated as dead)
- *   - Connection state tracking (connected, reconnecting, failed)
+ * Audio path:
+ *   - Uses the call's own microphone MediaStream when passed to start(), so we never
+ *     open a second capture (that can silence the published mic on phones).
+ *   - The worklet batches ~2048 samples per message; audio is resampled to 16kHz with
+ *     a stateful box-filter resampler (exact rate, basic anti-aliasing) and sent to
+ *     Speechmatics in 100ms frames instead of one message per 128-sample block.
  */
 
 export interface TranscriptLine {
@@ -44,35 +46,50 @@ interface UseTranscriptionReturn {
   transcript: TranscriptLine[];
   /** In-progress interim text */
   interimText: string;
-  /** Whether the transcription engine is actively listening */
+  /** Whether the hook is armed and listening for speech */
   isListening: boolean;
-  /** Whether audio sending is paused (connection alive) */
+  /** Whether audio sending is paused */
   isPaused: boolean;
-  /** Connection status for UI feedback */
+  /** Connection status for UI feedback ('connected' = armed and ready) */
   connectionStatus: ConnectionStatus;
   /** Any error that occurred */
   error: string | null;
   /**
-   * Start transcription. Safe to call repeatedly: if a session is already running on
-   * the same stream it only updates the speaker name. A different stream restarts it.
+   * Arm transcription. Safe to call repeatedly: if already armed on the same stream it
+   * only updates the speaker name. A different stream restarts it.
    */
   start: (speakerName?: string, mediaStream?: MediaStream) => Promise<void>;
-  /** Pause audio sending — keeps WebSocket alive */
+  /** Pause audio sending */
   pause: () => void;
-  /** Resume audio sending — resumes from pause */
+  /** Resume audio sending */
   resume: () => void;
-  /** Stop transcription — disconnects WebSocket + releases owned mic capture */
+  /** Stop transcription — closes any session, the audio graph and owned mic capture */
   stop: () => void;
 }
 
-// AudioWorklet processor code inlined as a Blob URL (avoids a separate file)
+// AudioWorklet processor: batches render quanta (128 samples) into larger chunks so
+// the main thread gets ~20 messages/s instead of ~375.
 const WORKLET_CODE = `
 class PcmCaptureProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.buffer = new Float32Array(2048);
+    this.length = 0;
+  }
   process(inputs) {
     const input = inputs[0];
-    if (input && input[0] && input[0].length > 0) {
-      // input[0] is Float32Array of samples for channel 0
-      this.port.postMessage(input[0].slice());
+    const channel = input && input[0];
+    if (channel && channel.length > 0) {
+      if (this.length + channel.length > this.buffer.length) {
+        this.port.postMessage(this.buffer.slice(0, this.length));
+        this.length = 0;
+      }
+      this.buffer.set(channel, this.length);
+      this.length += channel.length;
+      if (this.length >= this.buffer.length) {
+        this.port.postMessage(this.buffer.slice(0, this.length));
+        this.length = 0;
+      }
     }
     return true;
   }
@@ -80,15 +97,11 @@ class PcmCaptureProcessor extends AudioWorkletProcessor {
 registerProcessor('pcm-capture-processor', PcmCaptureProcessor);
 `;
 
-/**
- * Convert Float32 audio samples to Int16 PCM (Little-Endian).
- * Speechmatics expects `pcm_s16le` encoding.
- */
+/** Convert Float32 samples to Int16 PCM little-endian (Speechmatics `pcm_s16le`). */
 function float32ToPcm16(float32: Float32Array): ArrayBuffer {
   const buffer = new ArrayBuffer(float32.length * 2);
   const view = new DataView(buffer);
   for (let i = 0; i < float32.length; i++) {
-    // Clamp to [-1, 1] then scale to Int16 range
     const s = Math.max(-1, Math.min(1, float32[i]));
     view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
@@ -96,43 +109,64 @@ function float32ToPcm16(float32: Float32Array): ArrayBuffer {
 }
 
 /**
- * Downsample from the browser's native sample rate to 16kHz.
- * Uses simple linear interpolation.
+ * Stateful downsampler. Keeps the fractional read position and leftover samples
+ * between chunks so the output rate is exact, and averages the input samples that
+ * fall into each output sample (a box filter) to reduce aliasing.
  */
-function downsampleBuffer(
-  buffer: Float32Array,
-  inputSampleRate: number,
-  outputSampleRate: number
-): Float32Array {
-  if (inputSampleRate === outputSampleRate) return buffer;
-  const ratio = inputSampleRate / outputSampleRate;
-  const newLength = Math.round(buffer.length / ratio);
-  const result = new Float32Array(newLength);
-  for (let i = 0; i < newLength; i++) {
-    const index = i * ratio;
-    const low = Math.floor(index);
-    const high = Math.min(low + 1, buffer.length - 1);
-    const frac = index - low;
-    result[i] = buffer[low] * (1 - frac) + buffer[high] * frac;
+class Downsampler {
+  private carry = new Float32Array(0);
+  private pos = 0;
+
+  constructor(private readonly ratio: number) {}
+
+  process(input: Float32Array): Float32Array {
+    if (this.ratio === 1) return input;
+
+    const buf = new Float32Array(this.carry.length + input.length);
+    buf.set(this.carry);
+    buf.set(input, this.carry.length);
+
+    const out = new Float32Array(Math.floor((buf.length - this.pos) / this.ratio) + 1);
+    let n = 0;
+    while (this.pos + this.ratio <= buf.length) {
+      const startIdx = Math.floor(this.pos);
+      const endIdx = Math.max(startIdx + 1, Math.floor(this.pos + this.ratio));
+      let sum = 0;
+      for (let i = startIdx; i < endIdx; i++) sum += buf[i];
+      out[n++] = sum / (endIdx - startIdx);
+      this.pos += this.ratio;
+    }
+
+    const consumed = Math.floor(this.pos);
+    this.carry = buf.slice(consumed);
+    this.pos -= consumed;
+    return out.subarray(0, n);
   }
-  return result;
 }
 
 const hasLiveAudio = (stream: MediaStream | null | undefined) =>
   !!stream && stream.getAudioTracks().some((t) => t.readyState === 'live');
 
 const TARGET_SAMPLE_RATE = 16000;
+const FRAME_MS = 100;
 
 // Speechmatics WebSocket URL — eu2 region
 const SM_WS_BASE = 'wss://eu2.rt.speechmatics.com/v2';
 
-// Reconnection config
-const MAX_RECONNECT_ATTEMPTS = 5;
-const BASE_RECONNECT_DELAY_MS = 1000; // 1s, 2s, 4s, 8s, 16s exponential backoff
+// Voice detection
+const VAD_THRESHOLD = 0.006; // RMS of a worklet chunk counted as speech
+const SPEECH_CHUNKS_TO_OPEN = 2; // consecutive speech chunks (~85ms) before opening a session
+const PRE_ROLL_MS = 500; // audio kept from before speech was detected
+const MAX_BACKLOG_MS = 10_000; // audio buffered while a session connects
+const IDLE_CLOSE_MS = 15_000; // silence after which the session is released
+
+// Failure handling
+const QUOTA_COOLDOWN_MS = 10_000; // Speechmatics' recommended wait after 4005
+const MAX_CONSECUTIVE_FAILURES = 5;
+const ACK_TIMEOUT_MS = 15_000; // audio sent but not acknowledged → socket is dead
 const HEALTH_CHECK_INTERVAL_MS = 5_000;
-// Speechmatics acknowledges every audio chunk with AudioAdded. If audio has been
-// sent and nothing came back for this long, the socket is dead.
-const ACK_TIMEOUT_MS = 15_000;
+
+type Phase = 'idle' | 'connecting' | 'open' | 'closing';
 
 export function useTranscription(options?: UseTranscriptionOptions): UseTranscriptionReturn {
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
@@ -147,44 +181,53 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
     optionsRef.current = options;
   }, [options]);
 
-  const wsRef = useRef<WebSocket | null>(null);
+  // Audio graph (lives while armed)
   const streamRef = useRef<MediaStream | null>(null);
-  // True when streamRef was opened by this hook (we must stop it); false when it
-  // belongs to the call's microphone (we must never stop it).
-  const ownsStreamRef = useRef(false);
+  const ownsStreamRef = useRef(false); // true when we opened the capture ourselves
   const externalStreamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
-  const speakerNameRef = useRef('You');
-  const isStoppingRef = useRef(false);
-  const isPausedRef = useRef(false);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const removeGestureListenersRef = useRef<(() => void) | null>(null);
 
-  // Session bookkeeping
-  const isActiveRef = useRef(false); // a session is connecting, open or reconnecting
+  const speakerNameRef = useRef('You');
+  const isPausedRef = useRef(false);
+  const isArmedRef = useRef(false);
   const generationRef = useRef(0); // bumped on every stop; stale async work checks it
+
+  // Session state
+  const wsRef = useRef<WebSocket | null>(null);
+  const phaseRef = useRef<Phase>('idle');
   const seqNoRef = useRef(0);
   const awaitingAckSinceRef = useRef(0);
+  const backlogRef = useRef<Float32Array[]>([]);
+  const preRollRef = useRef<Float32Array[]>([]);
+  const lastSpeechAtRef = useRef(0);
+  const speechChunksRef = useRef(0);
+  const cooldownUntilRef = useRef(0);
+  const failuresRef = useRef(0);
+  const reopenAfterCloseRef = useRef(false);
+  const healthTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Reconnection state
-  const reconnectAttemptRef = useRef(0);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const healthCheckTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const attemptReconnectRef = useRef<(isQuota?: boolean) => void>(() => {});
+  // Frame assembly
+  const outputRateRef = useRef(TARGET_SAMPLE_RATE);
+  const frameSamplesRef = useRef(TARGET_SAMPLE_RATE / 10);
+  const frameBufRef = useRef<Float32Array>(new Float32Array(TARGET_SAMPLE_RATE / 10));
+  const frameLenRef = useRef(0);
+  const downsamplerRef = useRef<Downsampler | null>(null);
 
-  /** Clear all timers */
-  const clearTimers = useCallback(() => {
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
+  const openSessionRef = useRef<() => void>(() => {});
+
+  const clearHealthTimer = () => {
+    if (healthTimerRef.current) {
+      clearInterval(healthTimerRef.current);
+      healthTimerRef.current = null;
     }
-    if (healthCheckTimerRef.current) {
-      clearInterval(healthCheckTimerRef.current);
-      healthCheckTimerRef.current = null;
-    }
-  }, []);
+  };
 
-  /** Close the socket + audio graph. Detaches handlers first so no reconnect is triggered. */
-  const teardownSocketAndAudio = useCallback(() => {
+  /** Drop the socket without any graceful handshake (handlers detached first). */
+  const dropSocket = useCallback(() => {
+    clearHealthTimer();
     const ws = wsRef.current;
     wsRef.current = null;
     if (ws) {
@@ -199,6 +242,13 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
         ws.close(1000);
       } catch { /* ignore */ }
     }
+    phaseRef.current = 'idle';
+  }, []);
+
+  /** Tear down the audio graph and any capture we own. */
+  const teardownAudio = useCallback(() => {
+    removeGestureListenersRef.current?.();
+    removeGestureListenersRef.current = null;
 
     if (workletNodeRef.current) {
       try {
@@ -207,71 +257,170 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
       } catch { /* ignore */ }
       workletNodeRef.current = null;
     }
-
+    if (sourceNodeRef.current) {
+      try { sourceNodeRef.current.disconnect(); } catch { /* ignore */ }
+      sourceNodeRef.current = null;
+    }
     if (audioCtxRef.current) {
       try { audioCtxRef.current.close(); } catch { /* ignore */ }
       audioCtxRef.current = null;
     }
-  }, []);
-
-  /** Tear down WebSocket + audio pipeline + owned mic capture (without triggering reconnect) */
-  const cleanupConnection = useCallback(() => {
-    teardownSocketAndAudio();
-
-    // Only stop mic tracks we opened ourselves — never the call's microphone
     if (streamRef.current && ownsStreamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
     }
     streamRef.current = null;
     ownsStreamRef.current = false;
-  }, [teardownSocketAndAudio]);
+  }, []);
 
-  /** Full cleanup — tears down everything and resets all state */
-  const cleanup = useCallback(() => {
-    clearTimers();
-    cleanupConnection();
-    isActiveRef.current = false;
-    reconnectAttemptRef.current = 0;
-    setIsListening(false);
-    setIsPaused(false);
-    isPausedRef.current = false;
-    setConnectionStatus('disconnected');
-  }, [clearTimers, cleanupConnection]);
+  const resetBuffers = () => {
+    backlogRef.current = [];
+    preRollRef.current = [];
+    frameLenRef.current = 0;
+    speechChunksRef.current = 0;
+    reopenAfterCloseRef.current = false;
+  };
 
-  // Auto-cleanup on unmount & page unload
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      isStoppingRef.current = true;
-      teardownSocketAndAudio();
-    };
+  const sendFrame = (ws: WebSocket, frame: Float32Array) => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(float32ToPcm16(frame));
+      seqNoRef.current += 1;
+      if (!awaitingAckSinceRef.current) awaitingAckSinceRef.current = Date.now();
+    } catch { /* socket closing */ }
+  };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
+  const pushBounded = (list: Float32Array[], frame: Float32Array, maxFrames: number) => {
+    list.push(frame);
+    if (list.length > maxFrames) list.splice(0, list.length - maxFrames);
+  };
 
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      isStoppingRef.current = true;
-      generationRef.current += 1;
-      cleanup();
-    };
-  }, [cleanup, teardownSocketAndAudio]);
+  /** Route one 100ms frame according to the session phase. */
+  const handleFrame = useCallback((frame: Float32Array) => {
+    const now = Date.now();
+    const speechRecently = now - lastSpeechAtRef.current < 1_000;
+    const preRollFrames = Math.ceil(PRE_ROLL_MS / FRAME_MS);
+    const maxBacklogFrames = Math.ceil(MAX_BACKLOG_MS / FRAME_MS);
 
-  /**
-   * Core connection logic — called by both start() (initial) and the
-   * auto-reconnect mechanism.
-   */
-  const connect = useCallback(async (isReconnect: boolean = false) => {
-    const generation = generationRef.current;
-    const isStale = () => generation !== generationRef.current || isStoppingRef.current;
+    switch (phaseRef.current) {
+      case 'open': {
+        const ws = wsRef.current;
+        if (ws) sendFrame(ws, frame);
+        if (now - lastSpeechAtRef.current > IDLE_CLOSE_MS && ws && ws.readyState === WebSocket.OPEN) {
+          // Release the session slot; finals still arrive before EndOfTranscript
+          phaseRef.current = 'closing';
+          try {
+            ws.send(JSON.stringify({ message: 'EndOfStream', last_seq_no: seqNoRef.current }));
+          } catch { /* ignore */ }
+        }
+        return;
+      }
+      case 'connecting':
+        pushBounded(backlogRef.current, frame, maxBacklogFrames);
+        return;
+      case 'closing':
+        if (reopenAfterCloseRef.current || speechRecently) {
+          if (!reopenAfterCloseRef.current) {
+            reopenAfterCloseRef.current = true;
+            backlogRef.current = [...preRollRef.current];
+          }
+          pushBounded(backlogRef.current, frame, maxBacklogFrames);
+        } else {
+          pushBounded(preRollRef.current, frame, preRollFrames);
+        }
+        return;
+      case 'idle':
+      default:
+        // lastSpeechAt is only set after SPEECH_CHUNKS_TO_OPEN consecutive speech
+        // chunks, so a single click or bump does not open a session.
+        if (speechRecently && now >= cooldownUntilRef.current) {
+          backlogRef.current = [...preRollRef.current, frame];
+          preRollRef.current = [];
+          openSessionRef.current();
+        } else {
+          pushBounded(preRollRef.current, frame, preRollFrames);
+        }
+    }
+  }, []);
 
-    if (!isReconnect) {
-      setError(null);
-      setInterimText('');
+  /** Worklet audio → VAD → resample → 100ms frames. */
+  const handleAudioChunk = useCallback((samples: Float32Array) => {
+    if (!isArmedRef.current || !samples?.length) return;
+
+    // While paused, feed silence: nothing is transcribed, and the idle timer still
+    // releases the session.
+    if (isPausedRef.current) samples = new Float32Array(samples.length);
+
+    let sum = 0;
+    for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+    const rms = Math.sqrt(sum / samples.length);
+    if (rms >= VAD_THRESHOLD) {
+      speechChunksRef.current += 1;
+      if (speechChunksRef.current >= SPEECH_CHUNKS_TO_OPEN) lastSpeechAtRef.current = Date.now();
+    } else {
+      speechChunksRef.current = 0;
     }
 
-    setConnectionStatus(isReconnect ? 'reconnecting' : 'connecting');
+    const resampled = downsamplerRef.current ? downsamplerRef.current.process(samples) : samples;
+    const frameSize = frameSamplesRef.current;
+    let offset = 0;
+    while (offset < resampled.length) {
+      const take = Math.min(frameSize - frameLenRef.current, resampled.length - offset);
+      frameBufRef.current.set(resampled.subarray(offset, offset + take), frameLenRef.current);
+      frameLenRef.current += take;
+      offset += take;
+      if (frameLenRef.current === frameSize) {
+        handleFrame(frameBufRef.current.slice());
+        frameLenRef.current = 0;
+      }
+    }
+  }, [handleFrame]);
+
+  /** Called when a socket ends for any reason. Decides whether to reopen. */
+  const onSessionEnded = useCallback((opts: { quota?: boolean; failed?: boolean }) => {
+    dropSocket();
+    setInterimText('');
+    if (!isArmedRef.current) return;
+
+    if (opts.quota) {
+      failuresRef.current += 1;
+      cooldownUntilRef.current = Date.now() + QUOTA_COOLDOWN_MS;
+      backlogRef.current = [];
+      reopenAfterCloseRef.current = false;
+      setConnectionStatus('reconnecting');
+      setError((prev) => prev ?? 'Caption capacity is full right now. Captions will resume automatically.');
+      return;
+    }
+
+    if (opts.failed) {
+      failuresRef.current += 1;
+      const backoff = Math.min(30_000, 1_000 * 2 ** (failuresRef.current - 1));
+      cooldownUntilRef.current = Date.now() + backoff;
+      backlogRef.current = [];
+      reopenAfterCloseRef.current = false;
+      if (failuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+        setConnectionStatus('failed');
+        setError('Captions could not connect. They will retry the next time you speak.');
+      } else {
+        setConnectionStatus('reconnecting');
+      }
+      return;
+    }
+
+    // Graceful close (idle). Reopen right away if speech started while closing.
+    if (reopenAfterCloseRef.current) {
+      reopenAfterCloseRef.current = false;
+      openSessionRef.current();
+    }
+  }, [dropSocket]);
+
+  /** Open a Speechmatics session and flush the backlog once recognition starts. */
+  const openSession = useCallback(async () => {
+    if (phaseRef.current === 'connecting' || phaseRef.current === 'open') return;
+    phaseRef.current = 'connecting';
+    const generation = generationRef.current;
+    const isStale = () => generation !== generationRef.current || !isArmedRef.current;
 
     try {
-      // 1. Get temporary JWT from our server
       const tokenRes = await fetch('/api/speechmatics/token', { method: 'POST' });
       if (!tokenRes.ok) {
         const body = await tokenRes.json().catch(() => ({}));
@@ -281,208 +430,71 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
       if (!jwt) throw new Error('No JWT returned from token endpoint');
       if (isStale()) return;
 
-      // 2. Resolve the audio source: the call's mic stream if provided, else our own capture
-      let stream: MediaStream;
-      if (hasLiveAudio(externalStreamRef.current)) {
-        stream = externalStreamRef.current!;
-        streamRef.current = stream;
-        ownsStreamRef.current = false;
-      } else if (ownsStreamRef.current && hasLiveAudio(streamRef.current)) {
-        stream = streamRef.current!;
-      } else {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            channelCount: 1,
-          },
-        });
-        if (isStale()) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        ownsStreamRef.current = true;
-      }
-
-      // 3. Set up AudioContext + AudioWorklet for PCM capture.
-      // Use the device's native sample rate (forcing 48kHz breaks on some phones/Firefox);
-      // downsampleBuffer converts to 16kHz below.
-      const audioCtx = new AudioContext();
-      audioCtxRef.current = audioCtx;
-      // Contexts created outside a user gesture start "suspended" on mobile — the
-      // worklet would then never receive audio. Transcription can start without a tap
-      // (e.g. another participant turned captions on), so if resume() is refused,
-      // retry on the user's next tap or key press.
-      if (audioCtx.state === 'suspended') {
-        await audioCtx.resume().catch(() => {});
-      }
-      if (audioCtx.state === 'suspended') {
-        const resumeOnGesture = () => {
-          if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-        };
-        ['pointerdown', 'touchend', 'keydown'].forEach((type) =>
-          document.addEventListener(type, resumeOnGesture, { once: true, capture: true })
-        );
-      }
-
-      const workletBlobUrl = URL.createObjectURL(
-        new Blob([WORKLET_CODE], { type: 'application/javascript' })
-      );
-      await audioCtx.audioWorklet.addModule(workletBlobUrl);
-      URL.revokeObjectURL(workletBlobUrl);
-      if (isStale()) {
-        try { audioCtx.close(); } catch { /* ignore */ }
-        if (audioCtxRef.current === audioCtx) audioCtxRef.current = null;
-        return;
-      }
-
-      const source = audioCtx.createMediaStreamSource(stream);
-      const workletNode = new AudioWorkletNode(audioCtx, 'pcm-capture-processor');
-      workletNodeRef.current = workletNode;
-
-      source.connect(workletNode);
-      // Don't connect to destination — we only want to capture, not play back
-
-      // 4. Open WebSocket to Speechmatics
-      const ws = new WebSocket(`${SM_WS_BASE}?jwt=${jwt}`);
+      const ws = new WebSocket(`${SM_WS_BASE}?jwt=${encodeURIComponent(jwt)}`);
       wsRef.current = ws;
       seqNoRef.current = 0;
       awaitingAckSinceRef.current = 0;
 
       ws.onopen = () => {
-        // Send StartRecognition config
         ws.send(
           JSON.stringify({
             message: 'StartRecognition',
             audio_format: {
               type: 'raw',
               encoding: 'pcm_s16le',
-              sample_rate: TARGET_SAMPLE_RATE,
+              sample_rate: outputRateRef.current,
             },
             transcription_config: {
               language: 'tl', // Tagalog & English bilingual pack
-              operating_point: 'standard', // Fast, low-latency model
-              max_delay: 0.7, // Lowest delay allowed by Speechmatics for real-time responsiveness
+              operating_point: 'standard',
+              max_delay: 0.7,
               max_delay_mode: 'flexible',
-              enable_partials: true, // Stream words real-time with instant latency
+              enable_partials: true,
             },
           })
         );
       };
 
       ws.onmessage = (event) => {
-        if (isStoppingRef.current || wsRef.current !== ws) return;
+        if (wsRef.current !== ws) return;
+        awaitingAckSinceRef.current = 0; // any message proves the socket is alive
 
-        // Any message from the server proves the socket is alive
-        awaitingAckSinceRef.current = 0;
-
+        let msg: any;
         try {
-          const msg = JSON.parse(event.data as string);
+          msg = JSON.parse(event.data as string);
+        } catch {
+          return;
+        }
 
-          if (msg.message === 'RecognitionStarted') {
-            // Successfully connected — reset reconnect state
-            reconnectAttemptRef.current = 0;
-            setIsListening(true);
+        switch (msg.message) {
+          case 'RecognitionStarted': {
+            phaseRef.current = 'open';
+            failuresRef.current = 0;
+            cooldownUntilRef.current = 0;
             setConnectionStatus('connected');
             setError(null);
 
-            if (isReconnect) {
-              console.log('[Speechmatics] Reconnected successfully');
-            }
+            const backlog = backlogRef.current;
+            backlogRef.current = [];
+            backlog.forEach((frame) => sendFrame(ws, frame));
 
-            // Health check: socket closed, or audio sent but never acknowledged
-            if (healthCheckTimerRef.current) clearInterval(healthCheckTimerRef.current);
-            healthCheckTimerRef.current = setInterval(() => {
+            clearHealthTimer();
+            healthTimerRef.current = setInterval(() => {
               if (wsRef.current !== ws) return;
-
-              if (ws.readyState !== WebSocket.OPEN) {
-                console.warn('[Speechmatics] Health check: WebSocket not open, triggering reconnect');
-                attemptReconnectRef.current();
-                return;
-              }
-
               const pendingSince = awaitingAckSinceRef.current;
-              if (pendingSince > 0 && Date.now() - pendingSince > ACK_TIMEOUT_MS) {
-                console.warn('[Speechmatics] Health check: audio not acknowledged — triggering reconnect');
-                attemptReconnectRef.current();
+              if (ws.readyState !== WebSocket.OPEN || (pendingSince > 0 && Date.now() - pendingSince > ACK_TIMEOUT_MS)) {
+                console.warn('[Speechmatics] Session unresponsive — dropping it');
+                onSessionEnded({ failed: true });
               }
             }, HEALTH_CHECK_INTERVAL_MS);
-
-            // Voice Activity Detection (VAD) to preserve Speechmatics API usage:
-            // When silence is detected, audio packets are NOT sent to WebSocket.
-            // When speech is detected, pre-roll buffer flushes and audio streams immediately.
-            const VAD_THRESHOLD = 0.005; // Sensitive threshold to catch soft speech instantly
-            const HANGOVER_MS = 1200; // 1.2s hangover keeps audio flowing during natural speech pauses
-            const PRE_ROLL_MAX = 3;
-            const preRollChunks: Float32Array[] = [];
-            let lastSpeechTime = 0;
-            let isSilentMode = true;
-
-            const sendAudio = (chunk: Float32Array) => {
-              if (ws.readyState !== WebSocket.OPEN) return;
-              try {
-                ws.send(float32ToPcm16(downsampleBuffer(chunk, audioCtx.sampleRate, TARGET_SAMPLE_RATE)));
-                seqNoRef.current += 1;
-                if (!awaitingAckSinceRef.current) awaitingAckSinceRef.current = Date.now();
-              } catch {
-                // Socket closed or closing
-              }
-            };
-
-            workletNode.port.onmessage = (e: MessageEvent<Float32Array>) => {
-              if (ws.readyState !== WebSocket.OPEN) return;
-
-              // When paused, don't send any audio to Speechmatics
-              if (isPausedRef.current) return;
-
-              const samples = e.data;
-              if (!samples || samples.length === 0) return;
-
-              // RMS amplitude calculation
-              let sum = 0;
-              for (let i = 0; i < samples.length; i++) {
-                sum += samples[i] * samples[i];
-              }
-              const rms = Math.sqrt(sum / samples.length);
-
-              const now = Date.now();
-              if (rms >= VAD_THRESHOLD) {
-                lastSpeechTime = now;
-              }
-
-              preRollChunks.push(samples);
-              if (preRollChunks.length > PRE_ROLL_MAX) {
-                preRollChunks.shift();
-              }
-
-              const isSpeaking = (now - lastSpeechTime) < HANGOVER_MS;
-
-              if (isSpeaking) {
-                if (isSilentMode) {
-                  // Waking up from silence: flush pre-roll chunks (includes the current one)
-                  isSilentMode = false;
-                  while (preRollChunks.length > 0) {
-                    sendAudio(preRollChunks.shift()!);
-                  }
-                } else {
-                  sendAudio(samples);
-                }
-              } else {
-                // In silence/standby: zero audio packets sent to API to save credits!
-                isSilentMode = true;
-              }
-            };
+            break;
           }
 
-          if (msg.message === 'AddPartialTranscript') {
+          case 'AddPartialTranscript': {
             const partialText = (msg.results || [])
               .map((r: any) => r.alternatives?.[0]?.content || '')
               .join(' ')
               .trim();
-
-            // Ignore punctuation-only tokens like lone '.' or '...'
             if (partialText && /[a-zA-Z0-9À-ɏḀ-ỿ]/.test(partialText)) {
               setInterimText(partialText);
               optionsRef.current?.onTranscript?.({
@@ -491,35 +503,25 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
                 isPartial: true,
               });
             }
+            break;
           }
 
-          if (msg.message === 'AddTranscript') {
-            // Final committed transcript segment
+          case 'AddTranscript': {
             const finalText = (msg.results || [])
               .map((r: any) => r.alternatives?.[0]?.content || '')
               .join(' ')
               .trim();
-
-            // Ignore punctuation-only tokens like lone '.' or '...'
             if (finalText && /[a-zA-Z0-9À-ɏḀ-ỿ]/.test(finalText)) {
               setInterimText('');
-              // Notify callback
               optionsRef.current?.onTranscript?.({
                 text: finalText,
                 speaker: speakerNameRef.current,
                 isPartial: false,
               });
-
               setTranscript((prev) => {
                 const lastLine = prev[prev.length - 1];
                 const now = Date.now();
-
-                // If the last line is from the same speaker and recent (<8s), extend it
-                if (
-                  lastLine &&
-                  lastLine.speaker === speakerNameRef.current &&
-                  now - lastLine.timestamp < 8000
-                ) {
+                if (lastLine && lastLine.speaker === speakerNameRef.current && now - lastLine.timestamp < 8000) {
                   const updated = [...prev];
                   updated[updated.length - 1] = {
                     ...lastLine,
@@ -528,164 +530,171 @@ export function useTranscription(options?: UseTranscriptionOptions): UseTranscri
                   };
                   return updated;
                 }
-
-                // Otherwise, start a new line
-                return [
-                  ...prev,
-                  {
-                    speaker: speakerNameRef.current,
-                    text: finalText,
-                    timestamp: now,
-                  },
-                ];
+                return [...prev, { speaker: speakerNameRef.current, text: finalText, timestamp: now }];
               });
             }
+            break;
           }
 
-          if (msg.message === 'EndOfTranscript') {
-            // Server confirmed end — graceful shutdown (don't reconnect)
-            isStoppingRef.current = true;
-            cleanup();
-          }
+          case 'EndOfTranscript':
+            // Graceful end after our EndOfStream (idle release)
+            onSessionEnded({});
+            break;
 
-          if (msg.message === 'Error') {
+          case 'Error': {
             console.error('[Speechmatics] Error message:', msg);
-            setError(msg.reason || 'Transcription error');
-            // Don't cleanup immediately — let onclose handle reconnection
+            const isQuota = msg.type === 'quota_exceeded';
+            onSessionEnded(isQuota ? { quota: true } : { failed: true });
+            break;
           }
-        } catch {
-          // Ignore non-JSON messages (e.g. binary acks)
         }
       };
 
       ws.onerror = (e) => {
-        console.error('[Speechmatics] WebSocket error:', e);
-        // Don't set error here — let onclose handle reconnection
+        console.warn('[Speechmatics] WebSocket error:', e);
+        // onclose follows and decides what to do
       };
 
       ws.onclose = (e) => {
-        // Ignore close events from a socket we've already replaced
         if (wsRef.current !== ws) return;
-        setIsListening(false);
-
-        if (isStoppingRef.current || e.code === 1000) {
-          // Intentional stop or normal close — don't reconnect
-          cleanup();
-          return;
-        }
-
-        // Error 4005 = Speechmatics quota_exceeded (concurrent session limit)
-        const isQuota4005 = e.code === 4005 || Boolean(e.reason && e.reason.toLowerCase().includes('quota'));
-        if (isQuota4005) {
-          console.warn('[Speechmatics] 4005: Concurrent session limit reached. Backing off 10s...');
-          setError('Speechmatics concurrent session limit reached. Retrying in 10s...');
+        const isQuota = e.code === 4005 || Boolean(e.reason && e.reason.toLowerCase().includes('quota'));
+        if (isQuota) {
+          console.warn('[Speechmatics] 4005: concurrent session limit reached — waiting before retry');
+          onSessionEnded({ quota: true });
+        } else if (phaseRef.current === 'closing' || e.code === 1000) {
+          onSessionEnded({});
         } else {
           console.warn('[Speechmatics] WebSocket closed unexpectedly:', e.code, e.reason);
+          onSessionEnded({ failed: true });
         }
-        attemptReconnectRef.current(isQuota4005);
       };
     } catch (err: any) {
       if (isStale()) return;
-      console.error('[useTranscription] connect failed:', err);
-
-      if (isReconnect) {
-        // Reconnect attempt failed — try again
-        attemptReconnectRef.current(false);
-      } else {
-        setError(err.message || 'Failed to start transcription');
-        cleanup();
-        setConnectionStatus('failed');
-      }
+      console.error('[useTranscription] session open failed:', err);
+      onSessionEnded({ failed: true });
     }
-  }, [cleanup]);
-
-  /**
-   * Attempt to reconnect with exponential backoff.
-   * Tears down the old connection and schedules a new connect() call.
-   */
-  const attemptReconnect = useCallback((isQuota: boolean = false) => {
-    if (isStoppingRef.current) return;
-    // A reconnect is already scheduled — don't stack a second one
-    if (reconnectTimerRef.current) return;
-
-    if (healthCheckTimerRef.current) {
-      clearInterval(healthCheckTimerRef.current);
-      healthCheckTimerRef.current = null;
-    }
-
-    reconnectAttemptRef.current += 1;
-    const attempt = reconnectAttemptRef.current;
-
-    if (attempt > MAX_RECONNECT_ATTEMPTS) {
-      console.error(`[Speechmatics] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached — giving up`);
-      cleanup();
-      setError('Transcription session ended. Toggle Voice Transcription to reconnect.');
-      setConnectionStatus('failed');
-      return;
-    }
-
-    setIsListening(false);
-    setConnectionStatus('reconnecting');
-    if (!isQuota) {
-      setError(null);
-    }
-
-    // If quota 4005 error, wait 10s as officially recommended by Speechmatics documentation
-    // Otherwise standard backoff: 1s, 2s, 4s, 8s, 16s
-    const delay = isQuota
-      ? Math.max(10_000, BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt))
-      : BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt - 1);
-    console.log(`[Speechmatics] Reconnecting in ${delay}ms (attempt ${attempt}/${MAX_RECONNECT_ATTEMPTS})...`);
-
-    // Tear down old connection resources (keeps the mic stream)
-    teardownSocketAndAudio();
-
-    const generation = generationRef.current;
-    reconnectTimerRef.current = setTimeout(() => {
-      reconnectTimerRef.current = null;
-      if (isStoppingRef.current || generation !== generationRef.current) return;
-      connect(true);
-    }, delay);
-  }, [connect, cleanup, teardownSocketAndAudio]);
+  }, [onSessionEnded]);
 
   useEffect(() => {
-    attemptReconnectRef.current = attemptReconnect;
-  }, [attemptReconnect]);
+    openSessionRef.current = () => { void openSession(); };
+  }, [openSession]);
 
   const stop = useCallback(() => {
-    isStoppingRef.current = true;
     generationRef.current += 1;
-    cleanup();
+    isArmedRef.current = false;
+    dropSocket();
+    teardownAudio();
+    resetBuffers();
+    failuresRef.current = 0;
+    cooldownUntilRef.current = 0;
+    isPausedRef.current = false;
+    setIsPaused(false);
+    setIsListening(false);
     setInterimText('');
-  }, [cleanup]);
+    setConnectionStatus('disconnected');
+  }, [dropSocket, teardownAudio]);
 
   const start = useCallback(async (speakerName?: string, mediaStream?: MediaStream) => {
     speakerNameRef.current = speakerName || 'You';
     const nextStream = mediaStream ?? null;
 
-    // Already running on the same audio source — just keep the new speaker name.
-    // This guard is what prevents duplicate Speechmatics sessions (each one counts
-    // against the account's concurrent-session limit).
-    if (isActiveRef.current && externalStreamRef.current === nextStream) {
-      return;
-    }
+    // Already armed on the same audio source — just keep the new speaker name
+    if (isArmedRef.current && externalStreamRef.current === nextStream) return;
 
     // Audio source changed (e.g. mic device switched) — restart cleanly
-    if (isActiveRef.current) {
-      stop();
-    }
+    if (isArmedRef.current) stop();
 
     externalStreamRef.current = nextStream;
-    isActiveRef.current = true;
-    isStoppingRef.current = false;
-    isPausedRef.current = false;
-    setIsPaused(false);
-    reconnectAttemptRef.current = 0;
+    isArmedRef.current = true;
+    const generation = generationRef.current;
+    const isStale = () => generation !== generationRef.current || !isArmedRef.current;
 
-    await connect(false);
-  }, [connect, stop]);
+    setError(null);
+    setInterimText('');
+    setConnectionStatus('connecting');
 
-  /** Pause audio sending — keeps WebSocket connection alive. */
+    try {
+      let stream: MediaStream;
+      if (hasLiveAudio(nextStream)) {
+        stream = nextStream!;
+        ownsStreamRef.current = false;
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+        });
+        if (isStale()) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        ownsStreamRef.current = true;
+      }
+      streamRef.current = stream;
+
+      // Native sample rate (forcing one breaks on some phones/Firefox); we downsample.
+      const audioCtx = new AudioContext();
+      audioCtxRef.current = audioCtx;
+
+      // Contexts created outside a user gesture start "suspended" on mobile. Retry on
+      // the next tap/key press if resume() is refused.
+      if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
+      if (audioCtx.state === 'suspended') {
+        const resumeOnGesture = () => {
+          if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        };
+        const types = ['pointerdown', 'touchend', 'keydown'];
+        types.forEach((type) => document.addEventListener(type, resumeOnGesture, { capture: true }));
+        removeGestureListenersRef.current = () =>
+          types.forEach((type) => document.removeEventListener(type, resumeOnGesture, { capture: true }));
+      }
+
+      const workletBlobUrl = URL.createObjectURL(new Blob([WORKLET_CODE], { type: 'application/javascript' }));
+      try {
+        await audioCtx.audioWorklet.addModule(workletBlobUrl);
+      } finally {
+        URL.revokeObjectURL(workletBlobUrl);
+      }
+      if (isStale()) return;
+
+      const nativeRate = audioCtx.sampleRate;
+      const outputRate = nativeRate > TARGET_SAMPLE_RATE ? TARGET_SAMPLE_RATE : nativeRate;
+      outputRateRef.current = outputRate;
+      downsamplerRef.current = outputRate === nativeRate ? null : new Downsampler(nativeRate / outputRate);
+      frameSamplesRef.current = Math.round((outputRate * FRAME_MS) / 1000);
+      frameBufRef.current = new Float32Array(frameSamplesRef.current);
+      resetBuffers();
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      const workletNode = new AudioWorkletNode(audioCtx, 'pcm-capture-processor');
+      sourceNodeRef.current = source;
+      workletNodeRef.current = workletNode;
+      workletNode.port.onmessage = (e: MessageEvent<Float32Array>) => handleAudioChunk(e.data);
+      source.connect(workletNode); // capture only — not connected to the destination
+
+      setIsListening(true);
+      setConnectionStatus('connected');
+    } catch (err: any) {
+      if (isStale()) return;
+      console.error('[useTranscription] start failed:', err);
+      stop();
+      setError(err?.message || 'Failed to start transcription');
+      setConnectionStatus('failed');
+    }
+  }, [stop, handleAudioChunk]);
+
+  // Cleanup on unmount & page unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      isArmedRef.current = false;
+      dropSocket();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      stop();
+    };
+  }, [stop, dropSocket]);
+
+  /** Pause audio sending (session is released by the idle timer). */
   const pause = useCallback(() => {
     isPausedRef.current = true;
     setIsPaused(true);

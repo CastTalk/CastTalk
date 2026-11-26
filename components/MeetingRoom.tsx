@@ -37,7 +37,6 @@ import AcceptCall from '@/components/AcceptCall';
 
 import Loader from './Loader';
 import { cn } from '@/lib/utils';
-import { NoiseTexture } from '@/components/ui/noise-texture';
 import { Ripple } from './ui/ripple';
 import { useTranscription } from '@/hooks/useTranscription';
 import GoogleMeetTranscriptsSidebar, { TranscriptItem } from './GoogleMeetTranscriptsSidebar';
@@ -207,8 +206,9 @@ const CustomVideoFallback = React.forwardRef<HTMLDivElement, { participant?: any
         }}
       />
 
-      {/* Layer 4: Film grain noise */}
-      <NoiseTexture className="absolute inset-0 z-[4] opacity-[0.02] mix-blend-overlay pointer-events-none" />
+      {/* (Film-grain SVG noise removed: at 2% opacity it was invisible, but every
+          camera-off tile repainted a 6-octave feTurbulence filter — expensive on phones,
+          especially during layout animations when people join/leave.) */}
 
       {/* Layer 5: Avatar (no shadow or back glow) */}
       {participant?.image ? (
@@ -269,6 +269,83 @@ const RaisedHandTileBadge = ({ name }: { name: string }) => {
   );
 };
 
+const TILE_TRANSITION = { duration: 0.22, ease: [0.16, 1, 0.3, 1] as const };
+
+type CallTileProps = {
+  participant: any;
+  showVideo: boolean;
+  isSpotlight: boolean;
+  isHandUp: boolean;
+  name: string;
+  className: string;
+  compact?: boolean;
+};
+
+/**
+ * One participant tile, memoized.
+ *
+ * Stream patches every participant's audioLevel / isSpeaking many times a second
+ * while anyone talks (SFU audioLevelChanged events), and each patch gives every
+ * participant object a new identity. Without memo, all tiles — video elements,
+ * framer-motion wrappers, avatar fallbacks — re-rendered on every one of those
+ * patches. The comparator only looks at what the tile actually draws.
+ */
+const CallTile = React.memo(
+  ({ participant: p, showVideo, isSpotlight, isHandUp, name, className, compact }: CallTileProps) => (
+    <motion.div
+      layout="position"
+      initial={{ scale: 0.95, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0.95, opacity: 0 }}
+      transition={TILE_TRANSITION}
+      className={cn(className, isHandUp && 'hand-raised-active')}
+    >
+      {showVideo ? (
+        <ParticipantView
+          participant={p}
+          VideoPlaceholder={CustomVideoFallback as any}
+          ParticipantViewUI={null}
+          muteAudio
+          className="w-full h-full"
+        />
+      ) : (
+        <CustomVideoFallback participant={p} />
+      )}
+      {isSpotlight && (
+        <div
+          className={cn(
+            'absolute z-30 flex items-center bg-purple-600/90 text-white rounded-full font-bold shadow-md backdrop-blur-sm border border-purple-400/30 select-none pointer-events-none',
+            compact ? 'top-2.5 left-2.5 gap-1 px-2 py-0.5 text-[10px]' : 'top-3 left-3 gap-1.5 px-2.5 py-1 text-[11px]'
+          )}
+        >
+          <Sparkle size={compact ? 11 : 12} weight="fill" className="text-amber-300" />
+          <span>Spotlight</span>
+        </div>
+      )}
+      {!isHandUp && (
+        <div className="absolute bottom-3 left-3 z-20 text-white font-semibold text-xs tracking-tight pointer-events-none select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+          {name}
+        </div>
+      )}
+      <AnimatePresence>{isHandUp && <RaisedHandTileBadge name={name} />}</AnimatePresence>
+    </motion.div>
+  ),
+  (prev, next) =>
+    prev.showVideo === next.showVideo &&
+    prev.isSpotlight === next.isSpotlight &&
+    prev.isHandUp === next.isHandUp &&
+    prev.name === next.name &&
+    prev.className === next.className &&
+    prev.compact === next.compact &&
+    prev.participant.sessionId === next.participant.sessionId &&
+    prev.participant.videoStream === next.participant.videoStream &&
+    prev.participant.screenShareStream === next.participant.screenShareStream &&
+    prev.participant.image === next.participant.image &&
+    prev.participant.name === next.participant.name &&
+    prev.participant.publishedTracks.join(',') === next.participant.publishedTracks.join(',')
+);
+CallTile.displayName = 'CallTile';
+
 // Custom 1:1 Google Meet Replica People Sidebar Panel
 const GoogleMeetPeopleSidebar = ({ 
   onClose, 
@@ -303,7 +380,7 @@ const GoogleMeetPeopleSidebar = ({
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const localUser = participants.find((p) => p.isLocal);
+  const localUser = participants.find((p) => p.isLocalParticipant);
   const hostUserId = call?.state?.createdBy?.id || (call?.state?.custom as any)?.createdBy;
   const isLocalHost = Boolean(
     isHost ||
@@ -444,7 +521,7 @@ const GoogleMeetPeopleSidebar = ({
                       )}
                       <div className="flex flex-col min-w-0">
                         <span className="text-sm font-medium text-white truncate">
-                          {displayName} {p.isLocal ? '(You)' : ''}
+                          {displayName} {p.isLocalParticipant ? '(You)' : ''}
                         </span>
                         <div className="text-xs truncate font-normal mt-0.5">
                           {role === 'Meeting host' ? (
@@ -483,7 +560,7 @@ const GoogleMeetPeopleSidebar = ({
                           </DropdownMenuItem>
 
                           {/* Role Management (HOST ONLY) */}
-                          {canAssignRoles && !p.isLocal && (
+                          {canAssignRoles && !p.isLocalParticipant && (
                             <>
                               <DropdownMenuSeparator className="bg-[#3c4043]/50 my-1" />
                               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 py-1.5">
@@ -526,7 +603,7 @@ const GoogleMeetPeopleSidebar = ({
                           )}
 
                           {/* Moderator & Host Kick Option */}
-                          {canRemoveParticipants && !p.isLocal && (
+                          {canRemoveParticipants && !p.isLocalParticipant && (
                             <>
                               <DropdownMenuSeparator className="bg-[#3c4043]/50 my-1" />
                               <DropdownMenuItem 
@@ -612,16 +689,18 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
   const { toast } = useToast();
   const hasLeftRef = useRef(false);
 
-  // Active captions per participant profile tile: { [userId]: { speaker, text, timestamp } }
-  const [activeCaptions, setActiveCaptions] = useState<
-    Record<string, { speaker: string; text: string; timestamp: number }>
-  >({});
+  // Latest participant list for the long-lived custom event listener
+  const participantsRef = useRef(participants);
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
 
   const customName = typeof window !== 'undefined' ? localStorage.getItem('streamDisplayName') : null;
   const currentUserId = localParticipant?.userId || user?.id || 'local-user';
   const displayName = localParticipant?.name || customName || user?.fullName || user?.firstName || 'Participant';
 
   const lastBroadcastRef = useRef(0);
+  const lastPartialTextRef = useRef('');
 
   // Broadcast and locally display speech segment
   const handleTranscriptSegment = useCallback(
@@ -631,17 +710,8 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
         return;
       }
       const now = Date.now();
-      // 1. Display on local participant tile with 0ms instant latency
-      setActiveCaptions((prev) => ({
-        ...prev,
-        [currentUserId]: {
-          speaker: segment.speaker || displayName,
-          text: segment.text,
-          timestamp: now,
-        },
-      }));
 
-      // 2. Add committed final segments to the meetingTranscripts list
+      // 1. Add committed final segments to the meetingTranscripts list
       if (!segment.isPartial) {
         setMeetingTranscripts((prev) => {
           const last = prev[prev.length - 1];
@@ -672,13 +742,16 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
         });
       }
 
-      // 3. Broadcast in real-time to all call participants via Stream custom event
-      // Throttle partials to at most 1 every 300ms; finals send immediately.
-      // Every speaker broadcasts their own captions, so this rate multiplies by the
-      // number of people talking — keep it well under Stream's custom event limits.
+      // 2. Broadcast to all call participants via Stream custom event.
+      // Each event is an HTTP request to Stream and a re-render on every other device,
+      // and every speaker broadcasts their own captions, so the rate multiplies by the
+      // number of people talking. Partials: at most 1 per second and only when the
+      // text changed. Finals: sent immediately.
       if (call) {
-        if (!segment.isPartial || now - lastBroadcastRef.current > 300) {
+        const isNewPartial = segment.isPartial && segment.text !== lastPartialTextRef.current;
+        if (!segment.isPartial || (isNewPartial && now - lastBroadcastRef.current > 1000)) {
           lastBroadcastRef.current = now;
+          lastPartialTextRef.current = segment.isPartial ? segment.text : '';
           call
             .sendCustomEvent({
               type: 'live-caption',
@@ -801,10 +874,11 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
 
   const captionsOnInMeeting = isCcActive || Object.keys(remoteCaptionDemand).length > 0;
 
-  // Manage our own transcription session:
-  // - It runs only while captions are on in the meeting AND our mic is on. With the
-  //   mic off nothing captures our voice, and we don't hold one of the account's
-  //   concurrent real-time sessions (the plan allows 2) just to read captions.
+  // Manage our own transcription:
+  // - It is armed only while captions are on in the meeting AND our mic is on.
+  // - Armed does not mean connected: useTranscription opens a Speechmatics session
+  //   only while we are actually talking and releases it after 15s of silence, so
+  //   the account's few concurrent real-time sessions rotate between active speakers.
   // - Other participants' captions arrive over Stream custom events regardless.
   // - Transcription reads the call's own mic stream instead of opening a second
   //   capture, which on phones can silence the mic published to the call.
@@ -832,25 +906,6 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
       toast({ title: 'Captions error', description: transcriptionError, variant: 'destructive' });
     }
   }, [transcriptionError, captionsOnInMeeting, toast]);
-
-  // Auto-hide captions after 4.5 seconds of silence
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = Date.now();
-      setActiveCaptions((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        for (const [uid, cap] of Object.entries(next)) {
-          if (now - cap.timestamp > 4500) {
-            delete next[uid];
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
-    }, 500);
-    return () => clearInterval(timer);
-  }, []);
 
   const toggleCc = () => {
     const next = !isCcActive;
@@ -1071,22 +1126,13 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
         if (userId === currentLocalId) return;
 
         if (userId && text && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(text)) {
-          setActiveCaptions((prev) => ({
-            ...prev,
-            [userId]: {
-              speaker: speaker || 'Participant',
-              text,
-              timestamp: timestamp || Date.now(),
-            },
-          }));
-
           if (isPartial) {
             setRemoteInterimText(text);
             setRemoteInterimSpeaker(speaker || 'Participant');
           } else {
             setRemoteInterimText('');
             setRemoteInterimSpeaker('');
-            const remoteP = participants.find((p) => p.userId === userId);
+            const remoteP = participantsRef.current.find((p) => p.userId === userId);
             const eventTime = timestamp || Date.now();
             setMeetingTranscripts((prev) => {
               const last = prev[prev.length - 1];
@@ -1145,7 +1191,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
 
   const getParticipantHandName = (p: any) => {
     if (raisedHandsMap[p.userId]?.name) return raisedHandsMap[p.userId].name;
-    if (p.isLocal) {
+    if (p.isLocalParticipant) {
       const customName = typeof window !== 'undefined' ? localStorage.getItem('streamDisplayName') : null;
       return p.name || customName || user?.fullName || 'Participant';
     }
@@ -1155,7 +1201,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
   const isHandUpForParticipant = (p: any) => {
     if (raisedHandsMap[p.userId]) return true;
     const localUserId = localParticipant?.userId || user?.id || 'local-user';
-    if (p.isLocal && (raisedHandsMap[localUserId] || isHandRaised)) return true;
+    if (p.isLocalParticipant && (raisedHandsMap[localUserId] || isHandRaised)) return true;
     return false;
   };
 
@@ -1168,9 +1214,17 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
       h = h % 12 || 12;
       setTimeStr(`${h}:${m} ${ampm}`);
     };
+    // Minutes only — tick on minute boundaries, not every second
     update();
-    const t = setInterval(update, 1000);
-    return () => clearInterval(t);
+    let t: ReturnType<typeof setInterval> | undefined;
+    const timeout = setTimeout(() => {
+      update();
+      t = setInterval(update, 60_000);
+    }, 60_000 - (Date.now() % 60_000));
+    return () => {
+      clearTimeout(timeout);
+      if (t) clearInterval(t);
+    };
   }, []);
 
   // Cancel any pending leaves when this call is actively rendered
@@ -1194,32 +1248,39 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
     };
   }, [call]);
 
+  // Leave immediately when the tab is closed, refreshed or navigated away from.
+  // Without this the SFU only notices after its timeout, so everyone else keeps a
+  // frozen tile — and a refresh shows the same person twice. call.leave() closes the
+  // SFU socket synchronously, so it completes even while the page is unloading.
+  // (pagehide, not visibilitychange: switching apps on a phone must not end the call.)
   useEffect(() => {
-    // Dirty DOM hack: Stream's server caches user IDs for guests connecting via instant meetings.
-    // This forcibly replaces long "user_*" IDs with the beautiful displayName from MeetingSetup localStorage.
-    const customName = typeof window !== 'undefined' ? localStorage.getItem('streamDisplayName') : null;
-    
-    // Fallback if null, just call them Participant to remove ugliness
-    const defaultName = customName || 'Participant';
-
-    const interval = setInterval(() => {
-      if (typeof document === 'undefined') return;
-      const nameNodes = document.querySelectorAll('.str-video__participant-details__name');
-      
-      nameNodes.forEach(node => {
-        const text = node.textContent?.trim() || '';
-        // If it looks like a Stream autogenerated ID, or length is unusually long (> 20), replace it!
-        if (text.startsWith('user_') || (text.length > 20 && !text.includes(' '))) {
-          node.textContent = defaultName;
-        }
-      });
-    }, 300); // Fast interval to prevent flickering
-
-    return () => clearInterval(interval);
-  }, []);
+    if (!call) return;
+    const handlePageHide = () => {
+      if (hasLeftRef.current) return;
+      const state = call.state.callingState;
+      if (state === CallingState.LEFT || state === CallingState.IDLE) return;
+      hasLeftRef.current = true;
+      call.leave().catch(() => {});
+    };
+    // If the browser restores this page from its back/forward cache, the call was
+    // already left above — reload to go through the lobby and join fresh.
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted && hasLeftRef.current) window.location.reload();
+    };
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('pageshow', handlePageShow);
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [call]);
 
   // for more detail about types of CallingState see: https://getstream.io/video/docs/react/ui-cookbook/ringing-call/#incoming-call-panel
   const callingState = useCallCallingState();
+  const hasJoinedOnceRef = useRef(false);
+  const [isRejoining, setIsRejoining] = useState(false);
+  // Session IDs currently shown with live video (kept sticky to avoid flapping)
+  const videoSessionsRef = useRef<Set<string>>(new Set());
 
   // Safety net for the lobby choice: a slow enable() that was still in flight from the
   // lobby can finish after join and switch a device back on. Once joined, wait for any
@@ -1246,7 +1307,34 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
     return () => clearTimeout(timer);
   }, [callingState, call, lobbyMicOn, lobbyCameraOn]);
 
-  if (callingState !== CallingState.JOINED) return <Loader />;
+  // Once joined, a network blip puts the call into reconnecting/migrating/offline while
+  // Stream recovers on its own. Keep the call on screen with a banner instead of
+  // replacing it with a spinner. Stream gives up after 10 attempts
+  // (reconnecting-failed); then offer a manual rejoin instead of an endless spinner.
+  const hasJoinedOnce = hasJoinedOnceRef.current || callingState === CallingState.JOINED;
+  if (callingState === CallingState.JOINED) hasJoinedOnceRef.current = true;
+  const isReconnecting =
+    callingState === CallingState.RECONNECTING ||
+    callingState === CallingState.MIGRATING ||
+    callingState === CallingState.OFFLINE;
+  const reconnectFailed = callingState === CallingState.RECONNECTING_FAILED;
+
+  if (!hasJoinedOnce || !(callingState === CallingState.JOINED || isReconnecting || reconnectFailed)) {
+    return <Loader />;
+  }
+
+  const rejoin = async () => {
+    if (!call || isRejoining) return;
+    setIsRejoining(true);
+    try {
+      await call.join();
+    } catch (e) {
+      console.error('[MeetingRoom] Rejoin failed:', e);
+      toast({ title: 'Could not rejoin', description: 'Check your connection and try again.', variant: 'destructive' });
+    } finally {
+      setIsRejoining(false);
+    }
+  };
 
   const toggleMic = async () => {
     if (!call) return;
@@ -1303,6 +1391,57 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
     ease: [0.16, 1, 0.3, 1] as const,
   };
 
+  // One tile per person. A refresh or a dropped connection can leave an old session
+  // of the same user in the call until the SFU times it out; show only the newest
+  // (always our own local session for ourselves). Audio still plays for every session.
+  const joinedAtMs = (p: (typeof participants)[number]) => {
+    const t: any = p.joinedAt;
+    return t ? Number(t.seconds ?? 0) * 1000 + Math.floor(Number(t.nanos ?? 0) / 1e6) : 0;
+  };
+  const tileParticipants = (() => {
+    const newestByUser = new Map<string, (typeof participants)[number]>();
+    for (const p of participants) {
+      const key = p.userId || p.sessionId;
+      const existing = newestByUser.get(key);
+      if (
+        !existing ||
+        (!existing.isLocalParticipant && (p.isLocalParticipant || joinedAtMs(p) >= joinedAtMs(existing)))
+      ) {
+        newestByUser.set(key, p);
+      }
+    }
+    return participants.filter((p) => newestByUser.get(p.userId || p.sessionId) === p);
+  })();
+
+  // Cap how many tiles play live video. Every rendered video is a separate stream
+  // the device downloads and decodes; at 10 people that overheats phones and starts
+  // to choke audio. Stream only subscribes to a video while a ParticipantView shows
+  // it, so the rest (avatar tiles) cost nothing. Priority: pinned, dominant speaker,
+  // speaking, us; already-shown tiles get a small bonus so tiles don't flap.
+  const isPublishingVideo = (p: (typeof participants)[number]) =>
+    p.publishedTracks.includes(2) || p.publishedTracks.includes('VIDEO' as any);
+  const maxVideoTiles = isMobile ? 4 : 9;
+  const videoAllowed = (() => {
+    const previous = videoSessionsRef.current;
+    const ranked = tileParticipants
+      .filter(isPublishingVideo)
+      .map((p, index) => ({
+        p,
+        index,
+        score:
+          (p.sessionId === pinnedSessionId ? 8 : 0) +
+          (p.isDominantSpeaker ? 4 : 0) +
+          (p.isSpeaking ? 2 : 0) +
+          (p.isLocalParticipant ? 1 : 0) +
+          (previous.has(p.sessionId) ? 0.5 : 0),
+      }))
+      .sort((a, b) => b.score - a.score || a.index - b.index);
+    const allowed = new Set(ranked.slice(0, maxVideoTiles).map(({ p }) => p.sessionId));
+    videoSessionsRef.current = allowed;
+    return allowed;
+  })();
+  const showsVideo = (p: (typeof participants)[number]) => isPublishingVideo(p) && videoAllowed.has(p.sessionId);
+
   const CallLayout = () => {
     const screenShareParticipant = participants.find(
       (p) => p.screenShareStream || (p as any).isScreenSharing || p.publishedTracks?.includes(3) || p.publishedTracks?.includes('SCREEN_SHARE' as any)
@@ -1314,7 +1453,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
 
     if ((hasOngoingScreenShare || isScreenSharing || pinnedParticipant) && activeMainParticipant) {
       const presenterName = getParticipantHandName(activeMainParticipant);
-      const sideCount = participants.length;
+      const sideCount = tileParticipants.length;
 
       const tileSideClass = "w-full aspect-video max-h-[220px] rounded-2xl overflow-hidden relative bg-[#202124] border border-white/5 shadow-md shrink-0";
 
@@ -1362,45 +1501,17 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
           {/* Right side: Vertical grid of participants */}
           <div className="flex-[1] max-w-[27%] min-w-[220px] max-h-[calc(100dvh-140px)] sm:max-h-[calc(100dvh-160px)] my-auto flex flex-col gap-3 shrink-0 overflow-y-auto pr-1 no-scrollbar">
             <AnimatePresence mode="popLayout">
-              {participants.filter(p => p.sessionId !== activeMainParticipant.sessionId).map((p) => (
-                <motion.div 
-                  key={p.sessionId} 
-                  layout="position"
-                  initial={{ scale: 0.95, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.95, opacity: 0 }}
-                  transition={smoothTransition}
-                  className={cn(tileSideClass, isHandUpForParticipant(p) && "hand-raised-active")}
-                >
-                  {(p.publishedTracks.includes(2) || p.publishedTracks.includes('VIDEO' as any)) ? (
-                    <ParticipantView 
-                      participant={p} 
-                      VideoPlaceholder={CustomVideoFallback as any}
-                      ParticipantViewUI={null}
-                      muteAudio
-                      className="w-full h-full"
-                    />
-                  ) : (
-                    <CustomVideoFallback participant={p} />
-                  )}
-                  {userRoles[p.userId] === 'Spotlight' && (
-                    <div className="absolute top-2.5 left-2.5 z-30 flex items-center gap-1 bg-purple-600/90 text-white rounded-full px-2 py-0.5 text-[10px] font-bold shadow-md backdrop-blur-sm border border-purple-400/30 select-none pointer-events-none">
-                      <Sparkle size={11} weight="fill" className="text-amber-300" />
-                      <span>Spotlight</span>
-                    </div>
-                  )}
-                  {!isHandUpForParticipant(p) && (
-                    <div className="absolute bottom-3 left-3 z-20 text-white font-semibold text-xs tracking-tight pointer-events-none select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-                      {getParticipantHandName(p)}
-                    </div>
-                  )}
-                  <AnimatePresence>
-                    {isHandUpForParticipant(p) && (
-                      <RaisedHandTileBadge name={getParticipantHandName(p)} />
-                    )}
-                  </AnimatePresence>
-
-                </motion.div>
+              {tileParticipants.filter(p => p.sessionId !== activeMainParticipant.sessionId && p.userId !== activeMainParticipant.userId).map((p) => (
+                <CallTile
+                  key={p.sessionId}
+                  participant={p}
+                  showVideo={showsVideo(p)}
+                  isSpotlight={userRoles[p.userId] === 'Spotlight'}
+                  isHandUp={isHandUpForParticipant(p)}
+                  name={getParticipantHandName(p)}
+                  className={tileSideClass}
+                  compact
+                />
               ))}
             </AnimatePresence>
           </div>
@@ -1411,7 +1522,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
     const tileStyle = "rounded-2xl overflow-hidden relative bg-[#202124] border border-white/5 shadow-2xl shrink-0 transition-all";
     let tileClass = "";
 
-    const count = participants.length;
+    const count = tileParticipants.length;
     if (count === 1) {
       tileClass = activeSidebar && !isMobile
         ? "w-full sm:w-[96%] md:w-[92%] lg:w-[88%] max-w-[960px] max-h-[calc(100dvh-140px)] aspect-video mr-0 sm:mr-1 ml-auto" 
@@ -1430,45 +1541,16 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
       <div className={cn("w-full h-full flex items-center justify-center bg-transparent relative z-10", activeSidebar && !isMobile ? "p-1 sm:p-2 pr-0 sm:pr-1" : "p-2 sm:p-4")}>
         <div className={cn("flex flex-wrap items-center justify-center w-full max-h-[calc(100dvh-140px)] overflow-y-auto no-scrollbar", activeSidebar && !isMobile ? "gap-2 sm:gap-2.5" : "gap-2.5 sm:gap-4")}>
           <AnimatePresence mode="popLayout">
-            {participants.map((p) => (
-              <motion.div 
-                key={p.sessionId} 
-                layout="position"
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                transition={smoothTransition}
-                className={cn(tileStyle, tileClass, isHandUpForParticipant(p) && "hand-raised-active")}
-              >
-                {(p.publishedTracks.includes(2) || p.publishedTracks.includes('VIDEO' as any)) ? (
-                  <ParticipantView 
-                    participant={p} 
-                    VideoPlaceholder={CustomVideoFallback as any}
-                    ParticipantViewUI={null}
-                    muteAudio
-                    className="w-full h-full"
-                  />
-                ) : (
-                  <CustomVideoFallback participant={p} />
-                )}
-                {userRoles[p.userId] === 'Spotlight' && (
-                  <div className="absolute top-3 left-3 z-30 flex items-center gap-1.5 bg-purple-600/90 text-white rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md backdrop-blur-sm border border-purple-400/30 select-none pointer-events-none">
-                    <Sparkle size={12} weight="fill" className="text-amber-300" />
-                    <span>Spotlight</span>
-                  </div>
-                )}
-                {!isHandUpForParticipant(p) && (
-                  <div className="absolute bottom-3 left-3 z-20 text-white font-semibold text-xs tracking-tight pointer-events-none select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-                    {getParticipantHandName(p)}
-                  </div>
-                )}
-                <AnimatePresence>
-                  {isHandUpForParticipant(p) && (
-                    <RaisedHandTileBadge name={getParticipantHandName(p)} />
-                  )}
-                </AnimatePresence>
-
-              </motion.div>
+            {tileParticipants.map((p) => (
+              <CallTile
+                key={p.sessionId}
+                participant={p}
+                showVideo={showsVideo(p)}
+                isSpotlight={userRoles[p.userId] === 'Spotlight'}
+                isHandUp={isHandUpForParticipant(p)}
+                name={getParticipantHandName(p)}
+                className={cn(tileStyle, tileClass)}
+              />
             ))}
           </AnimatePresence>
         </div>
@@ -1484,6 +1566,35 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
           their camera off used to be silent to everyone else even with the mic on.
           All tiles pass muteAudio so nobody is played twice (e.g. pinned + side tile). */}
       <ParticipantsAudio participants={participants} />
+
+      {/* Connection banner: the call stays on screen while Stream reconnects */}
+      {(isReconnecting || reconnectFailed) && (
+        <div
+          role="status"
+          className="absolute left-1/2 top-3 z-[90] flex max-w-[calc(100%-32px)] -translate-x-1/2 items-center gap-3 rounded-full border border-white/10 bg-[#202124]/95 px-4 py-2 text-xs font-medium text-white shadow-xl backdrop-blur-md sm:top-6"
+        >
+          {reconnectFailed ? (
+            <>
+              <span className="size-2 shrink-0 rounded-full bg-[#ea4335]" />
+              <span>Connection lost</span>
+              <button
+                onClick={rejoin}
+                disabled={isRejoining}
+                className="rounded-full bg-[#8ab4f8] px-3 py-1 font-semibold text-[#202124] transition-colors hover:bg-[#93baf9] disabled:opacity-60"
+              >
+                {isRejoining ? 'Rejoining…' : 'Rejoin'}
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="size-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
+              <span>
+                {callingState === CallingState.OFFLINE ? "You're offline — waiting for network…" : 'Reconnecting…'}
+              </span>
+            </>
+          )}
+        </div>
+      )}
       <style>{`
         /* Stream grid overrides to match Google Meet Dark Theme */
         .str-video__paginated-grid-layout {
@@ -1699,7 +1810,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
           title="View participants"
         >
           <div className="flex items-center -space-x-2.5 overflow-hidden pl-0.5">
-            {participants.slice(0, 4).map((p, index) => {
+            {tileParticipants.slice(0, 4).map((p, index) => {
               const displayName = p.name || 'Participant';
               const imageUrl = p.image;
               const initial = displayName[0]?.toUpperCase() || 'U';
@@ -1724,7 +1835,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
             })}
           </div>
           <span className="text-xs font-bold text-white px-1.5">
-            {participants.length || 1}
+            {tileParticipants.length || 1}
           </span>
         </button>
 

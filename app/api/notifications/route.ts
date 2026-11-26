@@ -309,12 +309,36 @@ export async function GET(req: Request) {
       ]
     );
 
+    // Work out where tapping each notification should go. Schedule-based
+    // notification IDs are md5(`${prefix}_${meetingId}`), so rebuilding those IDs
+    // from the user's schedules maps every notification — including ones created
+    // before this existed — back to its meeting without a schema change.
+    const NOTIFICATION_PREFIXES = ['sched', 'prep', 'soon', 'started', 'past', 'done', 'email_1h', 'email_24h'];
+    const scheduleByNotificationId = new Map<string, any>();
+    for (const schedule of schedulesResponse.documents) {
+      if (!schedule.meetingId) continue;
+      for (const prefix of NOTIFICATION_PREFIXES) {
+        scheduleByNotificationId.set(getNotificationId(prefix, schedule.meetingId), schedule);
+      }
+    }
+
+    const JOINABLE_BEFORE_MS = 30 * 60000; // "starts in < 30 min" alerts can be joined
+    const hrefFor = (docId: string): string => {
+      const schedule = scheduleByNotificationId.get(docId);
+      if (!schedule) return '/upcoming';
+      const startsAt = new Date(schedule.startsAt).getTime();
+      const endsAt = startsAt + Number(schedule.duration || 60) * 60000;
+      const isJoinableNow = nowMs >= startsAt - JOINABLE_BEFORE_MS && nowMs < endsAt;
+      return isJoinableNow ? `/meeting/${encodeURIComponent(schedule.meetingId)}` : '/upcoming';
+    };
+
     const notifications = finalResponse.documents.map((doc: any) => ({
       id: doc.$id,
       text: doc.text,
       read: doc.read,
       type: doc.type,
-      createdAt: doc.createdAt
+      createdAt: doc.createdAt,
+      href: hrefFor(doc.$id),
     }));
 
     return NextResponse.json({ notifications });
