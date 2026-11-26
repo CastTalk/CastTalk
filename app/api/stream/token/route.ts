@@ -2,20 +2,13 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs';
 import { StreamClient } from '@stream-io/node-sdk';
 
-export async function GET(req: Request) {
+// Fallback for the tokenProvider server action. The user ID comes only from the
+// Clerk session; any ?userId= query parameter is ignored on purpose.
+export async function GET() {
   try {
-    let authUserId: string | null = null;
-    try {
-      const authData = auth();
-      authUserId = authData.userId;
-    } catch {}
+    const { userId } = auth();
 
-    const { searchParams } = new URL(req.url);
-    const queryUserId = searchParams.get('userId');
-
-    const activeUserId = queryUserId || authUserId;
-
-    if (!activeUserId) {
+    if (!userId) {
       return NextResponse.json({ error: 'User is not authenticated' }, { status: 401 });
     }
 
@@ -31,11 +24,11 @@ export async function GET(req: Request) {
     const expirationTime = Math.floor(Date.now() / 1000) + 24 * 3600;
     const issuedAt = Math.floor(Date.now() / 1000) - 60;
 
-    const token = streamClient.createToken(activeUserId, expirationTime, issuedAt);
+    const token = streamClient.createToken(userId, expirationTime, issuedAt);
 
     return NextResponse.json({ token });
   } catch (error: any) {
     console.error('[API Stream Token Error]:', error);
-    return NextResponse.json({ error: error.message || 'Failed to generate token' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to generate token' }, { status: 500 });
   }
 }

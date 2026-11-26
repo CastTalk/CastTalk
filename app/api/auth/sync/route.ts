@@ -1,51 +1,49 @@
 import { NextResponse } from 'next/server';
+import { auth, currentUser } from '@clerk/nextjs';
+import { randomBytes } from 'crypto';
 import { appwrite } from '@/lib/appwrite';
 
-export async function POST(req: Request) {
+/**
+ * Mirrors the signed-in Clerk user into Appwrite Auth.
+ *
+ * Identity, email and name are read from the Clerk session on the server — the
+ * request body is ignored — and the Appwrite user record is never returned,
+ * because it contains the email and password-hash fields.
+ */
+export async function POST() {
+  const { userId } = auth();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    const { userId, email, name } = await req.json();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
-    }
-
     try {
-      // Check if user already exists in Appwrite Auth
-      const existingUser = await appwrite.users.get(userId);
-      return NextResponse.json({
-        success: true,
-        message: 'User already exists in Appwrite Auth',
-        user: existingUser
-      });
+      await appwrite.users.get(userId);
+      return NextResponse.json({ success: true, created: false });
     } catch (e: any) {
       // Appwrite throws a 404 error if the user ID does not exist in Auth
-      if (e.code === 404 || e.status === 404 || String(e).includes('not found')) {
-        console.log(`[Appwrite Auth Sync] User ${userId} not found in Appwrite. Creating account...`);
-        
-        // Generate a random high-entropy temp password. They authenticate via Clerk,
-        // so they will not use this password, but Appwrite requires one for email signup.
-        const tempPassword = Math.random().toString(36).substring(2, 15) + 
-                             Math.random().toString(36).substring(2, 15) + 
-                             "A1!";
-        
-        const newUser = await appwrite.users.create(
-          userId,
-          email || undefined,
-          undefined,
-          tempPassword,
-          name || undefined
-        );
-        
-        return NextResponse.json({
-          success: true,
-          message: 'User successfully synced to Appwrite Auth',
-          user: newUser
-        });
-      }
-      throw e;
+      const isNotFound = e?.code === 404 || e?.status === 404;
+      if (!isNotFound) throw e;
     }
+
+    const clerkUser = await currentUser();
+    const email = clerkUser?.emailAddresses?.[0]?.emailAddress || undefined;
+    const name =
+      [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ') ||
+      clerkUser?.username ||
+      undefined;
+
+    // Users authenticate through Clerk and never use this password, but Appwrite
+    // requires one when an email is set.
+    const unusedPassword = `${randomBytes(24).toString('base64url')}A1!`;
+
+    await appwrite.users.create(userId, email, undefined, unusedPassword, name);
+    return NextResponse.json({ success: true, created: true });
   } catch (error: any) {
-    console.warn('[Appwrite Auth Sync Warning]: Appwrite unreachable or offline:', error.message || error);
-    return NextResponse.json({ success: false, message: 'Appwrite sync skipped (offline/unreachable)' }, { status: 200 });
+    console.error('[Appwrite Auth Sync] Failed:', error?.message || error);
+    return NextResponse.json(
+      { success: false, message: 'Appwrite sync skipped (offline/unreachable)' },
+      { status: 200 }
+    );
   }
 }

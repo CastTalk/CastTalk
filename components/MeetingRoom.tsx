@@ -612,16 +612,18 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
   const { toast } = useToast();
   const hasLeftRef = useRef(false);
 
-  // Active captions per participant profile tile: { [userId]: { speaker, text, timestamp } }
-  const [activeCaptions, setActiveCaptions] = useState<
-    Record<string, { speaker: string; text: string; timestamp: number }>
-  >({});
+  // Latest participant list for the long-lived custom event listener
+  const participantsRef = useRef(participants);
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
 
   const customName = typeof window !== 'undefined' ? localStorage.getItem('streamDisplayName') : null;
   const currentUserId = localParticipant?.userId || user?.id || 'local-user';
   const displayName = localParticipant?.name || customName || user?.fullName || user?.firstName || 'Participant';
 
   const lastBroadcastRef = useRef(0);
+  const lastPartialTextRef = useRef('');
 
   // Broadcast and locally display speech segment
   const handleTranscriptSegment = useCallback(
@@ -631,17 +633,8 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
         return;
       }
       const now = Date.now();
-      // 1. Display on local participant tile with 0ms instant latency
-      setActiveCaptions((prev) => ({
-        ...prev,
-        [currentUserId]: {
-          speaker: segment.speaker || displayName,
-          text: segment.text,
-          timestamp: now,
-        },
-      }));
 
-      // 2. Add committed final segments to the meetingTranscripts list
+      // 1. Add committed final segments to the meetingTranscripts list
       if (!segment.isPartial) {
         setMeetingTranscripts((prev) => {
           const last = prev[prev.length - 1];
@@ -672,13 +665,16 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
         });
       }
 
-      // 3. Broadcast in real-time to all call participants via Stream custom event
-      // Throttle partials to at most 1 every 300ms; finals send immediately.
-      // Every speaker broadcasts their own captions, so this rate multiplies by the
-      // number of people talking — keep it well under Stream's custom event limits.
+      // 2. Broadcast to all call participants via Stream custom event.
+      // Each event is an HTTP request to Stream and a re-render on every other device,
+      // and every speaker broadcasts their own captions, so the rate multiplies by the
+      // number of people talking. Partials: at most 1 per second and only when the
+      // text changed. Finals: sent immediately.
       if (call) {
-        if (!segment.isPartial || now - lastBroadcastRef.current > 300) {
+        const isNewPartial = segment.isPartial && segment.text !== lastPartialTextRef.current;
+        if (!segment.isPartial || (isNewPartial && now - lastBroadcastRef.current > 1000)) {
           lastBroadcastRef.current = now;
+          lastPartialTextRef.current = segment.isPartial ? segment.text : '';
           call
             .sendCustomEvent({
               type: 'live-caption',
@@ -801,10 +797,11 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
 
   const captionsOnInMeeting = isCcActive || Object.keys(remoteCaptionDemand).length > 0;
 
-  // Manage our own transcription session:
-  // - It runs only while captions are on in the meeting AND our mic is on. With the
-  //   mic off nothing captures our voice, and we don't hold one of the account's
-  //   concurrent real-time sessions (the plan allows 2) just to read captions.
+  // Manage our own transcription:
+  // - It is armed only while captions are on in the meeting AND our mic is on.
+  // - Armed does not mean connected: useTranscription opens a Speechmatics session
+  //   only while we are actually talking and releases it after 15s of silence, so
+  //   the account's few concurrent real-time sessions rotate between active speakers.
   // - Other participants' captions arrive over Stream custom events regardless.
   // - Transcription reads the call's own mic stream instead of opening a second
   //   capture, which on phones can silence the mic published to the call.
@@ -832,25 +829,6 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
       toast({ title: 'Captions error', description: transcriptionError, variant: 'destructive' });
     }
   }, [transcriptionError, captionsOnInMeeting, toast]);
-
-  // Auto-hide captions after 4.5 seconds of silence
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = Date.now();
-      setActiveCaptions((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        for (const [uid, cap] of Object.entries(next)) {
-          if (now - cap.timestamp > 4500) {
-            delete next[uid];
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
-    }, 500);
-    return () => clearInterval(timer);
-  }, []);
 
   const toggleCc = () => {
     const next = !isCcActive;
@@ -1071,22 +1049,13 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
         if (userId === currentLocalId) return;
 
         if (userId && text && /[a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/.test(text)) {
-          setActiveCaptions((prev) => ({
-            ...prev,
-            [userId]: {
-              speaker: speaker || 'Participant',
-              text,
-              timestamp: timestamp || Date.now(),
-            },
-          }));
-
           if (isPartial) {
             setRemoteInterimText(text);
             setRemoteInterimSpeaker(speaker || 'Participant');
           } else {
             setRemoteInterimText('');
             setRemoteInterimSpeaker('');
-            const remoteP = participants.find((p) => p.userId === userId);
+            const remoteP = participantsRef.current.find((p) => p.userId === userId);
             const eventTime = timestamp || Date.now();
             setMeetingTranscripts((prev) => {
               const last = prev[prev.length - 1];
@@ -1193,30 +1162,6 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
       }
     };
   }, [call]);
-
-  useEffect(() => {
-    // Dirty DOM hack: Stream's server caches user IDs for guests connecting via instant meetings.
-    // This forcibly replaces long "user_*" IDs with the beautiful displayName from MeetingSetup localStorage.
-    const customName = typeof window !== 'undefined' ? localStorage.getItem('streamDisplayName') : null;
-    
-    // Fallback if null, just call them Participant to remove ugliness
-    const defaultName = customName || 'Participant';
-
-    const interval = setInterval(() => {
-      if (typeof document === 'undefined') return;
-      const nameNodes = document.querySelectorAll('.str-video__participant-details__name');
-      
-      nameNodes.forEach(node => {
-        const text = node.textContent?.trim() || '';
-        // If it looks like a Stream autogenerated ID, or length is unusually long (> 20), replace it!
-        if (text.startsWith('user_') || (text.length > 20 && !text.includes(' '))) {
-          node.textContent = defaultName;
-        }
-      });
-    }, 300); // Fast interval to prevent flickering
-
-    return () => clearInterval(interval);
-  }, []);
 
   // for more detail about types of CallingState see: https://getstream.io/video/docs/react/ui-cookbook/ringing-call/#incoming-call-panel
   const callingState = useCallCallingState();

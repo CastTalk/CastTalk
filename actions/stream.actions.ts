@@ -3,22 +3,19 @@
 import { auth } from '@clerk/nextjs';
 import { StreamClient } from '@stream-io/node-sdk';
 
-export const tokenProvider = async (userId?: string) => {
+/**
+ * Issues a Stream token for the signed-in Clerk user.
+ *
+ * The user ID always comes from the server-side Clerk session, never from the
+ * caller. Accepting an ID from the browser would let any signed-in user mint a
+ * token for someone else (for example the meeting host).
+ */
+export const tokenProvider = async () => {
   const STREAM_API_KEY = process.env.NEXT_PUBLIC_STREAM_API_KEY;
   const STREAM_API_SECRET = process.env.STREAM_SECRET_KEY;
 
-  let clerkUserId: string | null = null;
-  try {
-    const authData = auth();
-    clerkUserId = authData?.userId || null;
-  } catch (err) {
-    console.warn('[stream.actions] auth() warning:', err);
-  }
-
-  const activeUserId = userId || clerkUserId;
-
-  if (!activeUserId) {
-    console.error('[stream.actions] User is not authenticated and no userId was provided.');
+  const { userId } = auth();
+  if (!userId) {
     throw new Error('User is not authenticated');
   }
 
@@ -38,9 +35,7 @@ export const tokenProvider = async (userId?: string) => {
     const expirationTime = Math.floor(Date.now() / 1000) + 24 * 3600;
     const issuedAt = Math.floor(Date.now() / 1000) - 60;
 
-    const token = streamClient.createToken(activeUserId, expirationTime, issuedAt);
-
-    return token;
+    return streamClient.createToken(userId, expirationTime, issuedAt);
   } catch (error) {
     console.error('[stream.actions] Failed to generate Stream token:', error);
     throw new Error('Failed to generate Stream token');

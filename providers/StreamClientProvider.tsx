@@ -22,13 +22,13 @@ const StreamVideoProvider = ({ children }: { children: ReactNode }) => {
     
     const getToken = async () => {
       try {
-        const token = await tokenProvider(user.id);
+        const token = await tokenProvider();
         if (token) return token;
       } catch (err) {
         console.warn('[StreamClientProvider] Server action tokenProvider failed, trying API route fallback...', err);
       }
 
-      const res = await fetch(`/api/stream/token?userId=${encodeURIComponent(user.id)}`);
+      const res = await fetch('/api/stream/token');
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Failed to fetch stream token');
@@ -55,23 +55,11 @@ const StreamVideoProvider = ({ children }: { children: ReactNode }) => {
 
     setVideoClient(client);
 
-    // Sync Clerk authenticated user to Appwrite Auth
+    // Sync Clerk authenticated user to Appwrite Auth (identity is read from the
+    // Clerk session on the server)
     const syncUserToAppwrite = async () => {
       try {
-        const email = user.emailAddresses?.[0]?.emailAddress || '';
-        const name = user.fullName || user.firstName || '';
-        
-        await fetch('/api/auth/sync', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId: user.id,
-            email,
-            name,
-          }),
-        });
+        await fetch('/api/auth/sync', { method: 'POST' });
       } catch (error) {
         console.error('[StreamClientProvider] Failed to sync user to Appwrite:', error);
       }

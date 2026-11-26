@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs';
 import { fetchOpenRouterCompletion, OpenRouterMessage } from '@/lib/openrouter';
 import { systemPromptTemplate } from '@/ai-context/prompts/systemPrompt';
 import { ActionPlanner } from '@/ai-context/planner/actionPlanner';
@@ -555,7 +556,14 @@ async function classifyMode(userMessage: string): Promise<{ mode: 'chat' | 'deep
 
 export async function POST(req: Request) {
   try {
-    const { messages, isThinking, userId, currentDateTime, mode } = await req.json();
+    // Identity comes from the Clerk session only. A userId in the body is ignored,
+    // otherwise anyone could load another user's schedules into the AI context.
+    const { userId } = auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { messages, isThinking, currentDateTime, mode } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'Messages array is required' }, { status: 400 });
