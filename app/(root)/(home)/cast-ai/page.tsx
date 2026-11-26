@@ -1307,7 +1307,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
 
       {messages.length === 0 ? (
         // Non-scrollable Empty Welcome Screen & Input together in the same div
-        <div className="flex-1 flex flex-col justify-between items-center relative z-10 px-4 md:px-6 lg:px-8 py-10 max-h-full overflow-hidden select-none">
+        <div className="flex-1 flex flex-col justify-between items-center relative z-10 px-4 md:px-6 lg:px-8 py-6 sm:py-10 max-h-full overflow-y-auto select-none">
           {/* Spacer to push content down slightly for balance */}
           <div className="flex-1" />
 
@@ -1338,7 +1338,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                 onSend={handleSend}
                 isLoading={isTyping}
                 placeholder="Ask CastAI anything about meetings, notes, or tasks..."
-                className="border-slate-200 shadow-none"
+                className="max-w-full"
                 onHistoryClick={() => setShowHistoryModal(prev => !prev)}
               />
             </div>
@@ -1363,8 +1363,8 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   className={`flex gap-4 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {msg.sender === 'ai' && (
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-ink shadow-[0_6px_16px_-8px_rgba(154,52,18,0.6)]" aria-label="CastAI">
-                      <PixelLoader animate={false} cell={4} gap={1.5} />
+                    <div className="size-9 rounded-xl bg-white border border-black/5 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
+                      <img src="/logo/Main.svg" alt="CastAI" className="size-6 object-contain" />
                     </div>
                   )}
                   <div className="flex flex-col max-w-[80%] gap-1">
@@ -1448,10 +1448,14 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   animate={{ opacity: 1 }}
                   className="flex gap-4 justify-start items-center"
                 >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-ink shadow-[0_6px_16px_-8px_rgba(154,52,18,0.6)]">
-                    <PixelLoader cell={4} gap={1.5} />
+                  <div className="size-9 rounded-xl bg-white border border-black/5 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
+                    <img src="/logo/Main.svg" alt="CastAI" className="size-6 object-contain" />
                   </div>
-                  <span className="text-shimmer-ember font-mono text-[12px] tracking-wide">Thinking</span>
+                  {/* Claude-style thinking: a tiny glyph that keeps changing shape */}
+                  <div className="flex items-center gap-2">
+                    <PixelLoader cell={3} gap={1} />
+                    <span className="text-shimmer-ember font-mono text-[12px] tracking-wide">Thinking</span>
+                  </div>
                 </motion.div>
               )}
               <div ref={messagesEndRef} />
@@ -1466,7 +1470,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   onSend={handleSend}
                   isLoading={isTyping}
                   placeholder="Ask CastAI anything about meetings, notes, or tasks..."
-                  className="border-slate-200 shadow-none"
+                  className="max-w-full"
                   onHistoryClick={() => setShowHistoryModal(prev => !prev)}
                 />
               </div>

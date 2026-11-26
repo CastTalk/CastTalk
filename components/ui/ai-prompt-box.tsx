@@ -1,7 +1,7 @@
 import React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ArrowUp, Paperclip, Square, X, StopCircle, Mic, Globe, BrainCog, FolderCog, History } from '@/components/icons';
+import { ArrowUp, Paperclip, Square, X, StopCircle, Mic, Globe, BrainCog, FolderCog, History, CaretLeft as ChevronLeft } from '@/components/icons';
 import { motion, AnimatePresence } from "framer-motion";
 
 // Utility function for className merging
@@ -329,7 +329,7 @@ const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
           <div
             ref={ref}
             className={cn(
-              "rounded-2xl border border-black/10 bg-white/90 p-2 shadow-[0_14px_40px_-18px_rgba(154,52,18,0.35)] backdrop-blur transition-all duration-300 focus-within:border-[#f97316]/50 focus-within:ring-4 focus-within:ring-[#f97316]/10",
+              "rounded-[22px] border border-black/10 bg-white p-3 shadow-[0_18px_50px_-22px_rgba(154,52,18,0.4)] transition-all duration-300 focus-within:border-[#f97316]/50 focus-within:ring-4 focus-within:ring-[#f97316]/10",
               isLoading && "border-red-500/70",
               className
             )}
@@ -447,6 +447,9 @@ const CustomDivider: React.FC = () => (
   </div>
 );
 
+// Starter prompts shown as chips above the input
+const STARTERS = ["Schedule a meeting", "Summarize my week", "Find a free slot"];
+
 // Main PromptInputBox Component
 interface PromptInputBoxProps {
   onSend?: (message: string, files?: File[]) => void;
@@ -465,6 +468,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
   const [showSearch, setShowSearch] = React.useState(false);
   const [showThink, setShowThink] = React.useState(false);
   const [showCanvas, setShowCanvas] = React.useState(false);
+  const [showChips, setShowChips] = React.useState(true);
   const uploadInputRef = React.useRef<HTMLInputElement>(null);
   const promptBoxRef = React.useRef<HTMLDivElement>(null);
 
@@ -594,82 +598,49 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
 
   const hasContent = input.trim() !== "";
 
+  // Kole Jain-style controls: a quiet "Deep search" pill and an "Automate mode" switch
   const actionButtons = React.useMemo(() => {
     return (
-      <div className="flex items-center gap-1 transition-opacity duration-300">
-        <div className="flex items-center">
-          <button
-            type="button"
-            onClick={() => handleToggleChange("search")}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={showThink}
+          onClick={() => handleToggleChange("think")}
+          className="group flex items-center gap-2.5 rounded-full py-1 pr-1 text-[13px] text-ink-soft transition-colors hover:text-ink"
+        >
+          <span
             className={cn(
-              "rounded-full transition-all flex items-center gap-1 px-2 py-1 border h-8",
-              showSearch
-                ? "bg-[#c2410c]/15 border-[#c2410c] text-[#c2410c]"
-                : "bg-transparent border-transparent text-[#9CA3AF] hover:text-[#D1D5DB]"
+              "relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200",
+              showThink ? "bg-[#f97316]" : "bg-black/10 group-hover:bg-black/15"
             )}
           >
-            <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
-              <motion.div
-                animate={{ rotate: showSearch ? 360 : 0, scale: showSearch ? 1.1 : 1 }}
-                whileHover={{ rotate: showSearch ? 360 : 15, scale: 1.1, transition: { type: "spring", stiffness: 300, damping: 10 } }}
-                transition={{ type: "spring", stiffness: 260, damping: 25 }}
-              >
-                <Globe className={cn("w-4 h-4", showSearch ? "text-[#c2410c]" : "text-inherit")} />
-              </motion.div>
-            </div>
-            <AnimatePresence>
-              {showSearch && (
-                <motion.span
-                  key="search-label"
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: "auto", opacity: 1 }}
-                  exit={{ width: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="text-xs overflow-hidden whitespace-nowrap text-[#c2410c] flex-shrink-0"
-                >
-                  Deep Search
-                </motion.span>
+            <motion.span
+              layout
+              transition={{ type: "spring", stiffness: 520, damping: 34 }}
+              className={cn(
+                "absolute top-0.5 size-4 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)]",
+                showThink ? "right-0.5" : "left-0.5"
               )}
-            </AnimatePresence>
-          </button>
+            />
+          </span>
+          <span className={cn("whitespace-nowrap", showThink && "text-[#9a3412]")}>Automate mode</span>
+        </button>
 
-          <CustomDivider />
-
-          <button
-            type="button"
-            onClick={() => handleToggleChange("think")}
-            className={cn(
-              "rounded-full transition-all flex items-center gap-1 px-2 py-1 border h-8",
-              showThink
-                ? "bg-[#9a3412]/15 border-[#9a3412] text-[#9a3412]"
-                : "bg-transparent border-transparent text-[#9CA3AF] hover:text-[#D1D5DB]"
-            )}
-          >
-            <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
-              <motion.div
-                animate={{ rotate: showThink ? 360 : 0, scale: showThink ? 1.1 : 1 }}
-                whileHover={{ rotate: showThink ? 360 : 15, scale: 1.1, transition: { type: "spring", stiffness: 300, damping: 10 } }}
-                transition={{ type: "spring", stiffness: 260, damping: 25 }}
-              >
-                <BrainCog className={cn("w-4 h-4", showThink ? "text-[#9a3412]" : "text-inherit")} />
-              </motion.div>
-            </div>
-            <AnimatePresence>
-              {showThink && (
-                <motion.span
-                  key="think-label"
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: "auto", opacity: 1 }}
-                  exit={{ width: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="text-xs overflow-hidden whitespace-nowrap text-[#9a3412] flex-shrink-0"
-                >
-                  Automate
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => handleToggleChange("search")}
+          aria-pressed={showSearch}
+          className={cn(
+            "flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12px] transition-colors",
+            showSearch
+              ? "border-[#f97316]/50 bg-[#f97316]/10 text-[#9a3412]"
+              : "border-black/10 text-ink-muted hover:border-[#f97316]/40 hover:text-ink"
+          )}
+        >
+          <Globe className="size-3.5" />
+          <span className="whitespace-nowrap">Deep search</span>
+        </button>
       </div>
     );
   }, [showSearch, showThink, handleToggleChange]);
@@ -715,7 +686,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
           type="button"
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0"
+          className="h-8 w-8 rounded-full text-ink-muted hover:text-[#9a3412] hover:bg-[#f97316]/10 flex-shrink-0"
           onClick={onHistoryClick}
         >
           <History className="h-5 w-5" />
@@ -726,72 +697,99 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
 
   return (
     <>
-      <PromptInput
-        value={input}
-        onValueChange={setInput}
-        isLoading={isLoading}
-        onSubmit={handleSubmit}
-        className={cn(
-          "w-full shadow-none transition-all duration-300 ease-in-out",
-          className
-        )}
-        disabled={isLoading}
-        ref={ref || promptBoxRef}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        {files.length > 0 && (
-          <div className="flex flex-wrap gap-2 p-0 pb-1 transition-all duration-300">
-            {files.map((file, index) => (
-              <div key={index} className="relative group">
-                {file.type.startsWith("image/") && filePreviews[file.name] && (
-                  <div
-                    className="w-16 h-16 rounded-xl overflow-hidden cursor-pointer transition-all duration-300"
-                    onClick={() => openImageModal(filePreviews[file.name])}
-                  >
-                    <img
-                       src={filePreviews[file.name]}
-                       alt={file.name}
-                       className="h-full w-full object-cover"
-                    />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemoveFile(index);
-                      }}
-                      className="absolute top-1 right-1 rounded-full bg-black/70 p-0.5 opacity-100 transition-opacity"
-                    >
-                      <X className="h-3 w-3 text-white" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="transition-all duration-300 opacity-100">
-          <PromptInputTextarea
-            placeholder={
-              showSearch
-                ? "Deep Search..."
-                : showThink
-                ? "Automate..."
-                : placeholder
-            }
-            className="text-base"
-          />
+      <div className={cn("relative w-full", className)}>
+        {/* Context strip peeking out from behind the box (Kole Jain's layered input) */}
+        <div className="relative z-0 mx-4 -mb-3 flex items-center gap-2 rounded-t-2xl border border-b-0 border-black/[0.07] bg-[#fafaf9]/90 px-4 pb-5 pt-2 font-mono text-[11px] text-ink-muted backdrop-blur">
+          <span className="size-1.5 shrink-0 bg-[#f97316]" />
+          Connected to your schedule and meetings
         </div>
 
-        <PromptInputActions className="flex items-center justify-between gap-2 p-0 pt-2">
-          {actionButtons}
-          <div className="flex items-center gap-1.5">
-            {onHistoryClick && historyButton}
-            {sendButton}
+        <PromptInput
+          value={input}
+          onValueChange={setInput}
+          isLoading={isLoading}
+          onSubmit={handleSubmit}
+          className="relative z-10 w-full transition-all duration-300 ease-in-out"
+          disabled={isLoading}
+          ref={ref || promptBoxRef}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* Starter chips */}
+          <div className="flex items-center gap-1.5 px-1.5 pt-1">
+            <AnimatePresence initial={false}>
+              {showChips &&
+                STARTERS.map((chip) => (
+                  <motion.button
+                    key={chip}
+                    type="button"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => {
+                      setInput(chip + " ");
+                      hasManuallyToggledRef.current = false;
+                    }}
+                    className="hidden h-7 items-center whitespace-nowrap rounded-full border border-black/10 px-3 text-[12px] text-ink-soft transition-colors hover:border-[#f97316]/50 hover:bg-[#f97316]/5 hover:text-[#9a3412] sm:flex"
+                  >
+                    {chip}
+                  </motion.button>
+                ))}
+            </AnimatePresence>
+            <button
+              type="button"
+              onClick={() => setShowChips((v) => !v)}
+              aria-label={showChips ? "Hide suggestions" : "Show suggestions"}
+              className="hidden size-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-black/5 hover:text-ink sm:flex"
+            >
+              <motion.span animate={{ rotate: showChips ? 0 : 180 }} transition={{ duration: 0.2 }} className="flex">
+                <ChevronLeft className="size-4" />
+              </motion.span>
+            </button>
           </div>
-        </PromptInputActions>
-      </PromptInput>
+
+          {files.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-1.5 pt-2 transition-all duration-300">
+              {files.map((file, index) => (
+                <div key={index} className="relative group">
+                  {file.type.startsWith("image/") && filePreviews[file.name] && (
+                    <div
+                      className="w-16 h-16 rounded-xl overflow-hidden cursor-pointer transition-all duration-300"
+                      onClick={() => openImageModal(filePreviews[file.name])}
+                    >
+                      <img src={filePreviews[file.name]} alt={file.name} className="h-full w-full object-cover" />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveFile(index);
+                        }}
+                        className="absolute top-1 right-1 rounded-full bg-black/70 p-0.5 opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3 text-white" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <PromptInputTextarea
+            placeholder={showSearch ? "Search across your meetings..." : showThink ? "What should I set up for you?" : placeholder}
+            className="min-h-[72px] px-2 pt-2 text-[18px] leading-relaxed text-ink placeholder:text-[#a1a1aa] sm:text-[19px]"
+          />
+
+          <PromptInputActions className="flex items-center justify-between gap-2 px-1 pb-0.5 pt-3">
+            {actionButtons}
+            <div className="flex items-center gap-1.5">
+              {onHistoryClick && historyButton}
+              {sendButton}
+            </div>
+          </PromptInputActions>
+        </PromptInput>
+      </div>
 
       <ImageViewDialog imageUrl={selectedImage} onClose={() => setSelectedImage(null)} />
     </>
