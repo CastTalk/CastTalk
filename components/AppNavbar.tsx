@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { UserButton, useUser } from '@clerk/nextjs';
 import { Bell, X, Calendar, Brain, Clock, Trash, AndroidLogo, List, House, CalendarCheck, CaretDown } from '@/components/icons';
-import { NoiseTexture } from '@/components/ui/noise-texture';
+import Logo from '@/components/Logo';
 import { useToast } from '@/components/ui/use-toast';
 
 interface NotificationItem {
@@ -310,11 +310,11 @@ const AppNavbar = () => {
       <div className="w-full relative z-40 flex justify-center border-b border-black/5 bg-white/80 backdrop-blur-md">
         <header className="flex w-full max-w-[1440px] flex-row justify-between items-center h-[54px] px-4 md:px-6 lg:px-8">
           <div className="flex items-center h-full cursor-pointer" onClick={() => handleNavigation('/')}>
-            <img src="/logo/logoMain.svg" alt="CastTalk" className="h-8 w-auto" />
+            <Logo />
           </div>
 
           {/* Mobile & Tablet Centered Time/Date in Header */}
-          <div className="flex lg:hidden absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center text-[13px] sm:text-[14px] font-medium text-slate-700 gap-1.5 whitespace-nowrap select-none pointer-events-none">
+          <div className="hidden sm:flex lg:hidden absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap font-mono text-[12px] text-ink-soft select-none pointer-events-none sm:text-[13px]">
             <span>{time}</span>
             <span className="text-slate-400">•</span>
             <span>{date}</span>
@@ -324,31 +324,31 @@ const AppNavbar = () => {
             <button 
               onClick={() => handleNavigation('/')} 
               className={pathname === '/' 
-                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
-                : 'text-slate-700 hover:text-black hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-medium'}
+                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-pixel shadow-sm transition-all' 
+                : 'text-ink-soft hover:text-ink hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-pixel'}
             >
               Home
             </button>
             <button 
               onClick={() => handleNavigation('/upcoming')} 
               className={pathname === '/upcoming' 
-                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
-                : 'text-slate-700 hover:text-black hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-medium'}
+                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-pixel shadow-sm transition-all' 
+                : 'text-ink-soft hover:text-ink hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-pixel'}
             >
               Schedule
             </button>
             <button 
               onClick={() => handleNavigation('/cast-ai')} 
               className={pathname === '/cast-ai' 
-                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
-                : 'text-slate-700 hover:text-black hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-medium'}
+                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-pixel shadow-sm transition-all' 
+                : 'text-ink-soft hover:text-ink hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-pixel'}
             >
               CastAI
             </button>
           </nav>
 
           <div className="flex items-center gap-4 text-slate-800">
-            <div className="hidden lg:flex items-center text-[15px] font-medium gap-2 mr-4">
+            <div className="mr-4 hidden items-center gap-2 font-mono text-[13px] text-ink-soft lg:flex">
               <span>{time}</span><span>•</span><span>{date}</span>
             </div>
             <div className="flex items-center gap-4">
@@ -368,11 +368,11 @@ const AppNavbar = () => {
                 </button>
 
                 {showNotifications && (
-                  <div className="absolute right-0 top-[42px] w-[calc(100vw-2rem)] sm:w-[360px] max-w-[360px] bg-white/95 backdrop-blur-md text-slate-800 rounded-2xl shadow-xl border border-slate-200/80 z-50 animate-slide-down overflow-hidden" style={{ right: 'min(0px, calc(-1 * (100vw - 100%)))' }}>
+                  <div className="fixed inset-x-3 top-[62px] z-50 overflow-hidden rounded-3xl border border-black/5 bg-white text-ink shadow-[0_24px_60px_-24px_rgba(154,52,18,0.35)] animate-slide-down sm:absolute sm:inset-x-auto sm:right-0 sm:top-[46px] sm:w-[380px]">
                     <div className="flex items-center justify-between p-4 border-b border-slate-100">
                       <div className="flex items-center gap-2">
                         <Bell size={18} weight="fill" className="text-[#9a3412]" />
-                        <span className="font-bold text-[15px] text-slate-900">Notifications</span>
+                        <span className="font-pixel text-[16px] text-ink">Notifications</span>
                       </div>
                       <div className="flex items-center gap-3">
                         {visibleNotifications.some(n => !n.read) && (
@@ -484,15 +484,13 @@ const AppNavbar = () => {
       {/* Mobile & Tablet collapsible sidebar panel — slides down from navbar */}
       <div
         ref={mobilePanelRef}
-        className={`lg:hidden fixed left-0 right-0 z-[39] bg-[#f8f9fa] border-b border-slate-200 shadow-lg shadow-black/5 overflow-hidden ${
+        className={`lg:hidden fixed left-0 right-0 z-[39] bg-white border-b border-black/5 shadow-lg shadow-black/5 overflow-hidden ${
           mobilePanelOpen 
             ? 'max-h-[500px] opacity-100' 
             : 'max-h-0 opacity-0 pointer-events-none'
         }`}
         style={{ top: '54px', transition: 'max-height 0.4s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease' }}
       >
-        {/* Subtle noise texture */}
-        <NoiseTexture className="opacity-[0.1]" />
         <div className="relative z-10 px-4 pt-3 pb-4">
           {/* Navigation links with staggered slide-down animation */}
           <nav className="flex flex-col gap-1">
@@ -575,6 +573,38 @@ const AppNavbar = () => {
           onClick={() => setMobilePanelOpen(false)}
         />
       )}
+
+      {/* Mobile & tablet bottom tab bar — the main navigation below lg */}
+      <nav
+        aria-label="Main"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-black/5 bg-white/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+      >
+        <div className="mx-auto flex h-16 max-w-md items-stretch justify-around px-2">
+          {mobileNavLinks.map((link) => {
+            const isActive = link.route === '/' ? pathname === '/' : pathname.startsWith(link.route);
+            const Icon = link.icon;
+            return (
+              <button
+                key={link.route}
+                onClick={() => handleNavigation(link.route)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex flex-1 flex-col items-center justify-center gap-1 transition-colors ${
+                  isActive ? 'text-ember-deep' : 'text-ink-muted hover:text-ink'
+                }`}
+              >
+                <span
+                  className={`flex h-8 w-14 items-center justify-center rounded-full transition-colors ${
+                    isActive ? 'bg-ember/10' : ''
+                  }`}
+                >
+                  <Icon size={20} />
+                </span>
+                <span className="font-pixel text-[11px] leading-none">{link.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </>
   );
 };

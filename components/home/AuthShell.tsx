@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import Logo from '@/components/Logo';
 import EmberAurora from './EmberAurora';
 
 /** Shared ember layout for the Clerk sign-in / sign-up screens. */
@@ -6,10 +7,10 @@ const AuthShell = ({ title, subtitle, children }: { title: string; subtitle: str
   <main className="relative flex min-h-[100dvh] w-full flex-col items-center overflow-x-hidden bg-white px-4 pb-16 text-ink">
     <EmberAurora />
     <div className="relative z-10 flex w-full max-w-6xl items-center px-2 pt-6">
-      <img src="/logo/logoMain.svg" alt="CastTalk" className="h-7 w-auto" />
+      <Logo />
     </div>
     <div className="relative z-10 mt-14 flex flex-col items-center text-center sm:mt-20">
-      <h1 className="font-pixel text-4xl leading-[1.05] tracking-[-0.02em] [text-wrap:balance] sm:text-5xl">{title}</h1>
+      <h1 className="font-pixel text-4xl font-normal leading-[1.05] tracking-[-0.02em] [text-wrap:balance] sm:text-5xl">{title}</h1>
       <p className="mt-4 max-w-sm font-serif text-lg text-ink-muted">{subtitle}</p>
     </div>
     <div className="relative z-10 mt-10">{children}</div>

@@ -14,7 +14,7 @@ import {
   ParticipantView,
   ParticipantsAudio,
 } from '@stream-io/video-react-sdk';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -640,8 +640,6 @@ const pendingLeaves = new Map<string, NodeJS.Timeout>();
 type CallLayoutType = 'grid' | 'fullscreen';
 
 const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?: boolean; lobbyCameraOn?: boolean }) => {
-  const searchParams = useSearchParams();
-  const isPersonalRoom = !!searchParams.get('personal');
   const router = useRouter();
   const { user } = useUser();
   const [layout, setLayout] = useState<CallLayoutType>('grid');

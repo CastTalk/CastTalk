@@ -1332,7 +1332,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                 as="h2"
                 animation="fadeIn"
                 by="word"
-                className="mt-6 text-center font-serif text-[18px] leading-relaxed text-ink-muted md:text-[20px]"
+                className="mt-6 text-center font-serif text-[18px] font-normal leading-relaxed text-ink-muted md:text-[20px]"
               >
                 Schedule meetings, manage events, and coordinate collaboration from one place.
               </TextAnimate>

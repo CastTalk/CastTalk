@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useRef, useCallback } from 'react';
+import Logo from '@/components/Logo';
 import { useRouter } from 'next/navigation';
 import {
   VideoPreview,
@@ -357,7 +358,7 @@ const MeetingSetup = ({
         onClick={() => router.push('/')}
         className="absolute top-8 left-8 z-20 cursor-pointer select-none hover:opacity-80 transition-opacity"
       >
-        <img src="/logo/logoMain.svg" alt="CastTalk" className="h-8 w-auto object-contain" />
+        <Logo />
       </div>
 
       <div className="relative z-10 my-auto flex w-full max-w-4xl flex-col items-center gap-8 py-6">

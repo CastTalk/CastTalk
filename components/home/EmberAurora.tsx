@@ -39,8 +39,8 @@ const EmberAurora = ({ className = '' }: { className?: string }) => (
     <Aurora
       colorStops={['#9a3412', '#f97316', '#fde68a']}
       lightMode
-      opacity={0.45}
-      blend={0.6}
+      opacity={0.6}
+      blend={0.65}
       amplitude={0.9}
       height={0.5}
       speed={0.6}

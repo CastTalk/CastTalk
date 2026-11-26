@@ -15,8 +15,8 @@ import { cn, generateShortMeetingId } from '@/lib/utils';
 import { format } from 'date-fns';
 import CastTalkModal from '@/components/CastTalkModal';
 import EmberAurora from '@/components/home/EmberAurora';
-import HeroCallMockup from '@/components/home/HeroCallMockup';
-import { Keyboard as PixelKeyboard, Link as PixelLink, Plus as PixelPlus, Video as PixelVideo } from 'pixelarticons/react';
+import HeroLaptopMockup from '@/components/home/HeroLaptopMockup';
+import { Close as PixelClose, Keyboard as PixelKeyboard, Link as PixelLink, Plus as PixelPlus, Video as PixelVideo } from 'pixelarticons/react';
 
 type MeetingMode = 'later' | 'instant' | null;
 
@@ -288,54 +288,45 @@ const Home = () => {
         <EmberAurora />
 
         {/* Hero: centered headline, two actions, product mockup below */}
-        <section className="relative z-20 mx-auto flex max-w-4xl flex-col items-center px-4 pt-16 text-center sm:pt-24">
-          <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/70 px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-ink-soft backdrop-blur">
-            <span className="size-1.5 rounded-full bg-ember" />
-            Live Taglish captions
-          </span>
-
-          <h1 className="font-pixel text-[40px] leading-[1.05] [text-wrap:balance] tracking-[-0.02em] text-ink sm:text-6xl lg:text-[76px]">
+        <section className="relative z-20 mx-auto flex max-w-4xl flex-col items-center px-4 pt-12 text-center sm:pt-16">
+          <h1 className="font-pixel text-[34px] font-normal leading-[1.1] tracking-[-0.01em] text-[#27272a] [text-wrap:balance] sm:text-5xl lg:text-[60px]">
             Meetings are hard.
             <br />
             Talking shouldn&apos;t be.
           </h1>
 
-          <p className="mt-6 max-w-md font-serif text-lg leading-relaxed text-ink-muted sm:text-xl">
+          <p className="mt-5 max-w-md font-serif text-lg leading-relaxed text-ink-muted sm:text-xl">
             Video calls with live captions that keep up with how you actually talk, anywhere, with anyone.
           </p>
 
-          <div className="mt-9 flex w-full max-w-lg flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            {/* New meeting */}
-            <div className="relative shrink-0">
-              <button
-                onClick={() => showDropdown ? closeDropdown() : setShowDropdown(true)}
-                aria-haspopup="menu"
-                aria-expanded={showDropdown}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-6 text-[15px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(22,22,24,0.5)] transition-colors hover:bg-ink-soft sm:w-auto"
-              >
-                <PixelPlus className="size-[18px]" />
-                New meeting
-              </button>
-              {showDropdown && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={closeDropdown} />
-                  <div
-                    role="menu"
-                    className={cn(
-                      "absolute left-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-black/5 bg-white p-1.5 text-left shadow-[0_16px_40px_-12px_rgba(0,0,0,0.2)]",
-                      dropdownClosing ? 'animate-slide-up' : 'animate-slide-down'
-                    )}
-                  >
-                    <button role="menuitem" onClick={() => openModal('instant')} className="flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-[14px] text-ink transition-colors hover:bg-ember/10">
-                      <span className="flex size-8 items-center justify-center rounded-lg bg-ember/10 text-ember-deep"><PixelVideo className="size-4" /></span>
-                      Start an instant meeting
-                    </button>
-                    <button role="menuitem" onClick={() => openModal('later')} className="flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-[14px] text-ink transition-colors hover:bg-ember/10">
-                      <span className="flex size-8 items-center justify-center rounded-lg bg-ember/10 text-ember-deep"><PixelLink className="size-4" /></span>
-                      Create a meeting for later
-                    </button>
-                  </div>
-                </>
+          <div className="mt-9 flex w-full max-w-2xl flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+            {/* New meeting: the pill turns into two choices in place, so nothing ever
+                floats over the mockup and no gap opens up under the row */}
+            <div className="flex shrink-0 items-center gap-2" role="group" aria-label="New meeting">
+              {!showDropdown ? (
+                <button
+                  onClick={() => setShowDropdown(true)}
+                  aria-expanded={false}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-6 text-[15px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(22,22,24,0.5)] transition-colors hover:bg-ink-soft sm:w-auto"
+                >
+                  <PixelPlus className="size-[18px]" />
+                  New meeting
+                </button>
+              ) : (
+                <div className="flex h-12 w-full items-center gap-1 rounded-full bg-ink p-1 text-[14px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(22,22,24,0.5)] animate-fade-in sm:w-auto">
+                  <button onClick={() => openModal('instant')} className="flex h-full flex-1 items-center justify-center gap-1.5 rounded-full px-4 transition-colors hover:bg-white/10 sm:flex-none">
+                    <PixelVideo className="size-4 text-[#fdba74]" />
+                    Start now
+                  </button>
+                  <span className="h-5 w-px bg-white/15" />
+                  <button onClick={() => openModal('later')} className="flex h-full flex-1 items-center justify-center gap-1.5 rounded-full px-4 transition-colors hover:bg-white/10 sm:flex-none">
+                    <PixelLink className="size-4 text-[#fdba74]" />
+                    Schedule
+                  </button>
+                  <button onClick={closeDropdown} aria-label="Close" className="flex size-10 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white">
+                    <PixelClose className="size-4" />
+                  </button>
+                </div>
               )}
             </div>
 
@@ -365,9 +356,9 @@ const Home = () => {
           </div>
         </section>
 
-        {/* Product shot: the call UI in a phone frame */}
-        <section className="relative z-10 mt-16 px-4 pb-24">
-          <HeroCallMockup />
+        {/* Product shot: the call UI on a laptop, turned slightly left */}
+        <section className="relative z-10 mt-12 px-4 pb-10 [overflow-y:clip] sm:mt-14">
+          <HeroLaptopMockup />
         </section>
       </div>
 
