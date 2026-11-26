@@ -4,14 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { useStreamVideoClient, Call } from '@stream-io/video-react-sdk';
-import {
-  ArrowRight, Link as LinkIcon, Plus, X,
-  ChatCircle, Clock,
-  Copy, Lock, Globe, CalendarPlus, SpinnerGap, CalendarCheck,
-} from '@phosphor-icons/react';
+import { Clock, Copy, Lock, Globe, SpinnerGap } from '@phosphor-icons/react';
 import { useToast } from '@/components/ui/use-toast';
 import Loader from '@/components/Loader';
-import { NoiseTexture } from '@/components/ui/noise-texture';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -19,6 +14,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn, generateShortMeetingId } from '@/lib/utils';
 import { format } from 'date-fns';
 import CastTalkModal from '@/components/CastTalkModal';
+import EmberAurora from '@/components/home/EmberAurora';
+import HeroCallMockup from '@/components/home/HeroCallMockup';
+import { Keyboard as PixelKeyboard, Link as PixelLink, Plus as PixelPlus, Video as PixelVideo } from 'pixelarticons/react';
 
 type MeetingMode = 'later' | 'instant' | null;
 
@@ -286,75 +284,91 @@ const Home = () => {
 
   return (
     <>
-      <div className="relative flex-1 overflow-hidden">
-        <NoiseTexture className="opacity-[0.15]" />
-        <div
-          className="absolute inset-0 z-0 pointer-events-none opacity-40"
-          style={{
-            backgroundImage: `linear-gradient(to right, rgba(21, 128, 61, 0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(21, 128, 61, 0.12) 1px, transparent 1px)`,
-            backgroundSize: '40px 40px',
-          }}
-        />
-        <div className="relative z-10 pt-32 px-4 md:px-6 lg:px-8 flex flex-col">
-          <h1 className="text-5xl md:text-6xl lg:text-[5.5rem] font-geist font-normal leading-[1.1] tracking-[-1.6px] text-black mb-8 max-w-[1000px]">
-            Video calls and meetings for{' '}
-            <span className="font-normal bg-gradient-to-r from-[#116a32] via-[#16a34a] to-[#3bcf7d] bg-clip-text text-transparent inline-block pb-0.5">
-              everyone
-            </span>
+      <div className="relative flex-1 overflow-y-auto overflow-x-hidden">
+        <EmberAurora />
+
+        {/* Hero: centered headline, two actions, product mockup below */}
+        <section className="relative z-10 mx-auto flex max-w-4xl flex-col items-center px-4 pt-16 text-center sm:pt-24">
+          <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/70 px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-ink-soft backdrop-blur">
+            <span className="size-1.5 rounded-full bg-ember" />
+            Live Taglish captions
+          </span>
+
+          <h1 className="font-pixel text-[40px] leading-[1.05] tracking-[-0.02em] text-ink sm:text-6xl lg:text-[76px]">
+            Meetings are hard.
+            <br />
+            Talking shouldn&apos;t be.
           </h1>
-          <p className="text-[1.1rem] md:text-[1.25rem] font-geist text-slate-600 mb-12 max-w-3xl leading-relaxed">
-            Connect, collaborate, and celebrate from anywhere with CastTalk
+
+          <p className="mt-6 max-w-md font-serif text-lg leading-relaxed text-ink-muted sm:text-xl">
+            Video calls with live captions that keep up with how you actually talk, anywhere, with anyone.
           </p>
-          <div className="flex flex-col sm:flex-row items-center gap-4 max-w-xl">
-            <div className="relative w-full sm:w-auto">
+
+          <div className="mt-9 flex w-full max-w-lg flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+            {/* New meeting */}
+            <div className="relative shrink-0">
               <button
                 onClick={() => showDropdown ? closeDropdown() : setShowDropdown(true)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#15803d] hover:bg-[#166534] text-white px-8 py-3.5 rounded-none text-[17px] !font-normal transition-colors shadow-sm"
+                aria-haspopup="menu"
+                aria-expanded={showDropdown}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-6 text-[15px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(22,22,24,0.5)] transition-colors hover:bg-ink-soft sm:w-auto"
               >
+                <PixelPlus className="size-[18px]" />
                 New meeting
-                <ArrowRight size={18} weight="regular" />
               </button>
               {showDropdown && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={closeDropdown} />
                   <div
+                    role="menu"
                     className={cn(
-                      "absolute left-0 top-full mt-2 z-50 w-72 bg-[#ecedef] border border-black/10 shadow-lg rounded-none overflow-hidden",
+                      "absolute left-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-black/5 bg-white p-1.5 text-left shadow-[0_16px_40px_-12px_rgba(0,0,0,0.2)]",
                       dropdownClosing ? 'animate-slide-up' : 'animate-slide-down'
                     )}
-                    style={{ borderWidth: '0.8px' }}
                   >
-                    <button onClick={() => openModal('instant')} className="w-full flex items-center gap-4 px-5 py-4 text-[15px] font-normal text-black hover:bg-black/5 transition-colors">
-                      <Plus size={22} weight="regular" />
+                    <button role="menuitem" onClick={() => openModal('instant')} className="flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-[14px] text-ink transition-colors hover:bg-ember/10">
+                      <span className="flex size-8 items-center justify-center rounded-lg bg-ember/10 text-ember-deep"><PixelVideo className="size-4" /></span>
                       Start an instant meeting
                     </button>
-                    <div className="h-px bg-black/10 mx-4" />
-                    <button onClick={() => openModal('later')} className="w-full flex items-center gap-4 px-5 py-4 text-[15px] font-normal text-black hover:bg-black/5 transition-colors">
-                      <LinkIcon size={22} weight="regular" />
+                    <button role="menuitem" onClick={() => openModal('later')} className="flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-[14px] text-ink transition-colors hover:bg-ember/10">
+                      <span className="flex size-8 items-center justify-center rounded-lg bg-ember/10 text-ember-deep"><PixelLink className="size-4" /></span>
                       Create a meeting for later
                     </button>
                   </div>
                 </>
               )}
             </div>
-            <div className="flex flex-1 w-full relative">
+
+            {/* Join with a code or link */}
+            <div className="relative flex h-12 flex-1 items-center rounded-full border border-black/10 bg-white/80 pl-4 pr-1 backdrop-blur transition-shadow focus-within:border-ember/60 focus-within:ring-4 focus-within:ring-ember/15">
+              <PixelKeyboard className="size-[18px] shrink-0 text-ink-muted" />
               <input
                 type="text"
                 placeholder="Enter a code or link"
+                aria-label="Meeting code or link"
                 value={linkOrCode}
                 onChange={(e) => setLinkOrCode(e.target.value)}
-                className="w-full pl-4 pr-20 py-3.5 bg-transparent border border-[#15803d] text-black rounded-none focus:outline-none focus:ring-1 focus:ring-[#15803d] transition-all placeholder:text-slate-500"
+                onKeyDown={(e) => { if (e.key === 'Enter' && linkOrCode && !isCheckingSchedule) joinMeeting(); }}
+                className="h-full min-w-0 flex-1 bg-transparent px-3 text-[15px] text-ink outline-none placeholder:text-ink-muted"
               />
               <button
                 onClick={joinMeeting}
                 disabled={!linkOrCode || isCheckingSchedule}
-                className={`absolute right-1 top-1 bottom-1 px-5 rounded-none font-medium transition-colors ${linkOrCode && !isCheckingSchedule ? 'text-[#15803d] hover:bg-[#15803d]/10 font-semibold' : 'text-slate-400 cursor-not-allowed'}`}
+                className={cn(
+                  "flex h-10 items-center rounded-full px-5 text-[14px] font-semibold transition-colors",
+                  linkOrCode && !isCheckingSchedule ? 'bg-ember text-white hover:bg-ember-deep' : 'cursor-not-allowed text-ink-muted'
+                )}
               >
-                {isCheckingSchedule ? <SpinnerGap size={18} className="animate-spin text-[#15803d]" /> : 'Join'}
+                {isCheckingSchedule ? <SpinnerGap size={18} className="animate-spin" /> : 'Join'}
               </button>
             </div>
           </div>
-        </div>
+        </section>
+
+        {/* Product shot: the call UI in a phone frame */}
+        <section className="relative z-10 mt-16 px-4 pb-24">
+          <HeroCallMockup />
+        </section>
       </div>
 
       {meetingMode && step <= 2 && (

@@ -307,7 +307,7 @@ const AppNavbar = () => {
 
   return (
     <>
-      <div className="w-full relative z-40 flex justify-center border-b-2 border-dashed border-[#15803d]/20 bg-[#f3f4f6]">
+      <div className="w-full relative z-40 flex justify-center border-b border-black/5 bg-white/80 backdrop-blur-md">
         <header className="flex w-full max-w-[1440px] flex-row justify-between items-center h-[54px] px-4 md:px-6 lg:px-8">
           <div className="flex items-center h-full cursor-pointer" onClick={() => handleNavigation('/')}>
             <img src="/logo/logoMain.svg" alt="CastTalk" className="h-8 w-auto" />
@@ -324,7 +324,7 @@ const AppNavbar = () => {
             <button 
               onClick={() => handleNavigation('/')} 
               className={pathname === '/' 
-                ? 'bg-[#15803d] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
+                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
                 : 'text-slate-700 hover:text-black hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-medium'}
             >
               Home
@@ -332,7 +332,7 @@ const AppNavbar = () => {
             <button 
               onClick={() => handleNavigation('/upcoming')} 
               className={pathname === '/upcoming' 
-                ? 'bg-[#15803d] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
+                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
                 : 'text-slate-700 hover:text-black hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-medium'}
             >
               Schedule
@@ -340,7 +340,7 @@ const AppNavbar = () => {
             <button 
               onClick={() => handleNavigation('/cast-ai')} 
               className={pathname === '/cast-ai' 
-                ? 'bg-[#15803d] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
+                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
                 : 'text-slate-700 hover:text-black hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-medium'}
             >
               CastAI
@@ -354,16 +354,16 @@ const AppNavbar = () => {
             <div className="flex items-center gap-4">
               <div className="notification-container relative flex items-center">
                 <button 
-                  onClick={() => setShowNotifications(!showNotifications)}                 className={`relative rounded-full p-2 transition-colors ${showNotifications ? 'bg-[#15803d]/10 text-[#15803d]' : 'hover:bg-[#15803d]/10 text-slate-800 hover:text-[#15803d]'}`}
+                  onClick={() => setShowNotifications(!showNotifications)}                 className={`relative rounded-full p-2 transition-colors ${showNotifications ? 'bg-[#f97316]/10 text-[#9a3412]' : 'hover:bg-[#f97316]/5 text-slate-800 hover:text-[#9a3412]'}`}
                   title="Notifications"
                 >
                   <Bell size={22} weight="regular" />
                   {visibleNotifications.filter(n => !n.read).length > 0 ? (
-                    <span className="absolute top-0.5 right-0.5 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-[#15803d] text-[9px] font-bold text-white ring-2 ring-white">
+                    <span className="absolute top-0.5 right-0.5 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-[#f97316] text-[9px] font-bold text-white ring-2 ring-white">
                       {visibleNotifications.filter(n => !n.read).length}
                     </span>
                   ) : (
-                    <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-[#15803d] ring-2 ring-white" />
+                    <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-[#f97316] ring-2 ring-white" />
                   )}
                 </button>
 
@@ -371,7 +371,7 @@ const AppNavbar = () => {
                   <div className="absolute right-0 top-[42px] w-[calc(100vw-2rem)] sm:w-[360px] max-w-[360px] bg-white/95 backdrop-blur-md text-slate-800 rounded-2xl shadow-xl border border-slate-200/80 z-50 animate-slide-down overflow-hidden" style={{ right: 'min(0px, calc(-1 * (100vw - 100%)))' }}>
                     <div className="flex items-center justify-between p-4 border-b border-slate-100">
                       <div className="flex items-center gap-2">
-                        <Bell size={18} weight="fill" className="text-[#15803d]" />
+                        <Bell size={18} weight="fill" className="text-[#9a3412]" />
                         <span className="font-bold text-[15px] text-slate-900">Notifications</span>
                       </div>
                       <div className="flex items-center gap-3">
@@ -452,7 +452,7 @@ const AppNavbar = () => {
               </div>
 
               {/* Desktop profile avatar */}
-              <div className="hidden lg:flex size-[34px] rounded-full overflow-hidden items-center justify-center border-2 border-[#15803d]/40 hover:border-[#15803d] transition-colors">
+              <div className="hidden lg:flex size-[34px] rounded-full overflow-hidden items-center justify-center border-2 border-[#f97316]/40 hover:border-[#f97316] transition-colors">
                 <UserButton afterSignOutUrl="/sign-in" appearance={{ elements: { avatarBox: 'w-full h-full' } }} />
               </div>
 
@@ -513,8 +513,8 @@ const AppNavbar = () => {
                     link.disabled
                       ? 'text-slate-300 cursor-not-allowed'
                       : isActive
-                      ? 'bg-[#15803d] text-white'
-                      : 'text-slate-600 hover:bg-[#15803d]/5 hover:text-slate-900 active:scale-[0.98]'
+                      ? 'bg-[#161618] text-white'
+                      : 'text-slate-600 hover:bg-[#f97316]/5 hover:text-slate-900 active:scale-[0.98]'
                   }`}
                   style={{
                     opacity: mobilePanelOpen ? 1 : 0,

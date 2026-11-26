@@ -8,7 +8,18 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
+import { GeistPixelSquare } from 'geist/font/pixel';
+import { Source_Serif_4 } from 'next/font/google';
 import localFont from 'next/font/local';
+
+// Ember redesign type system (same pairing as bryllim.com):
+// Geist Pixel Square for display headers, Source Serif 4 for descriptions,
+// Geist Sans for UI text, Geist Mono for small labels.
+const sourceSerif = Source_Serif_4({
+  subsets: ['latin'],
+  variable: '--font-source-serif',
+  display: 'swap',
+});
 
 import "./theme.css";
 
@@ -56,7 +67,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" className={`light ${roobert.variable} ${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" className={`light ${roobert.variable} ${GeistSans.variable} ${GeistMono.variable} ${GeistPixelSquare.variable} ${sourceSerif.variable}`}>
       <ClerkProvider
         appearance={{
           layout: {
