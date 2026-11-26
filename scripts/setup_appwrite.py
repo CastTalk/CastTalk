@@ -2,10 +2,7 @@ import urllib.request
 import json
 import time
 
-ENDPOINT = "https://syd.cloud.appwrite.io/v1"
-PROJECT_ID = "6a27f0d9002671523088"
-API_KEY = "standard_a078fa72fc96cbd1d9bbee6fb4f77f5980c15fdee8fd5acb18aa37fb9c2c43f8dc0c1caebc1b2d1818872a0e3ebaef13508efc637c06c6d6794851986b5bfa77eb3c93ba00feb1be08a4912413b75bf60076b981be60bc66258ee538596f3e14ffe1cd3727a594310c021d5bde88c6edb006423b9771efd1f675e04c3e12a332"
-DATABASE_ID = "castdb"
+from _env import ENDPOINT, PROJECT_ID, API_KEY, DATABASE_ID  # secrets come from .env.local
 
 def make_request(url, method="GET", data=None):
     headers = {
@@ -108,8 +105,8 @@ def main():
         col_payload = {
             "collectionId": col_id,
             "name": col_info["name"],
-            # Give read("any") and write("any") permissions so client/API can manage
-            "permissions": ["read(\"any\")", "write(\"any\")", "create(\"any\")", "update(\"any\")", "delete(\"any\")"]
+            # No public permissions: only the server (API key) may access documents
+            "permissions": []
         }
         print(f"\nCreating collection '{col_info['name']}' ({col_id})...")
         res_col = make_request(col_url, "POST", col_payload)

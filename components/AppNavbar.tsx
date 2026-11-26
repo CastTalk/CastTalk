@@ -4,13 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { UserButton, useUser } from '@clerk/nextjs';
 import { Bell, X, Calendar, Brain, Clock, Trash, AndroidLogo, List, House, CalendarCheck, CaretDown } from '@phosphor-icons/react';
-import { Client } from 'appwrite';
 import { NoiseTexture } from '@/components/ui/noise-texture';
 import { useToast } from '@/components/ui/use-toast';
-
-const appwriteClient = new Client()
-  .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://syd.cloud.appwrite.io/v1')
-  .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6a27f0d9002671523088');
 
 interface NotificationItem {
   id: string;
@@ -139,7 +134,7 @@ const AppNavbar = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Fetch initial notifications and subscribe to Appwrite Realtime
+  // Fetch notifications (polling + refresh on tab focus)
   useEffect(() => {
     if (!user?.id) return;
 
@@ -164,45 +159,22 @@ const AppNavbar = () => {
       }
     };
 
+    // Notifications come only from our authenticated API. (The browser used to
+    // subscribe to Appwrite Realtime on the whole collection, which required public
+    // read access and delivered every user's notifications to every browser.)
+    // Poll every 25s while the tab is visible, and refresh as soon as it's shown again.
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 25000);
-
-    // Appwrite Realtime listener with graceful fallback
-    let unsubscribe = () => {};
-    try {
-      unsubscribe = appwriteClient.subscribe(
-        'databases.castdb.collections.notifications.documents',
-        (response) => {
-          const doc = response.payload as any;
-          if (doc.userId !== user.id) return;
-
-          if (response.events.some(e => e.includes('create'))) {
-            const formatted: NotificationItem = {
-              id: doc.$id,
-              text: doc.text,
-              read: doc.read,
-              type: doc.type,
-              createdAt: doc.createdAt,
-              time: formatRelativeTime(doc.createdAt)
-            };
-            // The 25s poll may already have added it
-            setNotifications(prev => (prev.some(n => n.id === formatted.id) ? prev : [formatted, ...prev]));
-          } else if (response.events.some(e => e.includes('update'))) {
-            setNotifications(prev => prev.map(n => n.id === doc.$id ? { ...n, read: doc.read } : n));
-          } else if (response.events.some(e => e.includes('delete'))) {
-            setNotifications(prev => prev.filter(n => n.id !== doc.$id));
-          }
-        }
-      );
-    } catch (e) {
-      console.warn('[AppNavbar] Appwrite Realtime subscription error, using polling fallback:', e);
-    }
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchNotifications();
+    }, 25000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchNotifications();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       clearInterval(interval);
-      try {
-        unsubscribe();
-      } catch {}
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [user?.id]);
 
