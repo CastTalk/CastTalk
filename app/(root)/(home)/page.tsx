@@ -6,6 +6,7 @@ import { useUser } from '@clerk/nextjs';
 import { useStreamVideoClient, Call } from '@stream-io/video-react-sdk';
 import { Clock, Copy, Lock, Globe, SpinnerGap } from '@/components/icons';
 import { useToast } from '@/components/ui/use-toast';
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import Loader from '@/components/Loader';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -15,10 +16,14 @@ import { cn, generateShortMeetingId } from '@/lib/utils';
 import { format } from 'date-fns';
 import CastTalkModal from '@/components/CastTalkModal';
 import EmberAurora from '@/components/home/EmberAurora';
+import GlowWord from '@/components/home/GlowWord';
 import HeroLaptopMockup from '@/components/home/HeroLaptopMockup';
 import { Close as PixelClose, Keyboard as PixelKeyboard, Link as PixelLink, Plus as PixelPlus, Video as PixelVideo } from 'pixelarticons/react';
 
 type MeetingMode = 'later' | 'instant' | null;
+
+// Spring for the New meeting pill <-> choices morph and the Join field beside it
+const MORPH = { type: 'spring', stiffness: 420, damping: 36, mass: 0.8 } as const;
 
 const Home = () => {
   const router = useRouter();
@@ -290,48 +295,75 @@ const Home = () => {
         {/* Hero: centered headline, two actions, product mockup below */}
         <section className="relative z-20 mx-auto flex max-w-4xl flex-col items-center px-4 pt-12 text-center sm:pt-16">
           <h1 className="font-pixel text-[34px] font-normal leading-[1.1] tracking-[-0.01em] text-[#27272a] [text-wrap:balance] sm:text-5xl lg:text-[60px]">
-            Meetings are hard.
+            Talk the way you talk.
             <br />
-            Talking shouldn&apos;t be.
+            We&apos;ll catch <GlowWord>every word</GlowWord>.
           </h1>
 
           <p className="mt-5 max-w-md font-serif text-lg leading-relaxed text-ink-muted sm:text-xl">
             Video calls with live captions that keep up with how you actually talk, anywhere, with anyone.
           </p>
 
+          <LayoutGroup>
           <div className="mt-9 flex w-full max-w-2xl flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            {/* New meeting: the pill turns into two choices in place, so nothing ever
-                floats over the mockup and no gap opens up under the row */}
-            <div className="flex shrink-0 items-center gap-2" role="group" aria-label="New meeting">
-              {!showDropdown ? (
-                <button
-                  onClick={() => setShowDropdown(true)}
-                  aria-expanded={false}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-6 text-[15px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(22,22,24,0.5)] transition-colors hover:bg-ink-soft sm:w-auto"
-                >
-                  <PixelPlus className="size-[18px]" />
-                  New meeting
-                </button>
-              ) : (
-                <div className="flex h-12 w-full items-center gap-1 rounded-full bg-ink p-1 text-[14px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(22,22,24,0.5)] animate-fade-in sm:w-auto">
-                  <button onClick={() => openModal('instant')} className="flex h-full flex-1 items-center justify-center gap-1.5 rounded-full px-4 transition-colors hover:bg-white/10 sm:flex-none">
-                    <PixelVideo className="size-4 text-[#fdba74]" />
-                    Start now
-                  </button>
-                  <span className="h-5 w-px bg-white/15" />
-                  <button onClick={() => openModal('later')} className="flex h-full flex-1 items-center justify-center gap-1.5 rounded-full px-4 transition-colors hover:bg-white/10 sm:flex-none">
-                    <PixelLink className="size-4 text-[#fdba74]" />
-                    Schedule
-                  </button>
-                  <button onClick={closeDropdown} aria-label="Close" className="flex size-10 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white">
-                    <PixelClose className="size-4" />
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* New meeting: the pill morphs (animated width) into two choices in place,
+                so nothing floats over the mockup and nothing jumps */}
+            <motion.div
+              layout
+              transition={MORPH}
+              style={{ borderRadius: 9999 }}
+              role="group"
+              aria-label="New meeting"
+              className="relative flex h-12 shrink-0 items-center overflow-hidden bg-ink text-white shadow-[0_8px_24px_-8px_rgba(22,22,24,0.5)]"
+            >
+              <AnimatePresence mode="popLayout" initial={false}>
+                {!showDropdown ? (
+                  <motion.button
+                    key="new"
+                    onClick={() => setShowDropdown(true)}
+                    aria-expanded={false}
+                    initial={{ opacity: 0, filter: 'blur(4px)' }}
+                    animate={{ opacity: 1, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, filter: 'blur(4px)' }}
+                    transition={{ duration: 0.18 }}
+                    className="flex h-full w-full items-center justify-center gap-2 whitespace-nowrap px-6 text-[15px] font-medium transition-colors hover:bg-white/5"
+                  >
+                    <PixelPlus className="size-[18px]" />
+                    New meeting
+                  </motion.button>
+                ) : (
+                  <motion.div
+                    key="choices"
+                    initial={{ opacity: 0, filter: 'blur(4px)' }}
+                    animate={{ opacity: 1, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, filter: 'blur(4px)' }}
+                    transition={{ duration: 0.2, delay: 0.05 }}
+                    className="flex h-full w-full items-center gap-1 whitespace-nowrap p-1 text-[14px] font-medium"
+                  >
+                    <button onClick={() => openModal('instant')} className="flex h-full flex-1 items-center justify-center gap-1.5 rounded-full px-4 transition-colors hover:bg-white/10 sm:flex-none">
+                      <PixelVideo className="size-4 text-[#fdba74]" />
+                      Start now
+                    </button>
+                    <span className="h-5 w-px shrink-0 bg-white/15" />
+                    <button onClick={() => openModal('later')} className="flex h-full flex-1 items-center justify-center gap-1.5 rounded-full px-4 transition-colors hover:bg-white/10 sm:flex-none">
+                      <PixelLink className="size-4 text-[#fdba74]" />
+                      Schedule
+                    </button>
+                    <button onClick={() => setShowDropdown(false)} aria-label="Close" className="flex size-10 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white">
+                      <PixelClose className="size-4" />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
 
             {/* Join with a code or link */}
-            <div className="relative flex h-12 flex-1 items-center rounded-full border border-black/10 bg-white/80 pl-4 pr-1 backdrop-blur transition-shadow focus-within:border-ember/60 focus-within:ring-4 focus-within:ring-ember/15">
+            <motion.div
+              layout
+              transition={MORPH}
+              style={{ borderRadius: 9999 }}
+              className="relative flex h-12 min-w-0 flex-1 items-center border border-black/10 bg-white/80 pl-4 pr-1 backdrop-blur transition-shadow focus-within:border-ember/60 focus-within:ring-4 focus-within:ring-ember/15"
+            >
               <PixelKeyboard className="size-[18px] shrink-0 text-ink-muted" />
               <input
                 type="text"
@@ -352,8 +384,9 @@ const Home = () => {
               >
                 {isCheckingSchedule ? <SpinnerGap size={18} className="animate-spin" /> : 'Join'}
               </button>
-            </div>
+            </motion.div>
           </div>
+          </LayoutGroup>
         </section>
 
         {/* Product shot: the call UI on a laptop, turned slightly left */}
@@ -362,6 +395,7 @@ const Home = () => {
         </section>
       </div>
 
+      <AnimatePresence>
       {meetingMode && step <= 2 && (
         <CastTalkModal isOpen={!!meetingMode && step <= 2} onClose={() => { setMeetingMode(null); setStep(1); }}>
           {step <= 2 && (
@@ -670,8 +704,10 @@ const Home = () => {
           )}
         </CastTalkModal>
       )}
+      </AnimatePresence>
 
       {/* Step 3: Meeting Conflict — separate compact modal, sizes to content */}
+      <AnimatePresence>
       {meetingMode && step === 3 && (
         <CastTalkModal isOpen={step === 3} onClose={() => { setMeetingMode(null); setStep(1); }} maxWidth="max-w-[460px]">
           <div className="flex flex-col font-geist">
@@ -703,36 +739,36 @@ const Home = () => {
           </div>
         </CastTalkModal>
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {meetingLink && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setMeetingLink(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 animate-slide-down">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="font-pixel text-xl font-normal text-ink">Your meeting is ready</h2>
-            </div>
-            <p className="text-sm text-slate-500 mb-6">Share this link with people you want to meet with.</p>
-            <div className="flex items-center gap-2 bg-[#f3f4f6] border border-[#c4cccc] rounded-lg px-4 py-3 mb-6">
-              <span className="flex-1 text-sm text-slate-700 truncate">{meetingLink}</span>
-              <div
-                onClick={async () => { await navigator.clipboard.writeText(meetingLink!); toast({ title: 'Link copied!' }); }}
-                className="cursor-pointer text-slate-500 hover:text-black transition-colors shrink-0 p-1.5 rounded-md hover:bg-black/5 flex items-center justify-center active:scale-95"
-                title="Copy Link"
-              >
-                <Copy size={18} weight="bold" />
-              </div>
-            </div>
+        <CastTalkModal isOpen onClose={() => setMeetingLink(null)} maxWidth="max-w-md">
+          <h2 className="mb-1.5 pr-16 font-pixel text-xl font-normal text-ink">Your meeting is ready</h2>
+          <p className="mb-6 font-serif text-[15px] text-ink-muted">Share this link with people you want to meet with.</p>
+          <div className="mb-6 flex items-center gap-2 rounded-xl border border-black/10 bg-paper px-4 py-3">
+            <span className="flex-1 truncate font-mono text-[13px] text-ink-soft">{meetingLink}</span>
             <button
-              onClick={() => setMeetingLink(null)}
-              className="w-full py-3 bg-[#161618] hover:bg-[#3f3f46] text-white rounded-lg font-medium transition-colors"
+              onClick={async () => { await navigator.clipboard.writeText(meetingLink!); toast({ title: 'Link copied!' }); }}
+              className="flex shrink-0 items-center justify-center rounded-md p-1.5 text-ink-muted transition-colors hover:bg-ember/10 hover:text-ember-deep active:scale-95"
+              title="Copy link"
+              aria-label="Copy link"
             >
-              Done
+              <Copy size={18} />
             </button>
           </div>
-        </div>
+          <button
+            onClick={() => setMeetingLink(null)}
+            className="w-full rounded-full bg-ink py-3 font-medium text-white transition-colors hover:bg-ink-soft"
+          >
+            Done
+          </button>
+        </CastTalkModal>
       )}
+      </AnimatePresence>
 
       {/* Scheduled Meeting Join Modal */}
+      <AnimatePresence>
       {showScheduledJoinModal && scheduledMeetingInfo && (
         <CastTalkModal
           isOpen={showScheduledJoinModal}
@@ -780,8 +816,10 @@ const Home = () => {
           </div>
         </CastTalkModal>
       )}
+      </AnimatePresence>
 
       {/* Meeting Not Started Warning Modal */}
+      <AnimatePresence>
       {showNotStartedModal && notStartedInfo && (
         <CastTalkModal
           isOpen={showNotStartedModal}
@@ -821,6 +859,7 @@ const Home = () => {
           </div>
         </CastTalkModal>
       )}
+      </AnimatePresence>
     </>
   );
 };

@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { UserButton, useUser } from '@clerk/nextjs';
 import { Bell, X, Calendar, Brain, Clock, Trash, AndroidLogo, List, House, CalendarCheck, CaretDown } from '@/components/icons';
 import Logo from '@/components/Logo';
+import PixelBorder from '@/components/PixelBorder';
 import { useToast } from '@/components/ui/use-toast';
 
 interface NotificationItem {
@@ -308,13 +309,14 @@ const AppNavbar = () => {
   return (
     <>
       <div className="w-full relative z-40 flex justify-center border-b border-black/5 bg-white/80 backdrop-blur-md">
+        <PixelBorder />
         <header className="flex w-full max-w-[1440px] flex-row justify-between items-center h-[54px] px-4 md:px-6 lg:px-8">
           <div className="flex items-center h-full cursor-pointer" onClick={() => handleNavigation('/')}>
             <Logo />
           </div>
 
           {/* Mobile & Tablet Centered Time/Date in Header */}
-          <div className="hidden sm:flex lg:hidden absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap font-mono text-[12px] text-ink-soft select-none pointer-events-none sm:text-[13px]">
+          <div className="hidden md:flex lg:hidden absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap font-mono text-[12px] text-ink-soft select-none pointer-events-none sm:text-[13px]">
             <span>{time}</span>
             <span className="text-slate-400">•</span>
             <span>{date}</span>
@@ -347,11 +349,11 @@ const AppNavbar = () => {
             </button>
           </nav>
 
-          <div className="flex items-center gap-4 text-slate-800">
+          <div className="flex items-center gap-2 text-slate-800 sm:gap-4">
             <div className="mr-4 hidden items-center gap-2 font-mono text-[13px] text-ink-soft lg:flex">
               <span>{time}</span><span>•</span><span>{date}</span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
               <div className="notification-container relative flex items-center">
                 <button 
                   onClick={() => setShowNotifications(!showNotifications)}                 className={`relative rounded-full p-2 transition-colors ${showNotifications ? 'bg-[#f97316]/10 text-[#9a3412]' : 'hover:bg-[#f97316]/5 text-slate-800 hover:text-[#9a3412]'}`}

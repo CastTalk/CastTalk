@@ -8,6 +8,7 @@ import { Call, useStreamVideoClient } from '@stream-io/video-react-sdk';
 import { useUser } from '@clerk/nextjs';
 import { cn, generateShortMeetingId } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
+import { AnimatePresence } from 'framer-motion';
 import CastTalkModal from '@/components/CastTalkModal';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -732,6 +733,7 @@ export default function SchedulePage() {
         </div>
       </div>
 
+      <AnimatePresence>
       {selectedCall && (() => {
         const title = selectedCall.state.custom?.title || selectedCall.state.custom?.description || 'Meeting';
         const duration = Number(selectedCall.state.custom?.duration || 60);
@@ -912,7 +914,9 @@ export default function SchedulePage() {
           </CastTalkModal>
         );
       })()}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {callToDelete && (
         <CastTalkModal
           isOpen={!!callToDelete}
@@ -990,7 +994,9 @@ export default function SchedulePage() {
           </div>
         </CastTalkModal>
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {selectedCluster && (
         <CastTalkModal
           isOpen={!!selectedCluster}
@@ -1124,7 +1130,9 @@ export default function SchedulePage() {
           </div>
         </CastTalkModal>
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {meetingMode && step <= 2 && (
         <CastTalkModal isOpen={!!meetingMode && step <= 2} onClose={() => { setMeetingMode(null); setStep(1); }}>
           {step <= 2 && (
@@ -1430,8 +1438,10 @@ export default function SchedulePage() {
           )}
         </CastTalkModal>
       )}
+      </AnimatePresence>
 
       {/* Step 3: Meeting Conflict — separate compact modal, sizes to content */}
+      <AnimatePresence>
       {meetingMode && step === 3 && (
         <CastTalkModal isOpen={step === 3} onClose={() => { setMeetingMode(null); setStep(1); }} maxWidth="max-w-[460px]">
           <div className="flex flex-col font-geist">
@@ -1463,34 +1473,33 @@ export default function SchedulePage() {
           </div>
         </CastTalkModal>
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {meetingLink && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setMeetingLink(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 animate-slide-down">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="font-pixel text-xl font-normal text-ink">Your meeting is ready</h2>
-            </div>
-            <p className="text-sm text-slate-500 mb-6">Share this link with people you want to meet with.</p>
-            <div className="flex items-center gap-2 bg-[#f3f4f6] border border-[#c4cccc] rounded-lg px-4 py-3 mb-6">
-              <span className="flex-1 text-sm text-slate-700 truncate">{meetingLink}</span>
-              <div
-                onClick={async () => { await navigator.clipboard.writeText(meetingLink!); toast({ title: 'Link copied!' }); }}
-                className="cursor-pointer text-slate-500 hover:text-black transition-colors shrink-0 p-1.5 rounded-md hover:bg-black/5 flex items-center justify-center active:scale-95"
-                title="Copy Link"
-              >
-                <Copy size={18} weight="bold" />
-              </div>
-            </div>
+        <CastTalkModal isOpen onClose={() => setMeetingLink(null)} maxWidth="max-w-md">
+          <h2 className="mb-1.5 pr-16 font-pixel text-xl font-normal text-ink">Your meeting is ready</h2>
+          <p className="mb-6 font-serif text-[15px] text-ink-muted">Share this link with people you want to meet with.</p>
+          <div className="mb-6 flex items-center gap-2 rounded-xl border border-black/10 bg-paper px-4 py-3">
+            <span className="flex-1 truncate font-mono text-[13px] text-ink-soft">{meetingLink}</span>
             <button
-              onClick={() => setMeetingLink(null)}
-              className="w-full py-3 bg-[#3E2723] text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
+              onClick={async () => { await navigator.clipboard.writeText(meetingLink!); toast({ title: 'Link copied!' }); }}
+              className="flex shrink-0 items-center justify-center rounded-md p-1.5 text-ink-muted transition-colors hover:bg-ember/10 hover:text-ember-deep active:scale-95"
+              title="Copy link"
+              aria-label="Copy link"
             >
-              Done
+              <Copy size={18} />
             </button>
           </div>
-        </div>
+          <button
+            onClick={() => setMeetingLink(null)}
+            className="w-full rounded-full bg-ink py-3 font-medium text-white transition-colors hover:bg-ink-soft"
+          >
+            Done
+          </button>
+        </CastTalkModal>
       )}
+      </AnimatePresence>
     </div>
   );
 }

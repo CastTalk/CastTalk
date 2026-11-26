@@ -425,3 +425,32 @@
 ::-webkit-scrollbar-button:single-button:horizontal:increment {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges' fill='%239a3412'><rect x='5' y='3' width='1' height='2'/><rect x='4' y='2' width='1' height='4'/><rect x='3' y='1' width='1' height='6'/></svg>");
 }
+
+/* Headline standout word: fades in from a blur, then settles into its ember glow */
+@keyframes glowIn {
+  0% { opacity: 0; filter: blur(10px) drop-shadow(0 0 0 rgba(249, 115, 22, 0)); }
+  60% { opacity: 1; filter: blur(0) drop-shadow(0 0 30px rgba(249, 115, 22, 0.55)); }
+  100% { opacity: 1; filter: blur(0) drop-shadow(0 0 22px rgba(249, 115, 22, 0.35)); }
+}
+.animate-glow-in {
+  animation: glowIn 1.4s cubic-bezier(0.075, 0.82, 0.165, 1) 0.15s both;
+}
+
+/* Header border pixels: a few gently fade in and out */
+@keyframes pixelTwinkle {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.15; }
+}
+.animate-pixel-twinkle {
+  animation: pixelTwinkle 3.2s steps(4, end) infinite;
+}
+
+/* Touch devices: hide scrollbars (scrolling still works) */
+@media (hover: none) and (pointer: coarse) {
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  * {
+    scrollbar-width: none;
+  }
+}
