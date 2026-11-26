@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { useStreamVideoClient, Call } from '@stream-io/video-react-sdk';
-import { Clock, Copy, Lock, Globe, SpinnerGap } from '@phosphor-icons/react';
+import { Clock, Copy, Lock, Globe, SpinnerGap } from '@/components/icons';
 import { useToast } from '@/components/ui/use-toast';
 import Loader from '@/components/Loader';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -288,7 +288,7 @@ const Home = () => {
         <EmberAurora />
 
         {/* Hero: centered headline, two actions, product mockup below */}
-        <section className="relative z-10 mx-auto flex max-w-4xl flex-col items-center px-4 pt-16 text-center sm:pt-24">
+        <section className="relative z-20 mx-auto flex max-w-4xl flex-col items-center px-4 pt-16 text-center sm:pt-24">
           <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/70 px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-ink-soft backdrop-blur">
             <span className="size-1.5 rounded-full bg-ember" />
             Live Taglish captions
@@ -377,14 +377,14 @@ const Home = () => {
             <>
               {/* Step indicator */}
               <div className="flex items-center gap-2 mb-2">
-                <div className={cn("flex-1 h-1.5 rounded-full", step >= 1 ? "bg-[#15803d]" : "bg-slate-200")} />
-                <div className={cn("flex-1 h-1.5 rounded-full", step >= 2 ? "bg-[#15803d]" : "bg-slate-200")} />
+                <div className={cn("flex-1 h-1.5 rounded-full", step >= 1 ? "bg-[#f97316]" : "bg-slate-200")} />
+                <div className={cn("flex-1 h-1.5 rounded-full", step >= 2 ? "bg-[#f97316]" : "bg-slate-200")} />
               </div>
               <div className="flex items-center gap-2 mb-6">
-                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 1 ? "text-[#15803d]" : "text-slate-400")}>
+                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 1 ? "text-[#9a3412]" : "text-slate-400")}>
                   Session
                 </div>
-                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 2 ? "text-[#15803d]" : "text-slate-400")}>
+                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 2 ? "text-[#9a3412]" : "text-slate-400")}>
                   Details
                 </div>
               </div>
@@ -402,10 +402,10 @@ const Home = () => {
             )}>
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-[22px] font-medium text-[#111827] leading-none mb-1.5">
+                  <h2 className="font-pixel text-[22px] font-normal text-ink leading-none mb-1.5">
                     Select Meeting Type
                   </h2>
-                  <p className="text-[14px] text-[#6B7280]" style={{ marginBottom: '10px' }}>
+                  <p className="font-serif text-[15px] text-ink-muted" style={{ marginBottom: '10px' }}>
                     Select the type of meeting you want to create.
                   </p>
                 </div>
@@ -414,21 +414,21 @@ const Home = () => {
                   <label
                     className={cn(
                       "flex items-start gap-3.5 p-3 rounded-xl cursor-pointer transition-all border border-transparent",
-                      meetingType === 'general' ? "bg-emerald-50 border-emerald-200" : "hover:bg-slate-50"
+                      meetingType === 'general' ? "bg-orange-50 border-orange-200" : "hover:bg-slate-50"
                     )}
                     onClick={() => setMeetingType('general')}
                   >
                     <div className="mt-0.5">
                       <div className={cn(
                         "w-5 h-5 rounded-full border-[2px] flex items-center justify-center transition-colors",
-                        meetingType === 'general' ? "border-emerald-600" : "border-slate-300"
+                        meetingType === 'general' ? "border-orange-600" : "border-slate-300"
                       )}>
-                        {meetingType === 'general' && <div className="w-2.5 h-2.5 rounded-full bg-emerald-600" />}
+                        {meetingType === 'general' && <div className="w-2.5 h-2.5 rounded-full bg-orange-600" />}
                       </div>
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <Globe weight="fill" className={cn("w-4 h-4", meetingType === 'general' ? "text-emerald-600" : "text-slate-500")} />
+                        <Globe weight="fill" className={cn("w-4 h-4", meetingType === 'general' ? "text-orange-600" : "text-slate-500")} />
                         <span className="text-[15px] font-medium text-[#111827]">General</span>
                       </div>
                       <p className="text-[13px] text-[#6B7280] leading-snug">
@@ -475,10 +475,10 @@ const Home = () => {
             )}>
               <div className="space-y-4">
                 <div>
-                  <h2 className="text-[22px] font-medium text-[#111827] leading-none mb-1.5">
+                  <h2 className="font-pixel text-[22px] font-normal text-ink leading-none mb-1.5">
                     {"What's your meeting about?"}
                   </h2>
-                  <p className="text-[14px] text-[#6B7280]" style={{ marginBottom: '20px' }}>
+                  <p className="font-serif text-[15px] text-ink-muted" style={{ marginBottom: '20px' }}>
                     Fill out the details of your meeting.
                   </p>
                 </div>
@@ -552,7 +552,7 @@ const Home = () => {
                               disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                               style={{
                                 '--rdp-cell-size': '2rem',
-                                '--rdp-accent-color': '#15803d',
+                                '--rdp-accent-color': '#f97316',
                                 '--rdp-background-color': '#ffffff',
                                 color: '#111827',
                                 fontSize: '0.85rem',
@@ -653,7 +653,7 @@ const Home = () => {
               <div>
                 <button
                   onClick={() => { setMeetingMode(null); setStep(1); }}
-                  className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
+                  className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
                 >
                   Cancel
                 </button>
@@ -662,7 +662,7 @@ const Home = () => {
                 {step > 1 && (
                   <button
                     onClick={() => setStep(1)}
-                    className="px-5 py-2.5 rounded-xl text-[14px] font-bold bg-[#15803d]/10 text-[#15803d] hover:bg-[#15803d]/15 transition-colors"
+                    className="px-5 py-2.5 rounded-full text-[14px] font-semibold bg-[#f97316]/10 text-[#9a3412] hover:bg-[#f97316]/15 transition-colors"
                   >
                     Back
                   </button>
@@ -670,7 +670,7 @@ const Home = () => {
                 <button
                   onClick={step === 2 ? () => handleSubmit(false) : () => setStep(2)}
                   disabled={isCreating || (step === 2 && !formTitle.trim())}
-                  className="px-6 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#166534] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm bg-[#15803d]"
+                  className="px-6 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#3f3f46] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm bg-[#161618]"
                 >
                   {step === 2 ? (isCreating ? 'Creating...' : 'Create Event') : 'Next'}
                 </button>
@@ -685,7 +685,7 @@ const Home = () => {
         <CastTalkModal isOpen={step === 3} onClose={() => { setMeetingMode(null); setStep(1); }} maxWidth="max-w-[460px]">
           <div className="flex flex-col font-geist">
             {/* Title */}
-            <h2 className="text-[20px] font-medium text-[#111827] leading-tight font-geist mb-2">
+            <h2 className="font-pixel text-[20px] font-normal text-ink leading-tight font-geist mb-2">
               Meeting Conflict
             </h2>
 
@@ -698,13 +698,13 @@ const Home = () => {
             <div className="flex justify-end gap-3 pt-3 border-t border-[#E5E7EB]">
               <button
                 onClick={() => setStep(2)}
-                className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white font-geist"
+                className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white font-geist"
               >
                 Back
               </button>
               <button
                 onClick={() => handleSubmit(true)}
-                className="bg-[#15803d] hover:bg-[#166534] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] font-geist"
+                className="bg-[#161618] hover:bg-[#3f3f46] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] font-geist"
               >
                 Continue
               </button>
@@ -718,7 +718,7 @@ const Home = () => {
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setMeetingLink(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 animate-slide-down">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xl font-semibold text-black">Your meeting is ready</h2>
+              <h2 className="font-pixel text-xl font-normal text-ink">Your meeting is ready</h2>
             </div>
             <p className="text-sm text-slate-500 mb-6">Share this link with people you want to meet with.</p>
             <div className="flex items-center gap-2 bg-[#f3f4f6] border border-[#c4cccc] rounded-lg px-4 py-3 mb-6">
@@ -733,7 +733,7 @@ const Home = () => {
             </div>
             <button
               onClick={() => setMeetingLink(null)}
-              className="w-full py-3 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg font-medium transition-colors"
+              className="w-full py-3 bg-[#161618] hover:bg-[#3f3f46] text-white rounded-lg font-medium transition-colors"
             >
               Done
             </button>
@@ -752,7 +752,7 @@ const Home = () => {
           maxWidth="max-w-[420px]"
         >
           <div className="flex flex-col font-geist">
-            <h2 className="text-[20px] font-medium text-[#111827] leading-none mb-2.5">
+            <h2 className="font-pixel text-[20px] font-normal text-ink leading-none mb-2.5">
               Scheduled Meeting
             </h2>
             <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
@@ -773,7 +773,7 @@ const Home = () => {
                   setShowScheduledJoinModal(false);
                   setScheduledMeetingInfo(null);
                 }}
-                className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
+                className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
               >
                 Back
               </button>
@@ -781,7 +781,7 @@ const Home = () => {
                 type="button"
                 onClick={handleAddToCalendar}
                 disabled={isJoining}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm"
+                className="bg-[#161618] hover:bg-[#3f3f46] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm"
               >
                 {isJoining ? 'Adding...' : 'Add to calendar'}
               </button>
@@ -801,7 +801,7 @@ const Home = () => {
           maxWidth="max-w-[420px]"
         >
           <div className="flex flex-col font-geist">
-            <h2 className="text-[20px] font-medium text-[#111827] leading-none mb-2.5">
+            <h2 className="font-pixel text-[20px] font-normal text-ink leading-none mb-2.5">
               Meeting Not Started
             </h2>
             <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
@@ -822,7 +822,7 @@ const Home = () => {
                   setShowNotStartedModal(false);
                   setNotStartedInfo(null);
                 }}
-                className="bg-[#15803d] hover:bg-[#166534] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] shadow-sm"
+                className="bg-[#161618] hover:bg-[#3f3f46] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] shadow-sm"
               >
                 Back to Home
               </button>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { UserButton, useUser } from '@clerk/nextjs';
-import { Bell, X, Calendar, Brain, Clock, Trash, AndroidLogo, List, House, CalendarCheck, CaretDown } from '@phosphor-icons/react';
+import { Bell, X, Calendar, Brain, Clock, Trash, AndroidLogo, List, House, CalendarCheck, CaretDown } from '@/components/icons';
 import { NoiseTexture } from '@/components/ui/noise-texture';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -275,7 +275,7 @@ const AppNavbar = () => {
   const getNotifIcon = (type: string) => {
     switch (type) {
       case 'success':
-        return <Calendar size={16} weight="fill" className="text-emerald-600" />;
+        return <Calendar size={16} weight="fill" className="text-orange-600" />;
       case 'scheduled':
         return <Calendar size={16} weight="fill" className="text-amber-500" />;
       case 'cancelled':
@@ -285,7 +285,7 @@ const AppNavbar = () => {
       case 'alert':
         return <Clock size={16} weight="fill" className="text-amber-600" />;
       case 'update':
-        return <Calendar size={16} weight="fill" className="text-blue-600" />;
+        return <Calendar size={16} weight="fill" className="text-amber-600" />;
       default:
         return <Bell size={16} weight="fill" className="text-slate-600" />;
     }
@@ -293,12 +293,12 @@ const AppNavbar = () => {
 
   const getNotifBg = (type: string) => {
     switch (type) {
-      case 'success': return 'bg-emerald-50 border-emerald-100';
+      case 'success': return 'bg-orange-50 border-orange-100';
       case 'scheduled': return 'bg-amber-50 border-amber-100';
       case 'cancelled': return 'bg-red-50 border-red-100';
       case 'ai': return 'bg-violet-50 border-violet-100';
       case 'alert': return 'bg-amber-50 border-amber-100';
-      case 'update': return 'bg-blue-50 border-blue-100';
+      case 'update': return 'bg-amber-50 border-amber-100';
       default: return 'bg-slate-50 border-slate-100';
     }
   };
@@ -509,7 +509,7 @@ const AppNavbar = () => {
                     }
                   }}
                   disabled={link.disabled}
-                  className={`flex items-center gap-3.5 px-3 py-2.5 rounded-none text-[15px] font-medium transition-all duration-200 ${
+                  className={`flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-[15px] font-medium transition-all duration-200 ${
                     link.disabled
                       ? 'text-slate-300 cursor-not-allowed'
                       : isActive

@@ -1,4 +1,4 @@
-import { List, House, CalendarCheck, VideoCamera, ClockCounterClockwise,PlusSquare } from '@phosphor-icons/react';
+import { List, House, CalendarCheck, VideoCamera, ClockCounterClockwise,PlusSquare } from '@/components/icons';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 

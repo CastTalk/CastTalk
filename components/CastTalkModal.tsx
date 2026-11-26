@@ -2,7 +2,6 @@
 
 import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { NoiseTexture } from './ui/noise-texture';
 
 interface CastTalkModalProps {
   isOpen: boolean;
@@ -34,13 +33,11 @@ const CastTalkModal = ({
       {/* Modal Container */}
       <div 
         className={cn(
-          "relative flex flex-col w-full overflow-hidden rounded-2xl bg-white border-2 border-[rgba(62,39,35,0.4)] shadow-2xl transition-all duration-300 font-geist animate-slide-down text-slate-900",
+          "relative flex flex-col w-full overflow-hidden rounded-3xl bg-white border border-black/5 shadow-[0_30px_80px_-30px_rgba(154,52,18,0.45)] transition-all duration-300 font-geist animate-slide-down text-ink",
           maxWidth,
           className
         )}
       >
-        {/* Fine Noise Overlay for Premium Aesthetic */}
-        <NoiseTexture className="opacity-[0.12]" />
 
         {/* Content Box */}
         <div className={cn("relative z-10 flex flex-col p-6 flex-1 mt-2", contentClassName)}>

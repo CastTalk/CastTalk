@@ -1325,14 +1325,14 @@ The event has been successfully deleted/cancelled and removed from your dashboar
               transition={{ duration: 0.4 }}
               className="text-center flex flex-col items-center font-geist"
             >
-              <h1 className="text-5xl md:text-6xl lg:text-[88px] font-geist font-normal text-black tracking-[-1.8px] leading-[1.05]">
+              <h1 className="font-pixel text-5xl md:text-6xl lg:text-[72px] font-normal text-ink tracking-[-0.02em] leading-[1.05]">
                 How can I assist with your meetings?
               </h1>
               <TextAnimate
                 as="h2"
                 animation="fadeIn"
                 by="word"
-                className="text-[18px] md:text-[20px] font-geist font-normal text-[#475569] mt-8 leading-[32.5px] tracking-normal text-center"
+                className="mt-6 text-center font-serif text-[18px] leading-relaxed text-ink-muted md:text-[20px]"
               >
                 Schedule meetings, manage events, and coordinate collaboration from one place.
               </TextAnimate>
@@ -1430,7 +1430,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                       {msg.sender === 'ai' && (
                         <>
                           <span className="text-slate-300">•</span>
-                          <span className="font-normal text-emerald-600">worked for {formatDuration(msg.durationMs)}</span>
+                          <span className="font-normal text-orange-700">worked for {formatDuration(msg.durationMs)}</span>
                         </>
                       )}
                     </div>
@@ -1663,7 +1663,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
         maxWidth="max-w-[420px]"
       >
         <div className="flex flex-col font-geist">
-          <h2 className="text-[20px] font-medium text-[#111827] leading-none mb-2.5">
+          <h2 className="font-pixel text-[20px] font-normal text-ink leading-none mb-2.5">
             Automation in Progress
           </h2>
           <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
@@ -1673,14 +1673,14 @@ The event has been successfully deleted/cancelled and removed from your dashboar
             <button
               type="button"
               onClick={() => setShowInterruptModal(null)}
-              className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
+              className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
             >
               Back
             </button>
             <button
               type="button"
               onClick={exitAutomation}
-              className="px-5 py-2.5 rounded-xl text-[14px] font-bold text-white bg-red-600 hover:bg-red-700 shadow-sm transition-colors"
+              className="px-5 py-2.5 rounded-full text-[14px] font-semibold text-white bg-red-600 hover:bg-red-700 shadow-sm transition-colors"
             >
               Exit
             </button>

@@ -85,7 +85,7 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
+    --background: 0 0% 100%;
     --foreground: 228 48% 9%;
 
     --card: 0 0% 100%;
@@ -94,7 +94,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 228 48% 9%;
 
-    --primary: 221 100% 50%;
+    --primary: 24.6 95% 53.1%;
     --primary-foreground: 210 40% 98%;
 
     --secondary: 228 48% 9%;
@@ -111,19 +111,19 @@
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 221 100% 50%;
+    --ring: 24.6 95% 53.1%;
 
     --radius: 0.75rem;
   }
 
   .dark {
-    --background: 210 40% 98%;
+    --background: 0 0% 100%;
     --foreground: 228 48% 9%;
     --card: 0 0% 100%;
     --card-foreground: 228 48% 9%;
     --popover: 0 0% 100%;
     --popover-foreground: 228 48% 9%;
-    --primary: 221 100% 50%;
+    --primary: 24.6 95% 53.1%;
     --primary-foreground: 210 40% 98%;
     --secondary: 228 48% 9%;
     --secondary-foreground: 210 40% 98%;
@@ -135,7 +135,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 221 100% 50%;
+    --ring: 24.6 95% 53.1%;
   }
 
   * {
@@ -311,11 +311,11 @@
 }
 
 .cl-formButtonPrimary {
-  background-color: #004bff;
+  background-color: #161618;
 }
 
 .cl-formButtonPrimary:hover {
-  background-color: #003dcc;
+  background-color: #3f3f46;
 }
 
 @keyframes slideDown {

@@ -5,7 +5,7 @@ import { useGetCalls } from '@/hooks/useGetCalls';
 import MeetingCard from './MeetingCard';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CaretLeft, CaretRight, ClockCounterClockwise, Calendar, FilmReel, Play } from '@phosphor-icons/react';
+import { CaretLeft, CaretRight, ClockCounterClockwise, Calendar, FilmReel, Play } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 const CallList = ({ type }: { type: 'ended' | 'upcoming' | 'recordings' }) => {

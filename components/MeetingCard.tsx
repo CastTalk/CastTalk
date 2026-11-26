@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { avatarImages } from "@/constants";
 import { useToast } from "./ui/use-toast";
-import { IconProps, Copy, Play } from "@phosphor-icons/react";
+import { IconProps, Copy, Play } from '@/components/icons';
 import Image from "next/image";
 
 interface MeetingCardProps {
@@ -53,7 +53,7 @@ const MeetingCard = ({
         </div>
         
         <div className="flex flex-col gap-1.5">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 group-hover:text-primary transition-colors">{title}</h1>
+            <h1 className="font-pixel text-2xl font-normal text-ink group-hover:text-primary transition-colors">{title}</h1>
             <p className="text-sm font-semibold text-slate-400 group-hover:text-slate-500 transition-colors">{date}</p>
         </div>
       </article>

@@ -1,4 +1,4 @@
-import { IconProps } from '@phosphor-icons/react';
+import { IconProps } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { ElementType } from 'react';
 

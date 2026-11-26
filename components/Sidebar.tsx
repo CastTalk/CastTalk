@@ -2,7 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { House, Calendar, CalendarCheck, VideoCamera, Plus, Gear } from '@phosphor-icons/react';
+import { House, Calendar, CalendarCheck, VideoCamera, Plus, Gear } from '@/components/icons';
 import { UserButton, useUser, SignedIn } from '@clerk/nextjs';
 
 import { cn } from '@/lib/utils';

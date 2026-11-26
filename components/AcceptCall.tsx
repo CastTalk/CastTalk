@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserCircle, Check, X } from '@phosphor-icons/react';
+import { UserCircle, Check, X } from '@/components/icons';
 import {
   Popover,
   PopoverContent,
@@ -108,7 +108,7 @@ export const AcceptCall: React.FC<AcceptCallProps> = ({
                   </button>
                   <button
                     onClick={() => onAdmitUser(user.userId)}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center gap-1 shadow-sm"
+                    className="px-3 py-1.5 rounded-lg bg-[#f97316] hover:bg-[#ea580c] text-white text-xs font-bold transition-colors flex items-center gap-1 shadow-sm"
                   >
                     <Check size={14} weight="bold" />
                     <span>Admit</span>

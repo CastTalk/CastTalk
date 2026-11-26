@@ -1,7 +1,7 @@
 'use client';
 import { useCall } from '@stream-io/video-react-sdk';
 import { useEffect, useState } from 'react';
-import { VideoCamera, Timer } from '@phosphor-icons/react';
+import { VideoCamera, Timer } from '@/components/icons';
 
 const MeetingHeader = () => {
   const call = useCall();

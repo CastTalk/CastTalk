@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { CaretLeft, CaretRight, Trash, Info, Copy, Globe, Lock, X, Clock, Timer, MagnifyingGlass, Sliders } from '@phosphor-icons/react';
+import { CaretLeft, CaretRight, Trash, Info, Copy, Globe, Lock, X, Clock, Timer, MagnifyingGlass, Sliders } from '@/components/icons';
 import { useGetCalls } from '@/hooks/useGetCalls';
 import { Call, useStreamVideoClient } from '@stream-io/video-react-sdk';
 import { useUser } from '@clerk/nextjs';
@@ -447,7 +447,7 @@ export default function SchedulePage() {
         >
           Today
         </button>
-        <span className="text-sm font-medium text-slate-700 ml-1">{monthLabel}</span>
+        <span className="ml-1 font-pixel text-lg text-ink">{monthLabel}</span>
       </div>
 
       {/* Calendar */}
@@ -458,11 +458,11 @@ export default function SchedulePage() {
           {weekDays.map((day) => {
             const isToday = day.toDateString() === today.toDateString();
             return (
-              <div key={day.toISOString()} className={`flex-1 flex flex-col items-center py-3 border-l border-[#3E2723]/10 ${isToday ? 'bg-blue-50' : ''}`}>
-                <span className={`text-xs font-medium uppercase tracking-wide ${isToday ? 'text-blue-600' : 'text-[#3E2723]/50'}`}>
+              <div key={day.toISOString()} className={`flex-1 flex flex-col items-center py-3 border-l border-[#3E2723]/10 ${isToday ? 'bg-orange-50' : ''}`}>
+                <span className={`text-xs font-medium uppercase tracking-wide ${isToday ? 'text-[#9a3412]' : 'text-[#3E2723]/50'}`}>
                   {DAY_NAMES[day.getDay()]}
                 </span>
-                <span className={`text-2xl font-light leading-tight mt-0.5 ${isToday ? 'text-blue-600 font-medium' : 'text-[#3E2723]/80'}`}>
+                <span className={`font-pixel text-2xl leading-tight mt-0.5 ${isToday ? 'text-[#9a3412]' : 'text-[#3E2723]/80'}`}>
                   {day.getDate()}
                 </span>
               </div>
@@ -497,7 +497,7 @@ export default function SchedulePage() {
               return (
                 <div
                   key={day.toISOString()}
-                  className={`flex-1 relative border-l border-[#3E2723]/10 ${isToday ? 'bg-blue-50/40' : 'bg-[#3E2723]/[0.01]'}`}
+                  className={`flex-1 relative border-l border-[#3E2723]/10 ${isToday ? 'bg-orange-50/40' : 'bg-[#3E2723]/[0.01]'}`}
                 >
                   {/* Hour lines */}
                   {HOURS.map((h) => (
@@ -531,7 +531,7 @@ export default function SchedulePage() {
                             "absolute left-0 right-0 z-0 transition-all",
                             isTopPast
                               ? "pointer-events-none"
-                              : "cursor-pointer group hover:bg-blue-50/10"
+                              : "cursor-pointer group hover:bg-orange-50/40"
                           )}
                           style={{
                             top: (h - START_HOUR) * HOUR_HEIGHT,
@@ -547,7 +547,7 @@ export default function SchedulePage() {
                                 style={{ width: 'calc(100% - 3px)', height: 'calc(100% - 3px)' }}
                                 rx="4"
                                 ry="4"
-                                stroke="#3b82f6"
+                                stroke="#f97316"
                                 strokeWidth="1.5"
                                 className="animate-dash"
                               />
@@ -560,7 +560,7 @@ export default function SchedulePage() {
                             "absolute left-0 right-0 z-0 transition-all",
                             isBottomPast
                               ? "pointer-events-none"
-                              : "cursor-pointer group hover:bg-blue-50/10"
+                              : "cursor-pointer group hover:bg-orange-50/40"
                           )}
                           style={{
                             top: (h - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2,
@@ -576,7 +576,7 @@ export default function SchedulePage() {
                                 style={{ width: 'calc(100% - 3px)', height: 'calc(100% - 3px)' }}
                                 rx="4"
                                 ry="4"
-                                stroke="#3b82f6"
+                                stroke="#f97316"
                                 strokeWidth="1.5"
                                 className="animate-dash"
                               />
@@ -593,8 +593,8 @@ export default function SchedulePage() {
                       className="absolute left-0 right-0 flex items-center z-20 pointer-events-none"
                       style={{ top: nowTop }}
                     >
-                      <div className="size-2.5 rounded-full bg-red-500 -ml-1.5 shrink-0" />
-                      <div className="flex-1 h-px bg-red-500" />
+                      <div className="size-2.5 rounded-full bg-[#f97316] -ml-1.5 shrink-0" />
+                      <div className="flex-1 h-px bg-[#f97316]" />
                     </div>
                   )}
 
@@ -639,7 +639,7 @@ export default function SchedulePage() {
                         >
                           <div
                             className={cn(
-                              "h-full border p-3 flex flex-col justify-between text-[13px] leading-snug transition-opacity hover:opacity-95 rounded-none relative overflow-hidden",
+                              "h-full border p-3 flex flex-col justify-between text-[13px] leading-snug transition-opacity hover:opacity-95 rounded-xl relative overflow-hidden",
                               theme.bg,
                               theme.border,
                               theme.text,
@@ -714,7 +714,7 @@ export default function SchedulePage() {
                           onClick={() => setSelectedCluster(group)}
                         >
                           <div
-                            className="h-full border border-amber-300/80 p-3 flex flex-col justify-start items-start rounded-none relative overflow-hidden bg-gradient-to-b from-amber-50/90 to-amber-100/90 text-amber-900 shadow-sm"
+                            className="h-full border border-amber-300/80 p-3 flex flex-col justify-start items-start rounded-xl relative overflow-hidden bg-gradient-to-b from-amber-50/90 to-amber-100/90 text-amber-900 shadow-sm"
                           >
                             {/* Slashing pattern background to indicate overlapping/stacked events */}
                             <div
@@ -792,7 +792,7 @@ export default function SchedulePage() {
                         <span className="text-[10px] font-medium uppercase tracking-wider">Secure</span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-700">
+                      <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-50 border border-orange-200 rounded-full text-orange-700">
                         <Globe size={12} weight="fill" />
                         <span className="text-[10px] font-medium uppercase tracking-wider">General</span>
                       </div>
@@ -839,12 +839,12 @@ export default function SchedulePage() {
                   </div>
                 </div>
               ) : (
-                <div className="p-2.5 rounded-xl border border-green-200 bg-green-50/50 flex items-start gap-3">
-                  <div className="size-8 rounded-lg bg-green-100 flex items-center justify-center text-green-700 shrink-0">
+                <div className="p-2.5 rounded-xl border border-orange-200 bg-orange-50/50 flex items-start gap-3">
+                  <div className="size-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-700 shrink-0">
                     <Info size={16} weight="bold" />
                   </div>
                   <div className="flex-1">
-                     <p className="text-[13px] font-medium text-green-800 mb-0.5">
+                     <p className="text-[13px] font-medium text-orange-800 mb-0.5">
                       Meeting Ongoing / Ready
                     </p>
                     <p className="text-[12px] text-slate-600 font-normal leading-relaxed">
@@ -888,7 +888,7 @@ export default function SchedulePage() {
                 <div>
                   <button
                     onClick={() => setSelectedCall(null)}
-                    className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
+                    className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
                   >
                     Close
                   </button>
@@ -901,7 +901,7 @@ export default function SchedulePage() {
                         setSelectedCall(null);
                         router.push(`/meeting/${selectedCall.id}`);
                       }}
-                      className="px-6 py-2.5 rounded-xl text-[14px] font-bold hover:opacity-90 transition-opacity text-white shadow-sm"
+                      className="px-6 py-2.5 rounded-full text-[14px] font-semibold hover:opacity-90 transition-opacity text-white shadow-sm"
                       style={{ backgroundColor: '#3E2723' }}
                     >
                       Join Meeting
@@ -912,7 +912,7 @@ export default function SchedulePage() {
                   <div className="flex gap-3">
                     <button
                       disabled
-                      className="px-6 py-2.5 rounded-xl text-[14px] font-bold text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed select-none shadow-sm"
+                      className="px-6 py-2.5 rounded-full text-[14px] font-semibold text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed select-none shadow-sm"
                     >
                       Meeting Ended
                     </button>
@@ -931,7 +931,7 @@ export default function SchedulePage() {
           maxWidth="max-w-[420px]"
         >
           <div className="flex flex-col font-geist">
-            <h2 className="text-[20px] font-medium text-[#111827] leading-none mb-2.5">
+            <h2 className="font-pixel text-[20px] font-normal text-ink leading-none mb-2.5">
               Cancel Meeting
             </h2>
             <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
@@ -941,7 +941,7 @@ export default function SchedulePage() {
               <button
                 type="button"
                 onClick={() => setCallToDelete(null)}
-                className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
+                className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
               >
                 Close
               </button>
@@ -1083,7 +1083,7 @@ export default function SchedulePage() {
                         {/* Left: Round icon/avatar indicating type */}
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className="h-10 w-10 rounded-lg bg-slate-100 border border-[#3E2723]/20 flex items-center justify-center shrink-0">
-                            {isSecure ? <Lock size={18} weight="fill" className="text-amber-800" /> : <Globe size={18} weight="fill" className="text-emerald-800" />}
+                            {isSecure ? <Lock size={18} weight="fill" className="text-amber-800" /> : <Globe size={18} weight="fill" className="text-orange-800" />}
                           </div>
                           <div className="min-w-0 flex-1">
                             <h3 className="font-medium text-[14px] text-slate-800 leading-snug group-hover:text-[#3E2723] transition-colors truncate mb-1">
@@ -1126,7 +1126,7 @@ export default function SchedulePage() {
                 <button
                   type="button"
                   onClick={() => { setSelectedCluster(null); setSearchQuery(''); }}
-                  className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
+                  className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
                 >
                   Close
                 </button>
@@ -1167,10 +1167,10 @@ export default function SchedulePage() {
             )}>
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-[22px] font-medium text-[#111827] leading-none mb-1.5">
+                  <h2 className="font-pixel text-[22px] font-normal text-ink leading-none mb-1.5">
                     Select Meeting Type
                   </h2>
-                  <p className="text-[14px] text-[#6B7280]" style={{ marginBottom: '10px' }}>
+                  <p className="font-serif text-[15px] text-ink-muted" style={{ marginBottom: '10px' }}>
                     Select the type of meeting you want to create.
                   </p>
                 </div>
@@ -1179,21 +1179,21 @@ export default function SchedulePage() {
                   <label
                     className={cn(
                       "flex items-start gap-3.5 p-3 rounded-xl cursor-pointer transition-all border border-transparent",
-                      meetingType === 'general' ? "bg-emerald-50 border-emerald-200" : "hover:bg-slate-50"
+                      meetingType === 'general' ? "bg-orange-50 border-orange-200" : "hover:bg-slate-50"
                     )}
                     onClick={() => setMeetingType('general')}
                   >
                     <div className="mt-0.5">
                       <div className={cn(
                         "w-5 h-5 rounded-full border-[2px] flex items-center justify-center transition-colors",
-                        meetingType === 'general' ? "border-emerald-600" : "border-slate-300"
+                        meetingType === 'general' ? "border-orange-600" : "border-slate-300"
                       )}>
-                        {meetingType === 'general' && <div className="w-2.5 h-2.5 rounded-full bg-emerald-600" />}
+                        {meetingType === 'general' && <div className="w-2.5 h-2.5 rounded-full bg-orange-600" />}
                       </div>
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <Globe weight="fill" className={cn("w-4 h-4", meetingType === 'general' ? "text-emerald-600" : "text-slate-500")} />
+                        <Globe weight="fill" className={cn("w-4 h-4", meetingType === 'general' ? "text-orange-600" : "text-slate-500")} />
                         <span className="text-[15px] font-medium text-[#111827]">General</span>
                       </div>
                       <p className="text-[13px] text-[#6B7280] leading-snug">
@@ -1240,10 +1240,10 @@ export default function SchedulePage() {
             )}>
               <div className="space-y-4">
                 <div>
-                  <h2 className="text-[22px] font-medium text-[#111827] leading-none mb-1.5">
+                  <h2 className="font-pixel text-[22px] font-normal text-ink leading-none mb-1.5">
                     {"What's your meeting about?"}
                   </h2>
-                  <p className="text-[14px] text-[#6B7280]" style={{ marginBottom: '20px' }}>
+                  <p className="font-serif text-[15px] text-ink-muted" style={{ marginBottom: '20px' }}>
                     Fill out the details of your meeting.
                   </p>
                 </div>
@@ -1414,7 +1414,7 @@ export default function SchedulePage() {
               <div>
                 <button
                   onClick={() => { setMeetingMode(null); setStep(1); }}
-                  className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
+                  className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
                 >
                   Cancel
                 </button>
@@ -1423,7 +1423,7 @@ export default function SchedulePage() {
                 {step > 1 && (
                   <button
                     onClick={() => setStep(1)}
-                    className="px-5 py-2.5 rounded-xl text-[14px] font-bold bg-[#3E2723]/5 text-[#3E2723] hover:bg-[#3E2723]/10 transition-colors"
+                    className="px-5 py-2.5 rounded-full text-[14px] font-semibold bg-[#3E2723]/5 text-[#3E2723] hover:bg-[#3E2723]/10 transition-colors"
                   >
                     Back
                   </button>
@@ -1431,7 +1431,7 @@ export default function SchedulePage() {
                 <button
                   onClick={step === 2 ? () => handleSubmit(false) : () => setStep(2)}
                   disabled={isCreating || (step === 2 && !formTitle.trim())}
-                  className="px-6 py-2.5 rounded-xl text-[14px] font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm"
+                  className="px-6 py-2.5 rounded-full text-[14px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm"
                   style={{ backgroundColor: '#3E2723' }}
                 >
                   {step === 2 ? (isCreating ? 'Creating...' : 'Create Event') : 'Next'}
@@ -1447,7 +1447,7 @@ export default function SchedulePage() {
         <CastTalkModal isOpen={step === 3} onClose={() => { setMeetingMode(null); setStep(1); }} maxWidth="max-w-[460px]">
           <div className="flex flex-col font-geist">
             {/* Title */}
-            <h2 className="text-[20px] font-medium text-[#111827] leading-tight font-geist mb-2">
+            <h2 className="font-pixel text-[20px] font-normal text-ink leading-tight font-geist mb-2">
               Meeting Conflict
             </h2>
 
@@ -1460,7 +1460,7 @@ export default function SchedulePage() {
             <div className="flex justify-end gap-3 pt-3 border-t border-[#E5E7EB]">
               <button
                 onClick={() => setStep(2)}
-                className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white font-geist"
+                className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white font-geist"
               >
                 Back
               </button>
@@ -1480,7 +1480,7 @@ export default function SchedulePage() {
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setMeetingLink(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 animate-slide-down">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xl font-semibold text-black">Your meeting is ready</h2>
+              <h2 className="font-pixel text-xl font-normal text-ink">Your meeting is ready</h2>
             </div>
             <p className="text-sm text-slate-500 mb-6">Share this link with people you want to meet with.</p>
             <div className="flex items-center gap-2 bg-[#f3f4f6] border border-[#c4cccc] rounded-lg px-4 py-3 mb-6">

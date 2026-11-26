@@ -1,5 +1,5 @@
 'use client';
-import { Copy, PlusCircle, CheckCircle, X } from '@phosphor-icons/react';
+import { Copy, PlusCircle, CheckCircle, X } from '@/components/icons';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';

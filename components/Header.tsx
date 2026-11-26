@@ -2,7 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useUser } from '@clerk/nextjs';
-import { UserCircle, SignOut, UserGear, VideoCamera } from '@phosphor-icons/react';
+import { UserCircle, SignOut, UserGear, VideoCamera } from '@/components/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,

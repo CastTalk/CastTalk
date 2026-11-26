@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle, WarningCircle, Info } from "@phosphor-icons/react";
+import { CheckCircle, WarningCircle, Info } from '@/components/icons';
 import {
   Toast,
   ToastClose,

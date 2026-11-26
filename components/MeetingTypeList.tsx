@@ -1,5 +1,5 @@
 'use client';
-import { VideoCamera, Link, Calendar, FilmReel, X, ClipboardText, CheckCircle } from '@phosphor-icons/react';
+import { VideoCamera, Link, Calendar, FilmReel, X, ClipboardText, CheckCircle } from '@/components/icons';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -116,7 +116,7 @@ const MeetingTypeList = () => {
         icon={FilmReel}
         title="Recordings"
         description="View past meetings"
-        iconColor="text-emerald-500"
+        iconColor="text-orange-500"
         handleClick={() => router.push('/recordings')}
       />
 

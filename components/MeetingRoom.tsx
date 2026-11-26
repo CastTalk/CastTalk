@@ -23,7 +23,7 @@ import {
   ClosedCaptioning, ArrowSquareUp, HandPalm, DotsThreeVertical,
   Info, Copy, ChatCircle, Sparkle, ShieldWarning, DotsThree,
   MagnifyingGlass, UserPlus, Crown, ShieldCheck, PushPin, X, UserCircle
-} from '@phosphor-icons/react';
+} from '@/components/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -441,7 +441,7 @@ const GoogleMeetPeopleSidebar = ({
     <div className="flex flex-col h-full w-full bg-[#202124] text-white p-5 select-none overflow-hidden font-sans rounded-2xl border border-[#3c4043] shadow-2xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <h2 className="text-xl font-medium tracking-tight text-white">People</h2>
+        <h2 className="font-pixel text-xl font-normal text-white">People</h2>
         <button 
           onClick={onClose} 
           className="p-1.5 rounded-full hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
@@ -459,7 +459,7 @@ const GoogleMeetPeopleSidebar = ({
               "w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full text-xs font-semibold transition-all shadow-sm cursor-pointer",
               isAllMuted 
                 ? "bg-[#ea4335] hover:bg-[#d93025] text-white" 
-                : "bg-[#004a77] hover:bg-[#005999] text-[#c2e7ff]"
+                : "bg-[#9a3412] hover:bg-[#7c2d12] text-[#fde68a]"
             )}
           >
             <MicrophoneSlash size={18} weight="bold" />
@@ -469,7 +469,7 @@ const GoogleMeetPeopleSidebar = ({
       )}
 
       {/* Search Input */}
-      <div className="relative flex items-center bg-[#1e1f21] border border-[#5f6368] focus-within:border-[#8ab4f8] rounded-xl px-3.5 py-2.5 mb-5 transition-colors">
+      <div className="relative flex items-center bg-[#1e1f21] border border-[#5f6368] focus-within:border-[#fdba74] rounded-xl px-3.5 py-2.5 mb-5 transition-colors">
         <MagnifyingGlass size={18} className="text-[#9aa0a6] mr-2.5 shrink-0" />
         <input 
           type="text" 
@@ -529,7 +529,7 @@ const GoogleMeetPeopleSidebar = ({
                               <Crown size={12} weight="fill" /> Meeting host
                             </span>
                           ) : role === 'Moderator' ? (
-                            <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                            <span className="text-orange-300 flex items-center gap-1 font-medium">
                               <ShieldCheck size={12} weight="fill" /> Moderator
                             </span>
                           ) : isSpotlight ? (
@@ -555,7 +555,7 @@ const GoogleMeetPeopleSidebar = ({
                             onClick={() => setPinnedSessionId(pinnedSessionId === p.sessionId ? null : p.sessionId)}
                             className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/10 text-slate-200"
                           >
-                            <PushPin size={15} className={pinnedSessionId === p.sessionId ? "text-blue-400" : ""} />
+                            <PushPin size={15} className={pinnedSessionId === p.sessionId ? "text-orange-300" : ""} />
                             <span>{pinnedSessionId === p.sessionId ? 'Unpin from screen' : 'Pin to screen'}</span>
                           </DropdownMenuItem>
 
@@ -579,7 +579,7 @@ const GoogleMeetPeopleSidebar = ({
                                 onClick={() => setRole(p.userId, 'Moderator')}
                                 className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/10 text-slate-200"
                               >
-                                <ShieldCheck size={15} className="text-emerald-400" />
+                                <ShieldCheck size={15} className="text-orange-300" />
                                 <span>Set as Moderator</span>
                               </DropdownMenuItem>
 
@@ -1484,7 +1484,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
               transition={{ type: 'spring', stiffness: 350, damping: 25 }}
               className="absolute bottom-4 left-4 z-30 flex items-center gap-2.5 bg-[#202124]/90 backdrop-blur-md border border-white/10 text-white px-3.5 py-2 rounded-full text-xs font-semibold shadow-xl select-none"
             >
-              <div className="size-6 rounded-full bg-[#8ab4f8]/20 text-[#8ab4f8] flex items-center justify-center shrink-0">
+              <div className="size-6 rounded-full bg-[#fdba74]/20 text-[#fdba74] flex items-center justify-center shrink-0">
                 {screenShareParticipant ? (
                   <Monitor size={15} weight="bold" />
                 ) : (
@@ -1580,7 +1580,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
               <button
                 onClick={rejoin}
                 disabled={isRejoining}
-                className="rounded-full bg-[#8ab4f8] px-3 py-1 font-semibold text-[#202124] transition-colors hover:bg-[#93baf9] disabled:opacity-60"
+                className="rounded-full bg-[#fdba74] px-3 py-1 font-semibold text-[#202124] transition-colors hover:bg-[#fed7aa] disabled:opacity-60"
               >
                 {isRejoining ? 'Rejoining…' : 'Rejoin'}
               </button>
@@ -1785,13 +1785,13 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
               <div className="flex items-center gap-1 shrink-0">
                 <button
                   onClick={() => handleDenyUser(user.userId)}
-                  className="px-2.5 py-1 text-xs font-medium text-[#8ab4f8] hover:bg-[#8ab4f8]/10 rounded-lg transition-colors"
+                  className="px-2.5 py-1 text-xs font-medium text-[#fdba74] hover:bg-[#fdba74]/10 rounded-lg transition-colors"
                 >
                   Deny
                 </button>
                 <button
                   onClick={() => handleAdmitUser(user.userId)}
-                  className="px-3 py-1 text-xs font-semibold bg-[#8ab4f8] text-[#202124] hover:bg-[#93baf9] rounded-lg transition-colors shadow-sm"
+                  className="px-3 py-1 text-xs font-semibold bg-[#fdba74] text-[#202124] hover:bg-[#fed7aa] rounded-lg transition-colors shadow-sm"
                 >
                   Admit
                 </button>
@@ -1805,7 +1805,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
           onClick={() => setActiveSidebar((prev) => prev === 'people' ? null : 'people')}
           className={cn(
             "flex items-center gap-1.5 p-1 rounded-xl transition-all bg-[#3c4043] hover:bg-[#4a4f54] border border-transparent shadow-md select-none cursor-pointer",
-            showParticipants && "bg-[#8ab4f8]/20 border-[#8ab4f8]/40"
+            showParticipants && "bg-[#fdba74]/20 border-[#fdba74]/40"
           )}
           title="View participants"
         >
@@ -1845,7 +1845,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
           className={cn(
             "h-10 w-10 rounded-xl transition-all flex items-center justify-center border shadow-md cursor-pointer",
             isCastAIOpen 
-              ? "bg-[#8ab4f8]/20 text-[#8ab4f8] border-[#8ab4f8]/40" 
+              ? "bg-[#fdba74]/20 text-[#fdba74] border-[#fdba74]/40" 
               : "bg-[#3c4043] hover:bg-[#4a4f54] text-white border-transparent"
           )}
           title={isCastAIOpen ? "Close CastAI Assistant" : "Open CastAI Assistant"}
@@ -2127,7 +2127,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
           >
             <ClosedCaptioning size={18} weight={isCcActive ? "fill" : "bold"} />
             {!isCcActive && captionsOnInMeeting && (
-              <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-[#8ab4f8]" />
+              <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-[#fdba74]" />
             )}
           </button>
 
@@ -2138,7 +2138,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
               onClick={() => setActiveSidebar((prev) => prev === 'transcripts' ? null : 'transcripts')}
               className={cn(
                 "p-2 text-white rounded-l-xl outline-none focus:outline-none transition-colors border-r border-[#202124]/30 h-[42px] min-w-[36px] flex items-center justify-center cursor-pointer",
-                isTranscriptsOpen ? "bg-white/15 text-[#8ab4f8] rounded-l-xl" : "hover:bg-white/10 text-white"
+                isTranscriptsOpen ? "bg-white/15 text-[#fdba74] rounded-l-xl" : "hover:bg-white/10 text-white"
               )}
               title={isTranscriptsOpen ? "Hide Transcripts Panel" : "Show Transcripts Panel"}
             >
@@ -2204,7 +2204,7 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
                   onClick={() => setActiveSidebar((prev) => prev === 'ai' ? null : 'ai')}
                   className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 text-xs hover:bg-white/5 text-slate-200"
                 >
-                  <Sparkle size={16} weight="bold" className="text-[#8ab4f8]" />
+                  <Sparkle size={16} weight="bold" className="text-[#fdba74]" />
                   <span>{isCastAIOpen ? 'Close CastAI' : 'Open CastAI'}</span>
                 </DropdownMenuItem>
 

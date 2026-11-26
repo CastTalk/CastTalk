@@ -2,7 +2,7 @@ import { ReactNode, ElementType } from "react";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
-import { IconProps } from "@phosphor-icons/react";
+import { IconProps } from '@/components/icons';
 
 interface MeetingModalProps {
   isOpen: boolean;
