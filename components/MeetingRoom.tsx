@@ -37,7 +37,6 @@ import AcceptCall from '@/components/AcceptCall';
 
 import Loader from './Loader';
 import { cn } from '@/lib/utils';
-import { NoiseTexture } from '@/components/ui/noise-texture';
 import { Ripple } from './ui/ripple';
 import { useTranscription } from '@/hooks/useTranscription';
 import GoogleMeetTranscriptsSidebar, { TranscriptItem } from './GoogleMeetTranscriptsSidebar';
@@ -207,8 +206,9 @@ const CustomVideoFallback = React.forwardRef<HTMLDivElement, { participant?: any
         }}
       />
 
-      {/* Layer 4: Film grain noise */}
-      <NoiseTexture className="absolute inset-0 z-[4] opacity-[0.02] mix-blend-overlay pointer-events-none" />
+      {/* (Film-grain SVG noise removed: at 2% opacity it was invisible, but every
+          camera-off tile repainted a 6-octave feTurbulence filter — expensive on phones,
+          especially during layout animations when people join/leave.) */}
 
       {/* Layer 5: Avatar (no shadow or back glow) */}
       {participant?.image ? (
@@ -268,6 +268,83 @@ const RaisedHandTileBadge = ({ name }: { name: string }) => {
     </motion.div>
   );
 };
+
+const TILE_TRANSITION = { duration: 0.22, ease: [0.16, 1, 0.3, 1] as const };
+
+type CallTileProps = {
+  participant: any;
+  showVideo: boolean;
+  isSpotlight: boolean;
+  isHandUp: boolean;
+  name: string;
+  className: string;
+  compact?: boolean;
+};
+
+/**
+ * One participant tile, memoized.
+ *
+ * Stream patches every participant's audioLevel / isSpeaking many times a second
+ * while anyone talks (SFU audioLevelChanged events), and each patch gives every
+ * participant object a new identity. Without memo, all tiles — video elements,
+ * framer-motion wrappers, avatar fallbacks — re-rendered on every one of those
+ * patches. The comparator only looks at what the tile actually draws.
+ */
+const CallTile = React.memo(
+  ({ participant: p, showVideo, isSpotlight, isHandUp, name, className, compact }: CallTileProps) => (
+    <motion.div
+      layout="position"
+      initial={{ scale: 0.95, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0.95, opacity: 0 }}
+      transition={TILE_TRANSITION}
+      className={cn(className, isHandUp && 'hand-raised-active')}
+    >
+      {showVideo ? (
+        <ParticipantView
+          participant={p}
+          VideoPlaceholder={CustomVideoFallback as any}
+          ParticipantViewUI={null}
+          muteAudio
+          className="w-full h-full"
+        />
+      ) : (
+        <CustomVideoFallback participant={p} />
+      )}
+      {isSpotlight && (
+        <div
+          className={cn(
+            'absolute z-30 flex items-center bg-purple-600/90 text-white rounded-full font-bold shadow-md backdrop-blur-sm border border-purple-400/30 select-none pointer-events-none',
+            compact ? 'top-2.5 left-2.5 gap-1 px-2 py-0.5 text-[10px]' : 'top-3 left-3 gap-1.5 px-2.5 py-1 text-[11px]'
+          )}
+        >
+          <Sparkle size={compact ? 11 : 12} weight="fill" className="text-amber-300" />
+          <span>Spotlight</span>
+        </div>
+      )}
+      {!isHandUp && (
+        <div className="absolute bottom-3 left-3 z-20 text-white font-semibold text-xs tracking-tight pointer-events-none select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+          {name}
+        </div>
+      )}
+      <AnimatePresence>{isHandUp && <RaisedHandTileBadge name={name} />}</AnimatePresence>
+    </motion.div>
+  ),
+  (prev, next) =>
+    prev.showVideo === next.showVideo &&
+    prev.isSpotlight === next.isSpotlight &&
+    prev.isHandUp === next.isHandUp &&
+    prev.name === next.name &&
+    prev.className === next.className &&
+    prev.compact === next.compact &&
+    prev.participant.sessionId === next.participant.sessionId &&
+    prev.participant.videoStream === next.participant.videoStream &&
+    prev.participant.screenShareStream === next.participant.screenShareStream &&
+    prev.participant.image === next.participant.image &&
+    prev.participant.name === next.participant.name &&
+    prev.participant.publishedTracks.join(',') === next.participant.publishedTracks.join(',')
+);
+CallTile.displayName = 'CallTile';
 
 // Custom 1:1 Google Meet Replica People Sidebar Panel
 const GoogleMeetPeopleSidebar = ({ 
@@ -1137,9 +1214,17 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
       h = h % 12 || 12;
       setTimeStr(`${h}:${m} ${ampm}`);
     };
+    // Minutes only — tick on minute boundaries, not every second
     update();
-    const t = setInterval(update, 1000);
-    return () => clearInterval(t);
+    let t: ReturnType<typeof setInterval> | undefined;
+    const timeout = setTimeout(() => {
+      update();
+      t = setInterval(update, 60_000);
+    }, 60_000 - (Date.now() % 60_000));
+    return () => {
+      clearTimeout(timeout);
+      if (t) clearInterval(t);
+    };
   }, []);
 
   // Cancel any pending leaves when this call is actively rendered
@@ -1417,44 +1502,16 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
           <div className="flex-[1] max-w-[27%] min-w-[220px] max-h-[calc(100dvh-140px)] sm:max-h-[calc(100dvh-160px)] my-auto flex flex-col gap-3 shrink-0 overflow-y-auto pr-1 no-scrollbar">
             <AnimatePresence mode="popLayout">
               {tileParticipants.filter(p => p.sessionId !== activeMainParticipant.sessionId && p.userId !== activeMainParticipant.userId).map((p) => (
-                <motion.div 
-                  key={p.sessionId} 
-                  layout="position"
-                  initial={{ scale: 0.95, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.95, opacity: 0 }}
-                  transition={smoothTransition}
-                  className={cn(tileSideClass, isHandUpForParticipant(p) && "hand-raised-active")}
-                >
-                  {showsVideo(p) ? (
-                    <ParticipantView 
-                      participant={p} 
-                      VideoPlaceholder={CustomVideoFallback as any}
-                      ParticipantViewUI={null}
-                      muteAudio
-                      className="w-full h-full"
-                    />
-                  ) : (
-                    <CustomVideoFallback participant={p} />
-                  )}
-                  {userRoles[p.userId] === 'Spotlight' && (
-                    <div className="absolute top-2.5 left-2.5 z-30 flex items-center gap-1 bg-purple-600/90 text-white rounded-full px-2 py-0.5 text-[10px] font-bold shadow-md backdrop-blur-sm border border-purple-400/30 select-none pointer-events-none">
-                      <Sparkle size={11} weight="fill" className="text-amber-300" />
-                      <span>Spotlight</span>
-                    </div>
-                  )}
-                  {!isHandUpForParticipant(p) && (
-                    <div className="absolute bottom-3 left-3 z-20 text-white font-semibold text-xs tracking-tight pointer-events-none select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-                      {getParticipantHandName(p)}
-                    </div>
-                  )}
-                  <AnimatePresence>
-                    {isHandUpForParticipant(p) && (
-                      <RaisedHandTileBadge name={getParticipantHandName(p)} />
-                    )}
-                  </AnimatePresence>
-
-                </motion.div>
+                <CallTile
+                  key={p.sessionId}
+                  participant={p}
+                  showVideo={showsVideo(p)}
+                  isSpotlight={userRoles[p.userId] === 'Spotlight'}
+                  isHandUp={isHandUpForParticipant(p)}
+                  name={getParticipantHandName(p)}
+                  className={tileSideClass}
+                  compact
+                />
               ))}
             </AnimatePresence>
           </div>
@@ -1485,44 +1542,15 @@ const MeetingRoom = ({ lobbyMicOn = true, lobbyCameraOn = true }: { lobbyMicOn?:
         <div className={cn("flex flex-wrap items-center justify-center w-full max-h-[calc(100dvh-140px)] overflow-y-auto no-scrollbar", activeSidebar && !isMobile ? "gap-2 sm:gap-2.5" : "gap-2.5 sm:gap-4")}>
           <AnimatePresence mode="popLayout">
             {tileParticipants.map((p) => (
-              <motion.div 
-                key={p.sessionId} 
-                layout="position"
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                transition={smoothTransition}
-                className={cn(tileStyle, tileClass, isHandUpForParticipant(p) && "hand-raised-active")}
-              >
-                {showsVideo(p) ? (
-                  <ParticipantView 
-                    participant={p} 
-                    VideoPlaceholder={CustomVideoFallback as any}
-                    ParticipantViewUI={null}
-                    muteAudio
-                    className="w-full h-full"
-                  />
-                ) : (
-                  <CustomVideoFallback participant={p} />
-                )}
-                {userRoles[p.userId] === 'Spotlight' && (
-                  <div className="absolute top-3 left-3 z-30 flex items-center gap-1.5 bg-purple-600/90 text-white rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md backdrop-blur-sm border border-purple-400/30 select-none pointer-events-none">
-                    <Sparkle size={12} weight="fill" className="text-amber-300" />
-                    <span>Spotlight</span>
-                  </div>
-                )}
-                {!isHandUpForParticipant(p) && (
-                  <div className="absolute bottom-3 left-3 z-20 text-white font-semibold text-xs tracking-tight pointer-events-none select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-                    {getParticipantHandName(p)}
-                  </div>
-                )}
-                <AnimatePresence>
-                  {isHandUpForParticipant(p) && (
-                    <RaisedHandTileBadge name={getParticipantHandName(p)} />
-                  )}
-                </AnimatePresence>
-
-              </motion.div>
+              <CallTile
+                key={p.sessionId}
+                participant={p}
+                showVideo={showsVideo(p)}
+                isSpotlight={userRoles[p.userId] === 'Spotlight'}
+                isHandUp={isHandUpForParticipant(p)}
+                name={getParticipantHandName(p)}
+                className={cn(tileStyle, tileClass)}
+              />
             ))}
           </AnimatePresence>
         </div>

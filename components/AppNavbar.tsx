@@ -79,9 +79,19 @@ const AppNavbar = () => {
       setTime(now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }));
       setDate(new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(now));
     };
+    // The clock shows minutes only, so tick on minute boundaries instead of every
+    // second (which re-rendered the whole navbar 60 times a minute for nothing).
     update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const msToNextMinute = 60_000 - (Date.now() % 60_000);
+    const timeout = setTimeout(() => {
+      update();
+      interval = setInterval(update, 60_000);
+    }, msToNextMinute);
+    return () => {
+      clearTimeout(timeout);
+      if (interval) clearInterval(interval);
+    };
   }, []);
 
   // Dropdown close trigger
