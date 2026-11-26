@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs';
 import { StreamClient } from '@stream-io/node-sdk';
 
+// Never prerender at build time: every request needs the live session/DB.
+export const dynamic = 'force-dynamic';
+
 // Fallback for the tokenProvider server action. The user ID comes only from the
 // Clerk session; any ?userId= query parameter is ignored on purpose.
 export async function GET() {

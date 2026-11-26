@@ -3,6 +3,9 @@ import { auth, currentUser } from '@clerk/nextjs';
 import { randomBytes } from 'crypto';
 import { appwrite } from '@/lib/appwrite';
 
+// Never prerender at build time: every request needs the live session/DB.
+export const dynamic = 'force-dynamic';
+
 /**
  * Mirrors the signed-in Clerk user into Appwrite Auth.
  *

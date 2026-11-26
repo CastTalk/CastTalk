@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// Never prerender at build time: every request needs the live session/DB.
+export const dynamic = 'force-dynamic';
+
 /**
  * POST /api/speechmatics/token
  *

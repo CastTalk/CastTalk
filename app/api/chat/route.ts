@@ -8,6 +8,9 @@ import { EventStreamDispatcher, TaskState } from '@/lib/agent-sse';
 import { appwrite } from '@/lib/appwrite';
 import { Query } from 'node-appwrite';
 
+// Never prerender at build time: every request needs the live session/DB.
+export const dynamic = 'force-dynamic';
+
 async function getAIUserContext(userId: string): Promise<string> {
   if (!userId) return '';
   try {

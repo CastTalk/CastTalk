@@ -5,6 +5,9 @@ import { Query } from 'node-appwrite';
 import crypto from 'crypto';
 import { StreamClient } from '@stream-io/node-sdk';
 
+// Never prerender at build time: every request needs the live session/DB.
+export const dynamic = 'force-dynamic';
+
 const STREAM_API_KEY = process.env.NEXT_PUBLIC_STREAM_API_KEY;
 const STREAM_API_SECRET = process.env.STREAM_SECRET_KEY;
 

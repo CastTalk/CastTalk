@@ -5,6 +5,9 @@ import { Query, ID } from 'node-appwrite';
 import crypto from 'crypto';
 import { getUserEmail, send1HourPrepEmail, sendTomorrowReminderEmail } from '@/lib/mail-templates';
 
+// Never prerender at build time: every request needs the live session/DB.
+export const dynamic = 'force-dynamic';
+
 
 function getNotificationId(prefix: string, meetingId: string, suffix?: string | number): string {
   const input = suffix ? `${prefix}_${meetingId}_${suffix}` : `${prefix}_${meetingId}`;

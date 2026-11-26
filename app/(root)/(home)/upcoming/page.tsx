@@ -352,17 +352,6 @@ export default function SchedulePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [callToDelete, setCallToDelete] = useState<Call | null>(null);
 
-  useEffect(() => {
-    if (calls && calls.length > 0) {
-      console.log("DEBUG: All meetings found on calendar:", calls.map(c => ({
-        id: c.id,
-        title: c.state.custom?.title || c.state.custom?.description || 'Meeting',
-        startsAt: c.state.startsAt,
-        duration: c.state.custom?.duration,
-      })));
-    }
-  }, [calls]);
-
   const today = new Date();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(today));
   const [nowMinutes, setNowMinutes] = useState(today.getHours() * 60 + today.getMinutes());

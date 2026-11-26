@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { fetchOpenRouterCompletion, OpenRouterMessage } from '@/lib/openrouter';
 
+// Never prerender at build time: every request needs the live session/DB.
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
   try {
     const { messages, transcripts, userName } = await req.json();
