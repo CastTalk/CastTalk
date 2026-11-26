@@ -294,7 +294,7 @@ const Home = () => {
             Live Taglish captions
           </span>
 
-          <h1 className="font-pixel text-[40px] leading-[1.05] tracking-[-0.02em] text-ink sm:text-6xl lg:text-[76px]">
+          <h1 className="font-pixel text-[40px] leading-[1.05] [text-wrap:balance] tracking-[-0.02em] text-ink sm:text-6xl lg:text-[76px]">
             Meetings are hard.
             <br />
             Talking shouldn&apos;t be.

@@ -56,7 +56,7 @@ const HeroCallMockup = () => (
           {TILES.map((t) => (
             <div
               key={t.name}
-              className={`relative flex aspect-[3/4] items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br ${t.gradient} ${
+              className={`relative flex aspect-[4/5] items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br ${t.gradient} ${
                 t.speaking ? 'ring-2 ring-[#fde68a] ring-offset-2 ring-offset-[#121212]' : ''
               }`}
             >
@@ -92,7 +92,7 @@ const HeroCallMockup = () => (
         </div>
 
         {/* Control bar */}
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2.5 bg-gradient-to-t from-black/60 to-transparent pb-7 pt-8">
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2.5 bg-gradient-to-t from-black/70 via-black/40 to-transparent pb-6 pt-6">
           {[Mic, Video, MessageText, Hand].map((Icon, i) => (
             <div
               key={i}
