@@ -292,9 +292,9 @@ const Home = () => {
     <>
       <div className="relative flex-1 overflow-y-auto overflow-x-hidden">
         <EmberAurora />
-        {/* Ember pixels spreading down from the top edge — part of the scrolling
-            content, so they leave with the aurora instead of sticking to the navbar */}
-        <EmberPixels count={44} className="inset-x-0 top-0 z-[1] h-[140px]" drift={[-8, 32]} sway={[-20, 20]} />
+        {/* Ember pixels on the border line only: a thin band at the top edge, part of
+            the scrolling content so it leaves with the aurora */}
+        <EmberPixels count={46} className="inset-x-0 top-0 z-[1] h-[14px]" drift={[0, 12]} sway={[-8, 8]} sizes={[3, 4, 4, 6]} />
 
         {/* Hero: centered headline, two actions, product mockup below */}
         <section className="relative z-20 mx-auto flex max-w-4xl flex-col items-center px-4 pt-12 text-center sm:pt-16">

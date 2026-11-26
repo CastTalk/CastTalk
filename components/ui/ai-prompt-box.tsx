@@ -1,7 +1,7 @@
 import React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ArrowUp, Paperclip, Square, X, StopCircle, Mic, Globe, BrainCog, FolderCog, History } from "lucide-react";
+import { ArrowUp, Paperclip, Square, X, StopCircle, Mic, Globe, BrainCog, FolderCog, History } from '@/components/icons';
 import { motion, AnimatePresence } from "framer-motion";
 
 // Utility function for className merging
@@ -329,7 +329,7 @@ const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
           <div
             ref={ref}
             className={cn(
-              "rounded-2xl border border-[rgba(62,39,35,0.45)] bg-white p-2 shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-300",
+              "rounded-2xl border border-black/10 bg-white/90 p-2 shadow-[0_14px_40px_-18px_rgba(154,52,18,0.35)] backdrop-blur transition-all duration-300 focus-within:border-[#f97316]/50 focus-within:ring-4 focus-within:ring-[#f97316]/10",
               isLoading && "border-red-500/70",
               className
             )}
@@ -439,7 +439,7 @@ const PromptInputAction: React.FC<PromptInputActionProps> = ({
 const CustomDivider: React.FC = () => (
   <div className="relative h-6 w-[1.5px] mx-1">
     <div
-      className="absolute inset-0 bg-gradient-to-t from-transparent via-[#9b87f5]/70 to-transparent rounded-full"
+      className="absolute inset-0 bg-gradient-to-t from-transparent via-[#f97316]/70 to-transparent rounded-full"
       style={{
         clipPath: "polygon(0% 0%, 100% 0%, 100% 40%, 140% 50%, 100% 60%, 100% 100%, 0% 100%, 0% 60%, -40% 50%, 0% 40%)",
       }}
@@ -604,7 +604,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
             className={cn(
               "rounded-full transition-all flex items-center gap-1 px-2 py-1 border h-8",
               showSearch
-                ? "bg-[#1EAEDB]/15 border-[#1EAEDB] text-[#1EAEDB]"
+                ? "bg-[#c2410c]/15 border-[#c2410c] text-[#c2410c]"
                 : "bg-transparent border-transparent text-[#9CA3AF] hover:text-[#D1D5DB]"
             )}
           >
@@ -614,7 +614,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
                 whileHover={{ rotate: showSearch ? 360 : 15, scale: 1.1, transition: { type: "spring", stiffness: 300, damping: 10 } }}
                 transition={{ type: "spring", stiffness: 260, damping: 25 }}
               >
-                <Globe className={cn("w-4 h-4", showSearch ? "text-[#1EAEDB]" : "text-inherit")} />
+                <Globe className={cn("w-4 h-4", showSearch ? "text-[#c2410c]" : "text-inherit")} />
               </motion.div>
             </div>
             <AnimatePresence>
@@ -625,7 +625,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
                   animate={{ width: "auto", opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="text-xs overflow-hidden whitespace-nowrap text-[#1EAEDB] flex-shrink-0"
+                  className="text-xs overflow-hidden whitespace-nowrap text-[#c2410c] flex-shrink-0"
                 >
                   Deep Search
                 </motion.span>
@@ -641,7 +641,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
             className={cn(
               "rounded-full transition-all flex items-center gap-1 px-2 py-1 border h-8",
               showThink
-                ? "bg-[#8B5CF6]/15 border-[#8B5CF6] text-[#8B5CF6]"
+                ? "bg-[#9a3412]/15 border-[#9a3412] text-[#9a3412]"
                 : "bg-transparent border-transparent text-[#9CA3AF] hover:text-[#D1D5DB]"
             )}
           >
@@ -651,7 +651,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
                 whileHover={{ rotate: showThink ? 360 : 15, scale: 1.1, transition: { type: "spring", stiffness: 300, damping: 10 } }}
                 transition={{ type: "spring", stiffness: 260, damping: 25 }}
               >
-                <BrainCog className={cn("w-4 h-4", showThink ? "text-[#8B5CF6]" : "text-inherit")} />
+                <BrainCog className={cn("w-4 h-4", showThink ? "text-[#9a3412]" : "text-inherit")} />
               </motion.div>
             </div>
             <AnimatePresence>
@@ -662,7 +662,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
                   animate={{ width: "auto", opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="text-xs overflow-hidden whitespace-nowrap text-[#8B5CF6] flex-shrink-0"
+                  className="text-xs overflow-hidden whitespace-nowrap text-[#9a3412] flex-shrink-0"
                 >
                   Automate
                 </motion.span>
@@ -690,8 +690,8 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
           className={cn(
             "h-8 w-8 rounded-full transition-all duration-200",
             hasContent || isLoading
-              ? "bg-slate-900 hover:bg-slate-800 text-white cursor-pointer"
-              : "bg-slate-100 text-slate-300 cursor-not-allowed"
+              ? "bg-[#f97316] hover:bg-[#9a3412] text-white cursor-pointer"
+              : "bg-black/5 text-black/25 cursor-not-allowed"
           )}
           onClick={() => {
             if (hasContent) handleSubmit();

@@ -19,7 +19,7 @@ import {
   Card,
   Check as PxCheck,
   CheckboxOn,
-  ChevronDown,
+  ChevronDown as ChevronDown_,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -43,7 +43,7 @@ import {
   MapPin,
   Menu,
   Message,
-  Mic,
+  Mic as Mic_,
   MicOff,
   Monitor as PxMonitor,
   MoreHorizontal,
@@ -53,7 +53,7 @@ import {
   Plus as PxPlus,
   PlusBox,
   Robot,
-  Search,
+  Search as Search_,
   Send,
   SettingsCog,
   Shield,
@@ -62,12 +62,21 @@ import {
   Stop,
   Trash as PxTrash,
   Undo,
-  User,
+  User as User_,
   UserPlus as PxUserPlus,
   Users as PxUsers,
   Video,
   VolumeX,
   WarningDiamond,
+  AiSettings2,
+  ArrowUp as PxArrowUp,
+  Attachment,
+  Checkbox as PxCheckbox,
+  FileText as PxFileText,
+  Folder,
+  Sparkles as PxSparkles,
+  Square as PxSquare,
+  StopSolid,
 } from 'pixelarticons/react';
 
 type PixelIcon = (props: SVGProps<SVGSVGElement>) => JSX.Element;
@@ -103,7 +112,7 @@ const VideoOffPixel: PixelIcon = (props) => (
 // Navigation & chrome
 export const ArrowLeft = px(PxArrowLeft, 'ArrowLeft');
 export const ArrowSquareUp = px(ArrowUpBox, 'ArrowSquareUp');
-export const CaretDown = px(ChevronDown, 'CaretDown');
+export const CaretDown = px(ChevronDown_, 'CaretDown');
 export const CaretLeft = px(ChevronLeft, 'CaretLeft');
 export const CaretRight = px(ChevronRight, 'CaretRight');
 export const CaretUp = px(ChevronUp, 'CaretUp');
@@ -111,7 +120,7 @@ export const DotsThree = px(MoreHorizontal, 'DotsThree');
 export const DotsThreeVertical = px(MoreVertical, 'DotsThreeVertical');
 export const House = px(Home, 'House');
 export const List = px(Menu, 'List');
-export const MagnifyingGlass = px(Search, 'MagnifyingGlass');
+export const MagnifyingGlass = px(Search_, 'MagnifyingGlass');
 export const SignOut = px(Logout, 'SignOut');
 export const X = px(Close, 'X');
 
@@ -139,7 +148,7 @@ export const Timer = px(PxClock, 'Timer');
 // Call controls
 export const ClosedCaptioning = px(BadgeCaptions, 'ClosedCaptioning');
 export const HandPalm = px(Hand, 'HandPalm');
-export const Microphone = px(Mic, 'Microphone');
+export const Microphone = px(Mic_, 'Microphone');
 export const MicrophoneSlash = px(MicOff, 'MicrophoneSlash');
 export const Monitor = px(PxMonitor, 'Monitor');
 export const SpeakerSlash = px(VolumeX, 'SpeakerSlash');
@@ -155,8 +164,8 @@ export const SquaresFour = px(Grid2x22, 'SquaresFour');
 // People & roles
 export const Crown = px(PxCrown, 'Crown');
 export const IdentificationBadge = px(Card, 'IdentificationBadge');
-export const UserCircle = px(User, 'UserCircle');
-export const UserGear = px(User, 'UserGear');
+export const UserCircle = px(User_, 'UserCircle');
+export const UserGear = px(User_, 'UserGear');
 export const UserPlus = px(PxUserPlus, 'UserPlus');
 export const Users = px(PxUsers, 'Users');
 
@@ -180,3 +189,28 @@ export const Trash = px(PxTrash, 'Trash');
 export const AndroidLogo = px(Android, 'AndroidLogo');
 export const Brain = px(Robot, 'Brain');
 export const Sparkle = px(PxSparkle, 'Sparkle');
+
+// Lucide names used by CastAI, the prompt box and the agent plan (same props:
+// className sizes win over the default width/height)
+export const Sparkles = px(PxSparkles, 'Sparkles');
+export const User = px(User_, 'User');
+export const FileText = px(PxFileText, 'FileText');
+export const CheckSquare = px(PxCheckbox, 'CheckSquare');
+export const ChevronDown = px(ChevronDown_, 'ChevronDown');
+export const Pin = px(MapPin, 'Pin');
+export const Trash2 = px(PxTrash, 'Trash2');
+export const Search = px(Search_, 'Search');
+export const MessageSquare = px(Message, 'MessageSquare');
+export const Loader2 = px(Loader, 'Loader2');
+export const ArrowUp = px(PxArrowUp, 'ArrowUp');
+export const Paperclip = px(Attachment, 'Paperclip');
+export const Square = px(PxSquare, 'Square');
+export const StopSolidIcon = px(StopSolid, 'StopSolidIcon');
+export const Mic = px(Mic_, 'Mic');
+export const BrainCog = px(AiSettings2, 'BrainCog');
+export const FolderCog = px(Folder, 'FolderCog');
+export const History = px(Undo, 'History');
+export const CheckCircle2 = px(CheckboxOn, 'CheckCircle2');
+export const AlertCircle = px(WarningDiamond, 'AlertCircle');
+export const CircleDotDashed = px(Loader, 'CircleDotDashed');
+export const XCircle = px(Close, 'XCircle');

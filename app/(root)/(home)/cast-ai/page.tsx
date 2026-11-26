@@ -3,10 +3,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { PromptInputBox } from '@/components/ui/ai-prompt-box';
-import { Brain, Sparkles, User, Calendar, FileText, CheckSquare, Plus, ArrowLeft, ChevronDown, Pin, Trash2, Search, MessageSquare, Loader2 } from 'lucide-react';
+import { Brain, Sparkles, User, Calendar, FileText, CheckSquare, Plus, ArrowLeft, ChevronDown, Pin, Trash2, Search, MessageSquare, Loader2 } from '@/components/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { NoiseTexture } from '@/components/ui/noise-texture';
+import EmberAurora from '@/components/home/EmberAurora';
+import EmberPixels from '@/components/EmberPixels';
+import PixelLoader from '@/components/PixelLoader';
 import { TextAnimate } from '@/components/ui/text-animate';
 import { useStreamVideoClient } from '@stream-io/video-react-sdk';
 import Plan, { Task } from '@/components/ui/agent-plan';
@@ -1300,16 +1302,8 @@ The event has been successfully deleted/cancelled and removed from your dashboar
 
   return (
     <div className="relative flex-1 min-h-0 flex flex-col bg-background overflow-hidden font-geist">
-      <NoiseTexture className="opacity-[0.15]" />
-      <div
-        className="absolute inset-0 z-0 pointer-events-none opacity-40"
-        style={{
-          backgroundImage: `linear-gradient(to right, #c4cccc 1px, transparent 1px), linear-gradient(to bottom, #c4cccc 1px, transparent 1px)`,
-          backgroundSize: '40px 40px',
-          maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 50%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 50%)',
-        }}
-      />
+      <EmberAurora className="opacity-80" />
+      <EmberPixels count={40} className="inset-x-0 top-0 z-0 h-[14px]" drift={[0, 12]} sway={[-8, 8]} sizes={[3, 4, 4, 6]} />
 
       {messages.length === 0 ? (
         // Non-scrollable Empty Welcome Screen & Input together in the same div
@@ -1369,17 +1363,17 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   className={`flex gap-4 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {msg.sender === 'ai' && (
-                    <div className="size-9 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
-                      <img src="/logo/Main.svg" alt="CastAI" className="size-6 object-contain" />
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-ink shadow-[0_6px_16px_-8px_rgba(154,52,18,0.6)]" aria-label="CastAI">
+                      <PixelLoader animate={false} cell={4} gap={1.5} />
                     </div>
                   )}
                   <div className="flex flex-col max-w-[80%] gap-1">
                     {msg.sender === 'user' ? (
-                      <div className="px-4 py-3 rounded-2xl text-[14px] leading-relaxed shadow-sm border bg-slate-900 text-white border-slate-900 rounded-tr-none">
+                      <div className="rounded-2xl rounded-tr-md bg-gradient-to-br from-[#c2410c] to-[#f97316] px-4 py-3 text-[14px] leading-relaxed text-white shadow-[0_10px_24px_-12px_rgba(194,65,12,0.7)]">
                         <p className="whitespace-pre-line">{msg.text}</p>
                       </div>
                     ) : (
-                      <div className="py-2 text-[14px] leading-relaxed text-slate-800 flex flex-col gap-3">
+                      <div className="flex flex-col gap-3 py-2 font-serif text-[16px] leading-relaxed text-ink">
                         {msg.text && <p className="whitespace-pre-line">{msg.text}</p>}
                         
                         {/* If text is empty (processing in progress), render the plan directly */}
@@ -1394,7 +1388,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                           <div className="mt-2 flex flex-col gap-2">
                             <button
                               onClick={() => togglePlanExpanded(msg.id)}
-                              className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-slate-800 transition-colors w-fit font-medium"
+                              className="flex w-fit items-center gap-1.5 font-mono text-[11px] text-ink-muted transition-colors hover:text-ember-deep"
                             >
                               <ChevronDown className={`size-3.5 transition-transform duration-200 ${expandedPlans[msg.id] ? 'rotate-180' : ''}`} />
                               <span>worked for {formatDuration(msg.durationMs)}</span>
@@ -1418,25 +1412,25 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                         )}
                       </div>
                     )}
-                    <div className={`flex items-center gap-1.5 px-1 mt-0.5 text-[10px] text-slate-400 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`mt-0.5 flex items-center gap-1.5 px-1 font-mono text-[10px] text-ink-muted ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                       {msg.mode === 'search' && (
-                        <span className="font-normal text-[#1EAEDB]">Deep Search</span>
+                        <span className="font-normal text-[#c2410c]">Deep Search</span>
                       )}
                       {msg.mode === 'think' && (
-                        <span className="font-normal text-[#8B5CF6]">Automate</span>
+                        <span className="font-normal text-[#9a3412]">Automate</span>
                       )}
-                      {msg.mode && <span className="text-slate-300">•</span>}
+                      {msg.mode && <span className="text-black/20">•</span>}
                       <span>{msg.timestamp}</span>
                       {msg.sender === 'ai' && (
                         <>
-                          <span className="text-slate-300">•</span>
+                          <span className="text-black/20">•</span>
                           <span className="font-normal text-orange-700">worked for {formatDuration(msg.durationMs)}</span>
                         </>
                       )}
                     </div>
                   </div>
                   {msg.sender === 'user' && (
-                    <div className="size-9 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
+                    <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/5 bg-white shadow-sm">
                       {user?.imageUrl ? (
                         <img src={user.imageUrl} alt={user.fullName || 'User'} className="size-full object-cover" />
                       ) : (
@@ -1454,14 +1448,10 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   animate={{ opacity: 1 }}
                   className="flex gap-4 justify-start items-center"
                 >
-                  <div className="size-9 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
-                    <img src="/logo/Main.svg" alt="CastAI" className="size-6 object-contain" />
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-ink shadow-[0_6px_16px_-8px_rgba(154,52,18,0.6)]">
+                    <PixelLoader cell={4} gap={1.5} />
                   </div>
-                  <div className="py-2 flex items-center gap-1.5">
-                    <div className="size-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
-                    <div className="size-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
-                    <div className="size-1.5 rounded-full bg-slate-400 animate-bounce" />
-                  </div>
+                  <span className="text-shimmer-ember font-mono text-[12px] tracking-wide">Thinking</span>
                 </motion.div>
               )}
               <div ref={messagesEndRef} />
@@ -1527,7 +1517,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                 />
                 <button
                   onClick={startNewChat}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold shrink-0 transition-all shadow-sm"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-ink text-white hover:bg-ink-soft text-xs font-semibold shrink-0 transition-all shadow-sm"
                 >
                   <Plus className="size-3.5" />
                   <span>New chat</span>

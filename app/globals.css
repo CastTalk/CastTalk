@@ -470,3 +470,20 @@
     opacity: var(--o, 0.6);
   }
 }
+
+/* "Thinking" label: a slow ember shimmer sweeping across the text */
+@keyframes emberShimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+.text-shimmer-ember {
+  background: linear-gradient(90deg, #9a3412 0%, #9a3412 35%, #fdba74 50%, #9a3412 65%, #9a3412 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: emberShimmer 2.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer-ember { animation: none; color: #9a3412; }
+}
