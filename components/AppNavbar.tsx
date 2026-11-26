@@ -19,6 +19,7 @@ interface NotificationItem {
   type: string;
   createdAt: string;
   time: string; // Dynamic formatted label (e.g. "Just now")
+  href?: string; // Where tapping goes: the live meeting, or the schedule page
 }
 
 const mobileNavLinks: { label: string; route: string; icon: any; disabled?: boolean }[] = [
@@ -267,6 +268,15 @@ const AppNavbar = () => {
       "Couldn't mark notification as read"
     );
 
+  // Tapping a notification marks it read (if needed) and opens what it's about:
+  // the meeting while it's joinable, otherwise the schedule page.
+  const openNotification = (notif: NotificationItem) => {
+    if (!notif.read) void markRead(notif.id);
+    setShowNotifications(false);
+    setMobilePanelOpen(false);
+    handleNavigation(notif.href || '/upcoming');
+  };
+
   const deleteNotification = (id: string) => {
     const removed = notifications.find(n => n.id === id);
     if (!removed) return;
@@ -425,10 +435,18 @@ const AppNavbar = () => {
                         </div>
                       ) : (
                         visibleNotifications.map((notif) => (
-                          <div 
+                          <div
                             key={notif.id}
-                            onClick={() => !notif.read && markRead(notif.id)}
-                            className="group flex items-start gap-3 px-4 py-3 hover:bg-slate-50/80 cursor-pointer border-b border-slate-100 last:border-0 transition-colors"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => openNotification(notif)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                openNotification(notif);
+                              }
+                            }}
+                            className="group flex items-start gap-3 px-4 py-3 hover:bg-slate-50/80 active:bg-slate-100 cursor-pointer border-b border-slate-100 last:border-0 transition-colors"
                           >
                             <div className={`size-8 rounded-full flex items-center justify-center border shrink-0 ${getNotifBg(notif.type)}`}>
                               {getNotifIcon(notif.type)}
@@ -445,8 +463,10 @@ const AppNavbar = () => {
                                   e.stopPropagation();
                                   deleteNotification(notif.id);
                                 }}
-                                className="p-1.5 bg-red-50 hover:bg-red-100 rounded-full text-red-500 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
+                                // Always visible on touch screens (no hover); hover-reveal only with a mouse
+                                className="p-1.5 bg-red-50 hover:bg-red-100 rounded-full text-red-500 hover:text-red-600 transition-all [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
                                 title="Delete notification"
+                                aria-label="Delete notification"
                               >
                                 <Trash size={12} weight="bold" />
                               </button>
