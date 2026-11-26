@@ -1303,7 +1303,6 @@ The event has been successfully deleted/cancelled and removed from your dashboar
   return (
     <div className="relative flex-1 min-h-0 flex flex-col bg-background overflow-hidden font-geist">
       <EmberAurora className="opacity-80" />
-      <EmberPixels count={40} className="inset-x-0 top-0 z-0 h-[14px]" drift={[0, 12]} sway={[-8, 8]} sizes={[3, 4, 4, 6]} />
 
       {messages.length === 0 ? (
         // Non-scrollable Empty Welcome Screen & Input together in the same div
