@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { UserButton, useUser } from '@clerk/nextjs';
 import { Bell, X, Calendar, Brain, Clock, Trash, AndroidLogo, List, House, CalendarCheck, CaretDown } from '@/components/icons';
 import Logo from '@/components/Logo';
-import PixelBorder from '@/components/PixelBorder';
+import NavDock from '@/components/NavDock';
 import { useToast } from '@/components/ui/use-toast';
 
 interface NotificationItem {
@@ -309,7 +309,6 @@ const AppNavbar = () => {
   return (
     <>
       <div className="w-full relative z-40 flex justify-center border-b border-black/5 bg-white/80 backdrop-blur-md">
-        <PixelBorder />
         <header className="flex w-full max-w-[1440px] flex-row justify-between items-center h-[54px] px-4 md:px-6 lg:px-8">
           <div className="flex items-center h-full cursor-pointer" onClick={() => handleNavigation('/')}>
             <Logo />
@@ -322,32 +321,9 @@ const AppNavbar = () => {
             <span>{date}</span>
           </div>
 
-          <nav className="hidden lg:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 text-[14px]">
-            <button 
-              onClick={() => handleNavigation('/')} 
-              className={pathname === '/' 
-                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-pixel shadow-sm transition-all' 
-                : 'text-ink-soft hover:text-ink hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-pixel'}
-            >
-              Home
-            </button>
-            <button 
-              onClick={() => handleNavigation('/upcoming')} 
-              className={pathname === '/upcoming' 
-                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-pixel shadow-sm transition-all' 
-                : 'text-ink-soft hover:text-ink hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-pixel'}
-            >
-              Schedule
-            </button>
-            <button 
-              onClick={() => handleNavigation('/cast-ai')} 
-              className={pathname === '/cast-ai' 
-                ? 'bg-[#161618] text-white px-4 py-1.5 rounded-full font-pixel shadow-sm transition-all' 
-                : 'text-ink-soft hover:text-ink hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-pixel'}
-            >
-              CastAI
-            </button>
-          </nav>
+          <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 lg:block">
+            <NavDock compact pathname={pathname} onNavigate={handleNavigation} />
+          </div>
 
           <div className="flex items-center gap-2 text-slate-800 sm:gap-4">
             <div className="mr-4 hidden items-center gap-2 font-mono text-[13px] text-ink-soft lg:flex">
@@ -576,37 +552,15 @@ const AppNavbar = () => {
         />
       )}
 
-      {/* Mobile & tablet bottom tab bar — the main navigation below lg */}
-      <nav
-        aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-black/5 bg-white/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
-      >
-        <div className="mx-auto flex h-16 max-w-md items-stretch justify-around px-2">
-          {mobileNavLinks.map((link) => {
-            const isActive = link.route === '/' ? pathname === '/' : pathname.startsWith(link.route);
-            const Icon = link.icon;
-            return (
-              <button
-                key={link.route}
-                onClick={() => handleNavigation(link.route)}
-                aria-current={isActive ? 'page' : undefined}
-                className={`flex flex-1 flex-col items-center justify-center gap-1 transition-colors ${
-                  isActive ? 'text-ember-deep' : 'text-ink-muted hover:text-ink'
-                }`}
-              >
-                <span
-                  className={`flex h-8 w-14 items-center justify-center rounded-full transition-colors ${
-                    isActive ? 'bg-ember/10' : ''
-                  }`}
-                >
-                  <Icon size={20} />
-                </span>
-                <span className="font-pixel text-[11px] leading-none">{link.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+      {/* Mobile & tablet: floating square dock — the main navigation below lg */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] lg:hidden">
+        <NavDock
+          className="pointer-events-auto"
+          layoutId="nav-dock-active-mobile"
+          pathname={pathname}
+          onNavigate={handleNavigation}
+        />
+      </div>
     </>
   );
 };

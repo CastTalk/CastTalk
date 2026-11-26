@@ -13,7 +13,7 @@ const HomeLayout = ({ children }: Readonly<{ children: ReactNode }>) => {
       <AppNavbar />
 
       <div className="flex w-full flex-1 justify-center overflow-hidden">
-        <main className="relative flex w-full flex-1 flex-col overflow-hidden bg-white pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <main className="relative flex w-full flex-1 flex-col overflow-hidden bg-white pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
       </div>

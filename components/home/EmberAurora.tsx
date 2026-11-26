@@ -17,6 +17,7 @@ type AuroraProps = {
   lightMode?: boolean;
   mouseInteraction?: boolean;
   paused?: boolean;
+  dpr?: number;
   className?: string;
 };
 
@@ -25,6 +26,13 @@ const Aurora = dynamic(
   () => import('@/components/Aurora').then((m) => m.default as unknown as ComponentType<AuroraProps>),
   { ssr: false }
 );
+
+// Rough device tier: low memory / few cores / data saver -> render lighter.
+const isLowPowerDevice = () => {
+  if (typeof navigator === 'undefined') return false;
+  const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
+  return (nav.deviceMemory ?? 8) <= 4 || (nav.hardwareConcurrency ?? 8) <= 4 || !!nav.connection?.saveData;
+};
 
 // The "rise in" intro plays once per visit. Every page that shows the aurora
 // mounts a new instance, so without this the intro replayed on each navigation.
@@ -42,11 +50,14 @@ const EmberAurora = ({ className = '' }: { className?: string }) => {
     introPlayed = true;
     return play;
   });
+  // Low-power devices: 1x resolution and a single layer. Others: 2 layers, up to 2x.
+  // (Aurora itself stops drawing when off screen or when the tab is hidden.)
+  const [lowPower] = useState(isLowPowerDevice);
 
   return (
     <div
       aria-hidden
-      className={`pointer-events-none absolute inset-x-0 top-0 h-[600px] ${className}`}
+      className={`pointer-events-none absolute inset-x-0 top-0 h-[520px] ${className}`}
       style={{
         maskImage: 'linear-gradient(to bottom, black 0%, black 50%, transparent 100%)',
         WebkitMaskImage: 'linear-gradient(to bottom, black 0%, black 50%, transparent 100%)',
@@ -58,10 +69,11 @@ const EmberAurora = ({ className = '' }: { className?: string }) => {
         intro={intro}
         opacity={0.6}
         blend={0.65}
-        amplitude={1.6}
-        scale={0.7}
-        height={0.55}
-        layers={2}
+        amplitude={2.1}
+        scale={0.65}
+        height={0.42}
+        layers={lowPower ? 1 : 2}
+        dpr={lowPower ? 1 : undefined}
         speed={1}
         mouseInteraction
       />

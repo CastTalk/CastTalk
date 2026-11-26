@@ -436,15 +436,6 @@
   animation: glowIn 1.4s cubic-bezier(0.075, 0.82, 0.165, 1) 0.15s both;
 }
 
-/* Header border pixels: a few gently fade in and out */
-@keyframes pixelTwinkle {
-  0%, 100% { opacity: 0.9; }
-  50% { opacity: 0.15; }
-}
-.animate-pixel-twinkle {
-  animation: pixelTwinkle 3.2s steps(4, end) infinite;
-}
-
 /* Touch devices: hide scrollbars (scrolling still works) */
 @media (hover: none) and (pointer: coarse) {
   ::-webkit-scrollbar {
@@ -452,5 +443,30 @@
   }
   * {
     scrollbar-width: none;
+  }
+}
+
+/* Ember pixels (components/EmberPixels.tsx): fade in, drift in stepped pixel
+   moves, fade out. Paused off screen via [data-paused]. */
+@keyframes emberDrift {
+  0% { opacity: 0; transform: translate(0, 0); }
+  15% { opacity: var(--o, 0.8); }
+  70% { opacity: calc(var(--o, 0.8) * 0.7); }
+  100% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, -24px)); }
+}
+.ember-px {
+  opacity: 0;
+  animation-name: emberDrift;
+  animation-timing-function: steps(10, end);
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+.ember-field[data-paused='true'] .ember-px {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ember-px {
+    animation: none;
+    opacity: var(--o, 0.6);
   }
 }

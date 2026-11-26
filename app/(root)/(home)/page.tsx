@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import CastTalkModal from '@/components/CastTalkModal';
 import EmberAurora from '@/components/home/EmberAurora';
 import GlowWord from '@/components/home/GlowWord';
+import EmberPixels from '@/components/EmberPixels';
 import HeroLaptopMockup from '@/components/home/HeroLaptopMockup';
 import { Close as PixelClose, Keyboard as PixelKeyboard, Link as PixelLink, Plus as PixelPlus, Video as PixelVideo } from 'pixelarticons/react';
 
@@ -291,10 +292,13 @@ const Home = () => {
     <>
       <div className="relative flex-1 overflow-y-auto overflow-x-hidden">
         <EmberAurora />
+        {/* Ember pixels spreading down from the top edge — part of the scrolling
+            content, so they leave with the aurora instead of sticking to the navbar */}
+        <EmberPixels count={44} className="inset-x-0 top-0 z-[1] h-[140px]" drift={[-8, 32]} sway={[-20, 20]} />
 
         {/* Hero: centered headline, two actions, product mockup below */}
         <section className="relative z-20 mx-auto flex max-w-4xl flex-col items-center px-4 pt-12 text-center sm:pt-16">
-          <h1 className="font-pixel text-[34px] font-normal leading-[1.1] tracking-[-0.01em] text-[#27272a] [text-wrap:balance] sm:text-5xl lg:text-[60px]">
+          <h1 className="font-pixel text-[34px] font-normal leading-[1.1] tracking-[-0.01em] text-[#27272a] [-webkit-text-stroke:0.008em_currentColor] [text-wrap:balance] sm:text-5xl lg:text-[60px]">
             Talk the way you talk.
             <br />
             We&apos;ll catch <GlowWord>every word</GlowWord>.
