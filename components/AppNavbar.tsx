@@ -6,6 +6,7 @@ import { UserButton, useUser } from '@clerk/nextjs';
 import { Bell, X, Calendar, Brain, Clock, Trash, AndroidLogo, List, House, CalendarCheck, CaretDown } from '@phosphor-icons/react';
 import { Client } from 'appwrite';
 import { NoiseTexture } from '@/components/ui/noise-texture';
+import { useToast } from '@/components/ui/use-toast';
 
 const appwriteClient = new Client()
   .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://syd.cloud.appwrite.io/v1')
@@ -45,6 +46,10 @@ const AppNavbar = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+  const { toast } = useToast();
+  // Optimistic-write bookkeeping: polls are ignored while a write is in flight
+  const pendingMutationsRef = useRef(0);
+  const mutationVersionRef = useRef(0);
 
   const formatRelativeTime = (isoString: string) => {
     try {
@@ -128,10 +133,15 @@ const AppNavbar = () => {
     if (!user?.id) return;
 
     const fetchNotifications = async () => {
+      // Skip polls that overlap an optimistic write: their response may predate it
+      // and would briefly bring back a deleted item or an unread dot.
+      if (pendingMutationsRef.current > 0) return;
+      const versionAtStart = mutationVersionRef.current;
       try {
         const res = await fetch('/api/notifications');
         if (res.ok) {
           const data = await res.json();
+          if (pendingMutationsRef.current > 0 || mutationVersionRef.current !== versionAtStart) return;
           const formatted = (data.notifications || []).map((n: any) => ({
             ...n,
             time: formatRelativeTime(n.createdAt)
@@ -164,7 +174,8 @@ const AppNavbar = () => {
               createdAt: doc.createdAt,
               time: formatRelativeTime(doc.createdAt)
             };
-            setNotifications(prev => [formatted, ...prev]);
+            // The 25s poll may already have added it
+            setNotifications(prev => (prev.some(n => n.id === formatted.id) ? prev : [formatted, ...prev]));
           } else if (response.events.some(e => e.includes('update'))) {
             setNotifications(prev => prev.map(n => n.id === doc.$id ? { ...n, read: doc.read } : n));
           } else if (response.events.some(e => e.includes('delete'))) {
@@ -186,53 +197,87 @@ const AppNavbar = () => {
 
 
 
-  const markAllRead = async () => {
+  // ── Optimistic mutations ────────────────────────────────────────────────
+  // Each action updates the list immediately, then writes to the server. If the
+  // write fails (network error or non-2xx), only the items that action touched are
+  // restored, so concurrent actions and realtime updates are not clobbered.
+  const runOptimistic = async (
+    request: () => Promise<Response>,
+    apply: () => void,
+    rollback: () => void,
+    failureTitle: string
+  ) => {
+    pendingMutationsRef.current += 1;
+    mutationVersionRef.current += 1;
+    apply();
     try {
-      await fetch('/api/notifications', {
+      const res = await request();
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      console.error('[AppNavbar] Notification update failed:', e);
+      rollback();
+      toast({ title: failureTitle, description: 'Your change was undone. Please try again.', variant: 'destructive' });
+    } finally {
+      pendingMutationsRef.current -= 1;
+      mutationVersionRef.current += 1;
+    }
+  };
+
+  const restoreItems = (items: NotificationItem[]) =>
+    setNotifications(prev => {
+      const existing = new Set(prev.map(n => n.id));
+      const merged = [...prev, ...items.filter(n => !existing.has(n.id))];
+      return merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    });
+
+  const markAllRead = () => {
+    const unreadIds = new Set(notifications.filter(n => !n.read).map(n => n.id));
+    if (unreadIds.size === 0) return;
+    return runOptimistic(
+      () => fetch('/api/notifications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markAll: true })
-      });
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    } catch (e) {
-      console.error(e);
-    }
+        body: JSON.stringify({ markAll: true }),
+      }),
+      () => setNotifications(prev => prev.map(n => (unreadIds.has(n.id) ? { ...n, read: true } : n))),
+      () => setNotifications(prev => prev.map(n => (unreadIds.has(n.id) ? { ...n, read: false } : n))),
+      "Couldn't mark notifications as read"
+    );
   };
 
-  const markRead = async (id: string) => {
-    try {
-      await fetch('/api/notifications', {
+  const markRead = (id: string) =>
+    runOptimistic(
+      () => fetch('/api/notifications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [id] })
-      });
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    } catch (e) {
-      console.error(e);
-    }
+        body: JSON.stringify({ ids: [id] }),
+      }),
+      () => setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n))),
+      () => setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: false } : n))),
+      "Couldn't mark notification as read"
+    );
+
+  const deleteNotification = (id: string) => {
+    const removed = notifications.find(n => n.id === id);
+    if (!removed) return;
+    return runOptimistic(
+      () => fetch(`/api/notifications?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
+      () => setNotifications(prev => prev.filter(n => n.id !== id)),
+      () => restoreItems([removed]),
+      "Couldn't delete notification"
+    );
   };
 
-  const deleteNotification = async (id: string) => {
-    try {
-      await fetch(`/api/notifications?id=${id}`, {
-        method: 'DELETE'
-      });
-      // Soft delete locally first
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, type: 'deleted' } : n));
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const clearAllNotifications = async () => {
-    try {
-      await fetch('/api/notifications?clearAll=true', {
-        method: 'DELETE'
-      });
-      setNotifications([]);
-    } catch (e) {
-      console.error(e);
-    }
+  const clearAllNotifications = () => {
+    const removed = notifications;
+    if (removed.length === 0) return;
+    const removedIds = new Set(removed.map(n => n.id));
+    return runOptimistic(
+      () => fetch('/api/notifications?clearAll=true', { method: 'DELETE' }),
+      () => setNotifications(prev => prev.filter(n => !removedIds.has(n.id))),
+      () => restoreItems(removed),
+      "Couldn't clear notifications"
+    );
   };
 
   const getNotifIcon = (type: string) => {
