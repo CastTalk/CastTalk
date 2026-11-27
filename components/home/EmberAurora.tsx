@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, type ComponentType } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 
 type AuroraProps = {
   colorStops?: string[];
@@ -53,6 +53,18 @@ const EmberAurora = ({ className = '' }: { className?: string }) => {
   // Low-power devices: 1x resolution and a single layer. Others: 2 layers, up to 2x.
   // (Aurora itself stops drawing when off screen or when the tab is hidden.)
   const [lowPower] = useState(isLowPowerDevice);
+  // Start the WebGL aurora once the browser is idle after first paint, so it never
+  // competes with the headline (LCP) or hydration for the main thread.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(() => setReady(true), { timeout: 1200 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = window.setTimeout(() => setReady(true), 300);
+    return () => window.clearTimeout(t);
+  }, []);
 
   return (
     <div
@@ -63,6 +75,7 @@ const EmberAurora = ({ className = '' }: { className?: string }) => {
         WebkitMaskImage: 'linear-gradient(to bottom, black 0%, black 50%, transparent 100%)',
       }}
     >
+      {ready && (
       <Aurora
         colorStops={['#9a3412', '#f97316', '#fde68a']}
         lightMode
@@ -73,10 +86,13 @@ const EmberAurora = ({ className = '' }: { className?: string }) => {
         scale={0.65}
         height={0.42}
         layers={lowPower ? 1 : 2}
-        dpr={lowPower ? 1 : undefined}
+        // Soft gradient: rendering below device resolution and scaling up looks the
+        // same and shades 3-7x fewer pixels per frame
+        dpr={lowPower ? 0.5 : 0.75}
         speed={1}
         mouseInteraction
       />
+      )}
     </div>
   );
 };

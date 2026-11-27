@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
+import { useIdentity, useUser } from '@/providers/IdentityProvider';
 import { useStreamVideoClient, Call } from '@stream-io/video-react-sdk';
 import { Clock, Copy, Lock, Globe, SpinnerGap } from '@/components/icons';
 import { useToast } from '@/components/ui/use-toast';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
-import Loader from '@/components/Loader';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -29,7 +28,8 @@ const MORPH = { type: 'spring', stiffness: 420, damping: 36, mass: 0.8 } as cons
 const Home = () => {
   const router = useRouter();
   const [linkOrCode, setLinkOrCode] = useState('');
-  const { user, isLoaded } = useUser();
+  const { user } = useUser();
+  const { isGuest, requireAccount } = useIdentity();
   const client = useStreamVideoClient();
   const { toast } = useToast();
 
@@ -71,6 +71,12 @@ const Home = () => {
   };
 
   const openModal = (mode: MeetingMode) => {
+    // Scheduling sends reminder emails, so guests are asked to sign in
+    if (mode === 'later' && isGuest) {
+      setShowDropdown(false);
+      requireAccount('Scheduled meetings send reminder emails, so scheduling needs an account. As a guest you can still start an instant meeting or join one with a code.');
+      return;
+    }
     setFormTitle(''); setFormDesc('');
     const d = new Date();
     d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15);
@@ -178,8 +184,9 @@ const Home = () => {
         }
       }
 
-      // Sync manual meeting into Appwrite schedules database
-      await fetch('/api/schedules', {
+      // Sync manual meeting into Appwrite schedules database (members only:
+      // guests are never written to the database)
+      if (!isGuest) await fetch('/api/schedules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -221,6 +228,12 @@ const Home = () => {
     if (!linkOrCode) return;
     const meetingId = extractMeetingId(linkOrCode);
     if (!meetingId) return;
+
+    // Guests go straight to the room: the scheduled-meeting lookup is database-backed
+    if (isGuest) {
+      router.push(`/meeting/${meetingId}`);
+      return;
+    }
 
     try {
       setIsCheckingSchedule(true);
@@ -286,7 +299,6 @@ const Home = () => {
     }
   };
 
-  if (!isLoaded) return <Loader />;
 
   return (
     <>

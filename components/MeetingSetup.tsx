@@ -9,7 +9,7 @@ import {
 } from '@stream-io/video-react-sdk';
 import { Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash, Gear, PencilSimple, Check, Users, SpeakerSlash, Hourglass, Lock, ArrowLeft, Clock, SpinnerGap } from '@/components/icons';
 
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@/providers/IdentityProvider';
 import { Ripple } from './ui/ripple';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import Alert from './Alert';

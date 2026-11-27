@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@/providers/IdentityProvider';
 import { Call, useStreamVideoClient } from '@stream-io/video-react-sdk';
 
 export const useGetCalls = () => {
@@ -29,7 +29,8 @@ export const useGetCalls = () => {
 
         // 2. Fetch Appwrite schedules for user to ensure joined participant meetings are included
         let extraCalls: Call[] = [];
-        try {
+        // Guests have no database schedules — only their Stream calls
+        if (!user.isGuest) try {
           const scheduleRes = await fetch('/api/schedules');
           if (scheduleRes.ok) {
             const data = await scheduleRes.json();
@@ -80,7 +81,7 @@ export const useGetCalls = () => {
     };
 
     loadCalls();
-  }, [client, user?.id]);
+  }, [client, user?.id, user?.isGuest]);
 
   const endedCalls = useMemo(() => {
     const now = new Date();

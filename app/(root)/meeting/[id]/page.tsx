@@ -1,7 +1,9 @@
 'use client';
 
+// Stream's call UI styles: only the meeting page needs them (kept off Home etc.)
+import '@stream-io/video-react-sdk/dist/css/styles.css';
 import { useState, useRef } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@/providers/IdentityProvider';
 import { StreamCall, StreamTheme } from '@stream-io/video-react-sdk';
 import { useParams } from 'next/navigation';
 import { useGetCallById } from '@/hooks/useGetCallById';
@@ -17,6 +19,10 @@ const MeetingPage = () => {
   const [isSetupComplete, setIsSetupComplete] = useState(false);
   // Persist lobby device state so MeetingRoom can respect the user's pre-join choices
   const lobbyStateRef = useRef<{ isMicOn: boolean; isCameraOn: boolean }>({ isMicOn: true, isCameraOn: true });
+
+  // Visitors who haven't signed in or chosen guest yet: keep the page plain so the
+  // welcome gate (sign in / sign up / join as guest) is what they see.
+  if (isLoaded && !user) return <div className="h-[100dvh] w-full bg-white" />;
 
   if (!isLoaded || isCallLoading) return <Loader />;
 

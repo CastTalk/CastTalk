@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { UserButton, useUser } from '@clerk/nextjs';
-import { Bell, X, Calendar, Brain, Clock, Trash, AndroidLogo, List, House, CalendarCheck, CaretDown } from '@/components/icons';
+import { UserButton } from '@clerk/nextjs';
+import { useIdentity, useUser } from '@/providers/IdentityProvider';
+import { Bell, Calendar, Clock, Trash, AndroidLogo, List, CaretDown } from '@/components/icons';
 import Logo from '@/components/Logo';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import NavDock from '@/components/NavDock';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -18,16 +20,45 @@ interface NotificationItem {
   href?: string; // Where tapping goes: the live meeting, or the schedule page
 }
 
-const mobileNavLinks: { label: string; route: string; icon: any; disabled?: boolean }[] = [
-  { label: 'Home', route: '/', icon: House },
-  { label: 'Schedule', route: '/upcoming', icon: CalendarCheck },
-  { label: 'CastAI', route: '/cast-ai', icon: Brain },
-];
+const GuestAvatar = ({ name, className = '' }: { name: string; className?: string }) => (
+  <span className={`flex shrink-0 items-center justify-center rounded-full border border-ember/30 bg-ember/10 font-pixel uppercase text-ember-deep ${className}`}>
+    {name[0] || 'G'}
+  </span>
+);
+
+/** Desktop menu for guests: who they are, sign in / create account, leave guest mode */
+const GuestMenu = ({ name, onLeave }: { name: string; onLeave: () => Promise<void> }) => (
+  <DropdownMenu>
+    <DropdownMenuTrigger className="flex items-center gap-2 rounded-full border border-black/10 bg-white py-1 pl-1 pr-3 outline-none transition-colors hover:border-ember/40" aria-label="Guest menu">
+      <GuestAvatar name={name} className="size-[26px] text-[12px]" />
+      <span className="max-w-[120px] truncate text-[13px] text-ink">{name}</span>
+      <span className="rounded-full bg-black/5 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-ink-muted">Guest</span>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="z-[60] w-56 rounded-2xl border border-black/5 bg-white p-1.5 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.2)]">
+      <div className="px-3 py-2">
+        <p className="truncate text-[13px] font-medium text-ink">{name}</p>
+        <p className="font-mono text-[10px] text-ink-muted">Guest session · ends when you close the browser</p>
+      </div>
+      <DropdownMenuSeparator className="my-1 bg-black/5" />
+      <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 text-[13px] focus:bg-ember/10">
+        <a href="/sign-in">Sign in</a>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 text-[13px] focus:bg-ember/10">
+        <a href="/sign-up">Create an account</a>
+      </DropdownMenuItem>
+      <DropdownMenuSeparator className="my-1 bg-black/5" />
+      <DropdownMenuItem onClick={() => { void onLeave(); }} className="cursor-pointer rounded-xl px-3 py-2 text-[13px] text-red-600 focus:bg-red-50 focus:text-red-700">
+        Leave guest mode
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
+);
 
 const AppNavbar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useUser();
+  const { isMember, isGuest, leaveGuest } = useIdentity();
   const mobilePanelRef = useRef<HTMLDivElement>(null);
 
   const handleNavigation = (url: string) => {
@@ -137,7 +168,8 @@ const AppNavbar = () => {
 
   // Fetch notifications (polling + refresh on tab focus)
   useEffect(() => {
-    if (!user?.id) return;
+    // Notifications are database-backed: members only
+    if (!user?.id || user.isGuest) return;
 
     const fetchNotifications = async () => {
       // Skip polls that overlap an optimistic write: their response may predate it
@@ -177,7 +209,7 @@ const AppNavbar = () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [user?.id]);
+  }, [user?.id, user?.isGuest]);
 
 
 
@@ -330,6 +362,7 @@ const AppNavbar = () => {
               <span>{time}</span><span>•</span><span>{date}</span>
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
+              {isMember && (
               <div className="notification-container relative flex items-center">
                 <button 
                   onClick={() => setShowNotifications(!showNotifications)}                 className={`relative rounded-full p-2 transition-colors ${showNotifications ? 'bg-[#f97316]/10 text-[#9a3412]' : 'hover:bg-[#f97316]/5 text-slate-800 hover:text-[#9a3412]'}`}
@@ -428,11 +461,18 @@ const AppNavbar = () => {
                   </div>
                 )}
               </div>
+              )}
 
-              {/* Desktop profile avatar */}
-              <div className="hidden lg:flex size-[34px] rounded-full overflow-hidden items-center justify-center border-2 border-[#f97316]/40 hover:border-[#f97316] transition-colors">
-                <UserButton afterSignOutUrl="/sign-in" appearance={{ elements: { avatarBox: 'w-full h-full' } }} />
-              </div>
+              {/* Desktop profile avatar (member) or guest menu */}
+              {isMember ? (
+                <div className="hidden lg:flex size-[34px] rounded-full overflow-hidden items-center justify-center border-2 border-[#f97316]/40 hover:border-[#f97316] transition-colors">
+                  <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: 'w-full h-full' } }} />
+                </div>
+              ) : isGuest && user ? (
+                <div className="hidden lg:block">
+                  <GuestMenu name={user.fullName || 'Guest'} onLeave={leaveGuest} />
+                </div>
+              ) : null}
 
               {/* Mobile/Tablet collapsible sidebar trigger */}
               <button
@@ -444,6 +484,8 @@ const AppNavbar = () => {
                 <div className="size-[26px] rounded-full overflow-hidden border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0">
                   {user?.imageUrl ? (
                     <img src={user.imageUrl} alt="" className="w-full h-full object-cover" />
+                  ) : isGuest ? (
+                    <span className="font-pixel text-[12px] uppercase text-ember-deep">{(user?.fullName || 'G')[0]}</span>
                   ) : (
                     <List size={14} weight="bold" className="text-slate-500" />
                   )}
@@ -469,56 +511,8 @@ const AppNavbar = () => {
         }`}
         style={{ top: '54px', transition: 'max-height 0.4s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease' }}
       >
-        <div className="relative z-10 px-4 pt-3 pb-4">
-          {/* Navigation links with staggered slide-down animation */}
-          <nav className="flex flex-col gap-1">
-            {mobileNavLinks.map((link, index) => {
-              const isActive = pathname === link.route || pathname.startsWith(`${link.route}/`);
-              const Icon = link.icon;
-              return (
-                <button
-                  key={link.route}
-                  onClick={() => {
-                    if (!link.disabled) {
-                      handleNavigation(link.route);
-                      setMobilePanelOpen(false);
-                    }
-                  }}
-                  disabled={link.disabled}
-                  className={`flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-[15px] font-medium transition-all duration-200 ${
-                    link.disabled
-                      ? 'text-slate-300 cursor-not-allowed'
-                      : isActive
-                      ? 'bg-[#161618] text-white'
-                      : 'text-slate-600 hover:bg-[#f97316]/5 hover:text-slate-900 active:scale-[0.98]'
-                  }`}
-                  style={{
-                    opacity: mobilePanelOpen ? 1 : 0,
-                    transform: mobilePanelOpen ? 'translateY(0)' : 'translateY(-12px)',
-                    transition: `opacity 0.35s ease ${0.06 * (index + 1)}s, transform 0.35s ease ${0.06 * (index + 1)}s`,
-                  }}
-                >
-                  <Icon size={20} weight={isActive ? 'bold' : 'regular'} />
-                  <span>{link.label}</span>
-                  {link.disabled && (
-                    <span className="ml-auto text-[10px] font-semibold text-slate-300 bg-slate-100 px-2 py-0.5 rounded-full">Soon</span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Divider */}
-          <div 
-            className="my-4 h-px bg-slate-100"
-            style={{
-              opacity: mobilePanelOpen ? 1 : 0,
-              transform: mobilePanelOpen ? 'scaleX(1)' : 'scaleX(0)',
-              transition: 'opacity 0.3s ease 0.3s, transform 0.4s ease 0.25s',
-              transformOrigin: 'left',
-            }}
-          />
-
+        <div className="relative z-10 px-4 py-3">
+          {/* Navigation lives in the bottom dock; this panel is just the profile */}
           {/* Profile section pushed to bottom */}
           <div
             className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
@@ -528,17 +522,37 @@ const AppNavbar = () => {
               transition: 'opacity 0.4s ease 0.35s, transform 0.4s ease 0.35s',
             }}
           >
-            <div className="size-[36px] rounded-full overflow-hidden flex items-center justify-center border border-slate-200 shrink-0">
-              <UserButton afterSignOutUrl="/sign-in" appearance={{ elements: { avatarBox: 'w-full h-full' } }} />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[14px] font-semibold text-slate-800 truncate">
-                {user?.fullName || user?.firstName || 'Account'}
-              </span>
-              <span className="text-[12px] text-slate-400 truncate">
-                {user?.primaryEmailAddress?.emailAddress || 'Manage account'}
-              </span>
-            </div>
+            {isGuest ? (
+              <>
+                <GuestAvatar name={user?.fullName || 'Guest'} className="size-[36px] text-[14px]" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-[14px] font-semibold text-slate-800">{user?.fullName || 'Guest'}</span>
+                  <span className="truncate font-mono text-[11px] text-ink-muted">Guest session</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setMobilePanelOpen(false); void leaveGuest(); }}
+                  className="shrink-0 rounded-full px-2.5 py-1.5 text-[12px] text-ink-muted transition-colors hover:text-red-600"
+                >
+                  Leave
+                </button>
+                <a href="/sign-in" className="shrink-0 rounded-full bg-ink px-3 py-1.5 text-[12px] font-medium text-white">Sign in</a>
+              </>
+            ) : (
+              <>
+                <div className="size-[36px] rounded-full overflow-hidden flex items-center justify-center border border-slate-200 shrink-0">
+                  <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: 'w-full h-full' } }} />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[14px] font-semibold text-slate-800 truncate">
+                    {user?.fullName || user?.firstName || 'Account'}
+                  </span>
+                  <span className="text-[12px] text-slate-400 truncate">
+                    {user?.primaryEmailAddress?.emailAddress || 'Manage account'}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

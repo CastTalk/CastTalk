@@ -1,12 +1,22 @@
 import { NextResponse } from 'next/server';
 import { fetchOpenRouterCompletion, OpenRouterMessage } from '@/lib/openrouter';
+import { getCaller } from '@/lib/caller';
 
 // Never prerender at build time: every request needs the live session/DB.
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  // In-call assistant: members, or guests with a valid signed session (it's a
+  // public route so guests in a call can use it — never anonymous callers).
+  if (!getCaller()) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
-    const { messages, transcripts, userName } = await req.json();
+    const body = await req.json();
+    // Keep requests bounded (prompt size drives model cost)
+    const messages = Array.isArray(body?.messages) ? body.messages.slice(-20) : [];
+    const transcripts = Array.isArray(body?.transcripts) ? body.transcripts.slice(-300) : [];
+    const userName = typeof body?.userName === 'string' ? body.userName.slice(0, 60) : undefined;
 
     const formattedTranscripts = (transcripts || [])
       .map((t: any) => {

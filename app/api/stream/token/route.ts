@@ -1,36 +1,20 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs';
-import { StreamClient } from '@stream-io/node-sdk';
+import { getCaller } from '@/lib/caller';
+import { createStreamTokenFor } from '@/lib/stream-token';
 
 // Never prerender at build time: every request needs the live session/DB.
 export const dynamic = 'force-dynamic';
 
-// Fallback for the tokenProvider server action. The user ID comes only from the
-// Clerk session; any ?userId= query parameter is ignored on purpose.
+// Fallback for the tokenProvider server action. Identity comes only from the
+// Clerk session or the signed guest cookie; any ?userId= is ignored on purpose.
 export async function GET() {
+  const caller = getCaller();
+  if (!caller) {
+    return NextResponse.json({ error: 'User is not authenticated' }, { status: 401 });
+  }
   try {
-    const { userId } = auth();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'User is not authenticated' }, { status: 401 });
-    }
-
-    const STREAM_API_KEY = process.env.NEXT_PUBLIC_STREAM_API_KEY;
-    const STREAM_API_SECRET = process.env.STREAM_SECRET_KEY;
-
-    if (!STREAM_API_KEY || !STREAM_API_SECRET) {
-      console.error('[API Stream Token] Missing Stream API Key or Secret');
-      return NextResponse.json({ error: 'Stream credentials not configured' }, { status: 500 });
-    }
-
-    const streamClient = new StreamClient(STREAM_API_KEY, STREAM_API_SECRET);
-    const expirationTime = Math.floor(Date.now() / 1000) + 24 * 3600;
-    const issuedAt = Math.floor(Date.now() / 1000) - 60;
-
-    const token = streamClient.createToken(userId, expirationTime, issuedAt);
-
-    return NextResponse.json({ token });
-  } catch (error: any) {
+    return NextResponse.json({ token: createStreamTokenFor(caller) });
+  } catch (error) {
     console.error('[API Stream Token Error]:', error);
     return NextResponse.json({ error: 'Failed to generate token' }, { status: 500 });
   }

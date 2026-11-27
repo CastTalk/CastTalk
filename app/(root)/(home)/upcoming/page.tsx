@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CaretLeft, CaretRight, Trash, Info, Copy, Globe, Lock, X, Clock, Timer, MagnifyingGlass, Sliders } from '@/components/icons';
 import { useGetCalls } from '@/hooks/useGetCalls';
 import { Call, useStreamVideoClient } from '@stream-io/video-react-sdk';
-import { useUser } from '@clerk/nextjs';
+import { useIdentity, useUser } from '@/providers/IdentityProvider';
 import { cn, generateShortMeetingId } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
 import { AnimatePresence } from 'framer-motion';
@@ -154,7 +154,7 @@ function groupOverlappingCalls(calls: Call[]): Call[][] {
   return groups;
 }
 
-export default function SchedulePage() {
+function SchedulePageContent() {
   const router = useRouter();
   const { toast } = useToast();
   const { calls, isLoading } = useGetCalls();
@@ -1500,6 +1500,38 @@ export default function SchedulePage() {
         </CastTalkModal>
       )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+
+/**
+ * Scheduling sends reminder emails and is stored per account, so guests see a
+ * sign-in panel here instead of the calendar.
+ */
+export default function SchedulePage() {
+  const { isGuest } = useIdentity();
+  if (!isGuest) return <SchedulePageContent />;
+
+  return (
+    <div className="flex flex-1 items-center justify-center px-4 py-10">
+      <div className="w-full max-w-md rounded-[20px] bg-[#fafafa]/90 p-1 shadow-[0_40px_100px_-40px_rgba(154,52,18,0.4),0_0_0_1px_rgba(0,0,0,0.04)]">
+        <div className="relative overflow-hidden rounded-2xl border-[0.8px] border-[#e0e0e0] bg-white px-7 py-9 text-center">
+          <div aria-hidden className="pointer-events-none absolute -bottom-28 -left-20 size-72 rounded-full bg-[radial-gradient(closest-side,rgba(249,115,22,0.14),rgba(253,230,138,0.12)_60%,transparent)] blur-2xl" />
+          <h1 className="relative font-pixel text-[26px] font-normal leading-tight text-ink">Scheduling needs an account</h1>
+          <p className="relative mx-auto mt-3 max-w-[320px] font-serif text-[15px] leading-relaxed text-ink-muted">
+            Scheduled meetings send reminder emails and live on your calendar. Sign in to schedule — as a guest you can still start an instant meeting or join one with a code.
+          </p>
+          <div className="relative mt-7 flex flex-col gap-2.5">
+            <a href="/sign-in" className="flex h-11 items-center justify-center rounded-full bg-ink text-[14px] font-medium text-white transition-colors hover:bg-ink-soft">
+              Sign in
+            </a>
+            <a href="/sign-up" className="flex h-11 items-center justify-center rounded-full border border-black/10 text-[14px] font-medium text-ink transition-colors hover:border-ember/40 hover:bg-ember/5">
+              Create an account
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

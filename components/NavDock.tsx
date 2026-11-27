@@ -15,8 +15,8 @@ const isActiveRoute = (pathname: string, route: string) => (route === '/' ? path
 
 /**
  * Square dock navigation: one rounded-square bar, hairline dividers between
- * items, the current page shown as a dark square tile with just its icon, the
- * others as icon + label. The active tile slides between items (shared layout).
+ * items, the current page shown as a dark pill with its icon + label, the others
+ * as icon-only squares (label on hover). The active pill slides between items.
  */
 const NavDock = ({
   pathname,
@@ -50,10 +50,12 @@ const NavDock = ({
             onClick={() => onNavigate(link.route)}
             aria-current={active ? 'page' : undefined}
             aria-label={link.label}
+            title={active ? undefined : link.label}
             className={cn(
               'relative flex items-center justify-center transition-colors',
               compact ? 'h-8 rounded-lg' : 'h-10 rounded-xl',
-              active ? (compact ? 'w-8' : 'w-10') : 'gap-2 px-3.5 text-ink-soft hover:bg-ember/[0.07] hover:text-ink'
+              // Active page: icon + label in the dark pill. Others: icon-only squares.
+              active ? 'gap-2 px-3.5 text-white' : cn(compact ? 'w-8' : 'w-10', 'text-ink-soft hover:bg-ember/[0.07] hover:text-ink')
             )}
           >
             {active && (
@@ -64,7 +66,7 @@ const NavDock = ({
               />
             )}
             <Icon size={compact ? 18 : 20} className={cn('relative z-10', active ? 'text-[#fdba74]' : '')} />
-            {!active && <span className={cn('relative z-10 font-pixel leading-none', compact ? 'text-[12px]' : 'text-[13px]')}>{link.label}</span>}
+            {active && <span className={cn('relative z-10 font-pixel leading-none', compact ? 'text-[12px]' : 'text-[13px]')}>{link.label}</span>}
           </button>
         </Fragment>
       );

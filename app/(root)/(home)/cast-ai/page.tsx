@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useIdentity, useUser } from '@/providers/IdentityProvider';
 import { PromptInputBox } from '@/components/ui/ai-prompt-box';
 import { Brain, Sparkles, User, Calendar, FileText, CheckSquare, Plus, ArrowLeft, ChevronDown, Pin, Trash2, Search, MessageSquare, Loader2 } from '@/components/icons';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -459,6 +459,9 @@ const groupThreads = (threads: any[]) => {
 
 export default function CastAIPage() {
   const { user } = useUser();
+  const { isMember, requireAccount } = useIdentity();
+  const CASTAI_NEEDS_ACCOUNT = 'CastAI plans and books meetings on your calendar and keeps your chat history, so it needs an account. Sign in to start chatting.';
+  const openHistory = () => (isMember ? setShowHistoryModal((prev) => !prev) : requireAccount(CASTAI_NEEDS_ACCOUNT));
   const router = useRouter();
   const client = useStreamVideoClient();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -662,6 +665,11 @@ export default function CastAIPage() {
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
+    // Guests and visitors: CastAI is member-only (calendar actions + saved history)
+    if (!isMember) {
+      requireAccount(CASTAI_NEEDS_ACCOUNT);
+      return;
+    }
 
     startTimeRef.current = Date.now();
 
@@ -1338,7 +1346,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                 isLoading={isTyping}
                 placeholder="Ask CastAI anything about meetings, notes, or tasks..."
                 className="max-w-full"
-                onHistoryClick={() => setShowHistoryModal(prev => !prev)}
+                onHistoryClick={openHistory}
               />
             </div>
           </div>
@@ -1470,7 +1478,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   isLoading={isTyping}
                   placeholder="Ask CastAI anything about meetings, notes, or tasks..."
                   className="max-w-full"
-                  onHistoryClick={() => setShowHistoryModal(prev => !prev)}
+                  onHistoryClick={openHistory}
                 />
               </div>
             </div>

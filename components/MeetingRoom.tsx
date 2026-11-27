@@ -15,7 +15,7 @@ import {
   ParticipantsAudio,
 } from '@stream-io/video-react-sdk';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@/providers/IdentityProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, SquaresFour, GridFour, Monitor,
