@@ -35,8 +35,8 @@ const NavDock = ({
   <nav
     aria-label="Main"
     className={cn(
-      'flex items-center gap-1 border border-black/[0.07] bg-white/90 backdrop-blur-md',
-      compact ? 'rounded-xl p-1 shadow-[0_4px_14px_-8px_rgba(154,52,18,0.3)]' : 'rounded-2xl p-1.5 shadow-[0_10px_30px_-14px_rgba(154,52,18,0.35)]',
+      'flex items-center gap-1.5 border border-black/[0.07] bg-white/90 backdrop-blur-md',
+      compact ? 'rounded-xl px-1.5 py-1 shadow-[0_4px_14px_-8px_rgba(154,52,18,0.3)]' : 'rounded-2xl px-2 py-1.5 shadow-[0_10px_30px_-14px_rgba(154,52,18,0.35)]',
       className
     )}
   >
@@ -54,8 +54,8 @@ const NavDock = ({
             className={cn(
               'relative flex items-center justify-center transition-colors',
               compact ? 'h-8 rounded-lg' : 'h-10 rounded-xl',
-              // Active page: icon + label in the dark pill. Others: icon-only squares.
-              active ? 'gap-2 px-3.5 text-white' : cn(compact ? 'w-8' : 'w-10', 'text-ink-soft hover:bg-ember/[0.07] hover:text-ink')
+              // Active page: icon + label in the dark pill. Others: icon-only buttons.
+              active ? 'gap-2 px-4 text-white' : cn(compact ? 'w-10' : 'w-11', 'text-ink-soft hover:bg-ember/[0.07] hover:text-ink')
             )}
           >
             {active && (

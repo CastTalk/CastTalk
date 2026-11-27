@@ -318,7 +318,7 @@ const Home = () => {
             </span>
           </h1>
 
-          <p className="mt-4 max-w-md font-serif text-lg leading-relaxed text-ink-muted sm:text-xl">
+          <p className="max-w-md font-serif text-lg leading-relaxed text-ink-muted sm:text-xl">
             No missing out on important discussions.
           </p>
 
