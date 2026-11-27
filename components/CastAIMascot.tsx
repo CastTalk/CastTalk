@@ -202,7 +202,7 @@ const CastAIMascot = ({
         </defs>
 
         {/* Soft shadow */}
-        <ellipse cx="50" cy="90" rx="22" ry="3.5" fill="#9a3412" opacity="0.18" />
+        <ellipse cx="50" cy="90" rx="22" ry="3.5" fill="#9a3412" opacity="0.08" />
 
         {/* Body */}
         <path ref={pathRef} fill={`url(#clay-${uid})`} />

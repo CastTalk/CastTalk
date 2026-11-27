@@ -1391,7 +1391,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
               transition={{ duration: 0.4 }}
               className="text-center flex flex-col items-center font-geist"
             >
-              <CastAIMascot mood={mascotMood === 'sleep' ? 'sleep' : 'easy'} size={76} className="mb-5" />
+              <CastAIMascot mood={mascotMood === 'sleep' ? 'sleep' : 'easy'} size={120} className="mb-3" />
               <h1 className="font-pixel text-5xl md:text-6xl lg:text-[72px] font-normal text-ink tracking-[-0.02em] leading-[1.05]">
                 How can I assist with your meetings?
               </h1>
@@ -1437,12 +1437,12 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   className={`flex gap-4 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {msg.sender === 'ai' && (
-                    <div className="flex size-9 shrink-0 items-center justify-center">
+                    <div className="flex size-12 shrink-0 items-center justify-center">
                       {/* The newest reply carries the live mascot; older ones a still one */}
                       {msg.id === liveAiId ? (
-                        <CastAIMascot mood={mascotMood} size={36} />
+                        <CastAIMascot mood={mascotMood} size={58} />
                       ) : (
-                        <CastAIMascot mood="idle" size={36} animate={false} />
+                        <CastAIMascot mood="idle" size={58} animate={false} />
                       )}
                     </div>
                   )}
@@ -1527,8 +1527,8 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   animate={{ opacity: 1 }}
                   className="flex gap-4 justify-start items-center"
                 >
-                  <div className="flex size-9 shrink-0 items-center justify-center">
-                    <CastAIMascot mood={mascotMood} size={36} />
+                  <div className="flex size-12 shrink-0 items-center justify-center">
+                    <CastAIMascot mood={mascotMood} size={58} />
                   </div>
                   <span className="text-shimmer-ember font-mono text-[12px] tracking-wide">
                     {mascotMood === 'hard' ? 'Working through it' : mascotMood === 'thinking' ? 'Pondering' : 'Thinking'}
