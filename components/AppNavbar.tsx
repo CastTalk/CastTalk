@@ -2,9 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { UserButton, useUser } from '@clerk/nextjs';
-import { Bell, X, Calendar, Brain, Clock, Trash, AndroidLogo, List, House, CalendarCheck, CaretDown } from '@phosphor-icons/react';
-import { NoiseTexture } from '@/components/ui/noise-texture';
+import { UserButton } from '@clerk/nextjs';
+import { useIdentity, useUser } from '@/providers/IdentityProvider';
+import { Bell, Calendar, Clock, Trash, AndroidLogo, List, CaretDown } from '@/components/icons';
+import { AnimatePresence, motion } from 'framer-motion';
+import Logo from '@/components/Logo';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import NavDock from '@/components/NavDock';
 import { useToast } from '@/components/ui/use-toast';
 
 interface NotificationItem {
@@ -17,16 +21,45 @@ interface NotificationItem {
   href?: string; // Where tapping goes: the live meeting, or the schedule page
 }
 
-const mobileNavLinks: { label: string; route: string; icon: any; disabled?: boolean }[] = [
-  { label: 'Home', route: '/', icon: House },
-  { label: 'Schedule', route: '/upcoming', icon: CalendarCheck },
-  { label: 'CastAI', route: '/cast-ai', icon: Brain },
-];
+const GuestAvatar = ({ name, className = '' }: { name: string; className?: string }) => (
+  <span className={`flex shrink-0 items-center justify-center rounded-full border border-ember/30 bg-ember/10 font-pixel uppercase text-ember-deep ${className}`}>
+    {name[0] || 'G'}
+  </span>
+);
+
+/** Desktop menu for guests: who they are, sign in / create account, leave guest mode */
+const GuestMenu = ({ name, onLeave }: { name: string; onLeave: () => Promise<void> }) => (
+  <DropdownMenu>
+    <DropdownMenuTrigger className="flex items-center gap-2 rounded-full border border-black/10 bg-white py-1 pl-1 pr-3 outline-none transition-colors hover:border-ember/40" aria-label="Guest menu">
+      <GuestAvatar name={name} className="size-[26px] text-[12px]" />
+      <span className="max-w-[120px] truncate text-[13px] text-ink">{name}</span>
+      <span className="rounded-full bg-black/5 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-ink-muted">Guest</span>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="z-[60] w-56 rounded-2xl border border-black/5 bg-white p-1.5 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.2)]">
+      <div className="px-3 py-2">
+        <p className="truncate text-[13px] font-medium text-ink">{name}</p>
+        <p className="font-mono text-[10px] text-ink-muted">Guest session · ends when you close the browser</p>
+      </div>
+      <DropdownMenuSeparator className="my-1 bg-black/5" />
+      <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 text-[13px] focus:bg-ember/10">
+        <a href="/sign-in">Sign in</a>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-3 py-2 text-[13px] focus:bg-ember/10">
+        <a href="/sign-up">Create an account</a>
+      </DropdownMenuItem>
+      <DropdownMenuSeparator className="my-1 bg-black/5" />
+      <DropdownMenuItem onClick={() => { void onLeave(); }} className="cursor-pointer rounded-xl px-3 py-2 text-[13px] text-red-600 focus:bg-red-50 focus:text-red-700">
+        Leave guest mode
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
+);
 
 const AppNavbar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useUser();
+  const { isMember, isGuest, leaveGuest } = useIdentity();
   const mobilePanelRef = useRef<HTMLDivElement>(null);
 
   const handleNavigation = (url: string) => {
@@ -136,7 +169,8 @@ const AppNavbar = () => {
 
   // Fetch notifications (polling + refresh on tab focus)
   useEffect(() => {
-    if (!user?.id) return;
+    // Notifications are database-backed: members only
+    if (!user?.id || user.isGuest) return;
 
     const fetchNotifications = async () => {
       // Skip polls that overlap an optimistic write: their response may predate it
@@ -147,6 +181,7 @@ const AppNavbar = () => {
         const res = await fetch('/api/notifications');
         if (res.ok) {
           const data = await res.json();
+          if (data.degraded) return; // Keep existing notifications during transient backend blips
           if (pendingMutationsRef.current > 0 || mutationVersionRef.current !== versionAtStart) return;
           const formatted = (data.notifications || []).map((n: any) => ({
             ...n,
@@ -176,7 +211,7 @@ const AppNavbar = () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [user?.id]);
+  }, [user?.id, user?.isGuest]);
 
 
 
@@ -275,7 +310,7 @@ const AppNavbar = () => {
   const getNotifIcon = (type: string) => {
     switch (type) {
       case 'success':
-        return <Calendar size={16} weight="fill" className="text-emerald-600" />;
+        return <Calendar size={16} weight="fill" className="text-orange-600" />;
       case 'scheduled':
         return <Calendar size={16} weight="fill" className="text-amber-500" />;
       case 'cancelled':
@@ -285,7 +320,7 @@ const AppNavbar = () => {
       case 'alert':
         return <Clock size={16} weight="fill" className="text-amber-600" />;
       case 'update':
-        return <Calendar size={16} weight="fill" className="text-blue-600" />;
+        return <Calendar size={16} weight="fill" className="text-amber-600" />;
       default:
         return <Bell size={16} weight="fill" className="text-slate-600" />;
     }
@@ -293,12 +328,12 @@ const AppNavbar = () => {
 
   const getNotifBg = (type: string) => {
     switch (type) {
-      case 'success': return 'bg-emerald-50 border-emerald-100';
+      case 'success': return 'bg-orange-50 border-orange-100';
       case 'scheduled': return 'bg-amber-50 border-amber-100';
       case 'cancelled': return 'bg-red-50 border-red-100';
       case 'ai': return 'bg-violet-50 border-violet-100';
       case 'alert': return 'bg-amber-50 border-amber-100';
-      case 'update': return 'bg-blue-50 border-blue-100';
+      case 'update': return 'bg-amber-50 border-amber-100';
       default: return 'bg-slate-50 border-slate-100';
     }
   };
@@ -307,154 +342,148 @@ const AppNavbar = () => {
 
   return (
     <>
-      <div className="w-full relative z-40 flex justify-center border-b-2 border-dashed border-[#15803d]/20 bg-[#f3f4f6]">
+      <div className="w-full relative z-40 flex justify-center border-b border-black/5 bg-white/80 backdrop-blur-md">
         <header className="flex w-full max-w-[1440px] flex-row justify-between items-center h-[54px] px-4 md:px-6 lg:px-8">
           <div className="flex items-center h-full cursor-pointer" onClick={() => handleNavigation('/')}>
-            <img src="/logo/logoMain.svg" alt="CastTalk" className="h-8 w-auto" />
+            <Logo />
           </div>
 
           {/* Mobile & Tablet Centered Time/Date in Header */}
-          <div className="flex lg:hidden absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center text-[13px] sm:text-[14px] font-medium text-slate-700 gap-1.5 whitespace-nowrap select-none pointer-events-none">
+          <div className="hidden md:flex lg:hidden absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap font-mono text-[12px] text-ink-soft select-none pointer-events-none sm:text-[13px]">
             <span>{time}</span>
             <span className="text-slate-400">•</span>
             <span>{date}</span>
           </div>
 
-          <nav className="hidden lg:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 text-[14px]">
-            <button 
-              onClick={() => handleNavigation('/')} 
-              className={pathname === '/' 
-                ? 'bg-[#15803d] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
-                : 'text-slate-700 hover:text-black hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-medium'}
-            >
-              Home
-            </button>
-            <button 
-              onClick={() => handleNavigation('/upcoming')} 
-              className={pathname === '/upcoming' 
-                ? 'bg-[#15803d] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
-                : 'text-slate-700 hover:text-black hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-medium'}
-            >
-              Schedule
-            </button>
-            <button 
-              onClick={() => handleNavigation('/cast-ai')} 
-              className={pathname === '/cast-ai' 
-                ? 'bg-[#15803d] text-white px-4 py-1.5 rounded-full font-medium shadow-sm transition-all' 
-                : 'text-slate-700 hover:text-black hover:bg-black/5 px-3.5 py-1.5 rounded-full transition-colors font-medium'}
-            >
-              CastAI
-            </button>
-          </nav>
+          <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 lg:block">
+            <NavDock compact pathname={pathname} onNavigate={handleNavigation} />
+          </div>
 
-          <div className="flex items-center gap-4 text-slate-800">
-            <div className="hidden lg:flex items-center text-[15px] font-medium gap-2 mr-4">
+          <div className="flex items-center gap-2 text-slate-800 sm:gap-4">
+            <div className="mr-4 hidden items-center gap-2 font-mono text-[13px] text-ink-soft lg:flex">
               <span>{time}</span><span>•</span><span>{date}</span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              {isMember && (
               <div className="notification-container relative flex items-center">
                 <button 
-                  onClick={() => setShowNotifications(!showNotifications)}                 className={`relative rounded-full p-2 transition-colors ${showNotifications ? 'bg-[#15803d]/10 text-[#15803d]' : 'hover:bg-[#15803d]/10 text-slate-800 hover:text-[#15803d]'}`}
+                  onClick={() => setShowNotifications(!showNotifications)}                 className={`relative rounded-full p-2 transition-colors ${showNotifications ? 'bg-[#f97316]/10 text-[#9a3412]' : 'hover:bg-[#f97316]/5 text-slate-800 hover:text-[#9a3412]'}`}
                   title="Notifications"
                 >
                   <Bell size={22} weight="regular" />
                   {visibleNotifications.filter(n => !n.read).length > 0 ? (
-                    <span className="absolute top-0.5 right-0.5 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-[#15803d] text-[9px] font-bold text-white ring-2 ring-white">
+                    <span className="absolute top-0.5 right-0.5 min-w-4 h-4 px-1 flex items-center justify-center rounded-full bg-[#f97316] text-[9px] font-bold text-white ring-2 ring-white">
                       {visibleNotifications.filter(n => !n.read).length}
                     </span>
                   ) : (
-                    <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-[#15803d] ring-2 ring-white" />
+                    <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-[#f97316] ring-2 ring-white" />
                   )}
                 </button>
 
+                <AnimatePresence>
                 {showNotifications && (
-                  <div className="absolute right-0 top-[42px] w-[calc(100vw-2rem)] sm:w-[360px] max-w-[360px] bg-white/95 backdrop-blur-md text-slate-800 rounded-2xl shadow-xl border border-slate-200/80 z-50 animate-slide-down overflow-hidden" style={{ right: 'min(0px, calc(-1 * (100vw - 100%)))' }}>
-                    <div className="flex items-center justify-between p-4 border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <Bell size={18} weight="fill" className="text-[#15803d]" />
-                        <span className="font-bold text-[15px] text-slate-900">Notifications</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {visibleNotifications.some(n => !n.read) && (
-                          <button 
-                            onClick={markAllRead}
-                            className="px-2 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200/60 rounded-md transition-colors"
-                          >
-                            Mark all read
-                          </button>
-                        )}
-                        {visibleNotifications.length > 0 && visibleNotifications.every(n => n.read) && (
-                          <button 
-                            onClick={clearAllNotifications}
-                            className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 rounded-md transition-colors"
-                            title="Clear all notifications"
-                          >
-                            <Trash size={13} weight="bold" />
-                            <span>Clear all</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="max-h-[320px] overflow-y-auto no-scrollbar py-2">
-                      {visibleNotifications.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-                          <div className="size-12 rounded-full bg-slate-50 flex items-center justify-center mb-3 border border-slate-100">
-                            <Bell size={24} className="text-slate-400" />
-                          </div>
-                          <h4 className="text-sm font-semibold text-slate-700">All caught up!</h4>
-                          <p className="text-xs text-slate-400 mt-1">No new notifications at the moment.</p>
+                  <motion.div
+                    key="notif-panel"
+                    initial={{ opacity: 0, scale: 0.96, y: -6 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.97, y: -4, transition: { duration: 0.15, ease: 'easeIn' } }}
+                    transition={{ duration: 0.45, ease: [0.075, 0.82, 0.165, 1] }}
+                    style={{ transformOrigin: 'top right' }}
+                    className="fixed inset-x-3 top-[62px] z-50 rounded-[20px] bg-[#fafafa] p-1 shadow-[0_30px_80px_-28px_rgba(154,52,18,0.4),0_0_0_1px_rgba(0,0,0,0.04)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-[46px] sm:w-[380px]"
+                  >
+                    <div className="relative overflow-hidden rounded-2xl border-[0.8px] border-[#e0e0e0] bg-white text-ink">
+                      <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-16 size-64 rounded-full bg-[radial-gradient(closest-side,rgba(249,115,22,0.12),rgba(253,230,138,0.1)_60%,transparent)] blur-2xl" />
+                      <div className="relative flex items-center justify-between border-b border-black/[0.06] px-4 py-3.5">
+                        <span className="font-pixel text-[17px] text-ink">Notifications</span>
+                        <div className="flex items-center gap-1.5">
+                          {visibleNotifications.some(n => !n.read) && (
+                            <button
+                              onClick={markAllRead}
+                              className="rounded-full border border-black/10 px-2.5 py-1 text-[11px] font-medium text-ink-soft transition-colors hover:border-ember/40 hover:bg-ember/5 hover:text-ember-deep"
+                            >
+                              Mark all read
+                            </button>
+                          )}
+                          {visibleNotifications.length > 0 && visibleNotifications.every(n => n.read) && (
+                            <button
+                              onClick={clearAllNotifications}
+                              className="flex items-center gap-1 rounded-full border border-black/10 px-2.5 py-1 text-[11px] font-medium text-ink-soft transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                              title="Clear all notifications"
+                            >
+                              <Trash size={12} />
+                              Clear all
+                            </button>
+                          )}
                         </div>
-                      ) : (
-                        visibleNotifications.map((notif) => (
-                          <div
-                            key={notif.id}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => openNotification(notif)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                openNotification(notif);
-                              }
-                            }}
-                            className="group flex items-start gap-3 px-4 py-3 hover:bg-slate-50/80 active:bg-slate-100 cursor-pointer border-b border-slate-100 last:border-0 transition-colors"
-                          >
-                            <div className={`size-8 rounded-full flex items-center justify-center border shrink-0 ${getNotifBg(notif.type)}`}>
-                              {getNotifIcon(notif.type)}
+                      </div>
+
+                      <div className="relative max-h-[340px] overflow-y-auto no-scrollbar p-1.5">
+                        {visibleNotifications.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+                            <div className="mb-3 flex size-11 items-center justify-center rounded-xl bg-ember/10 text-ember-deep">
+                              <Bell size={22} />
                             </div>
-                            <div className="flex-1 min-w-0 pr-4">
-                              <p className={`text-[12px] leading-normal line-clamp-2 ${!notif.read ? 'text-slate-900 font-medium' : 'text-slate-500 font-normal'}`}>
-                                {notif.text}
-                              </p>
-                              <span className="text-[10px] text-slate-400 mt-1 block">{notif.time}</span>
-                            </div>
-                            <div className="flex flex-col items-center justify-center gap-2 shrink-0">
-                              <button 
+                            <h4 className="font-pixel text-[15px] text-ink">All caught up</h4>
+                            <p className="mt-1 font-serif text-[13px] text-ink-muted">No new notifications right now.</p>
+                          </div>
+                        ) : (
+                          visibleNotifications.map((notif) => (
+                            <div
+                              key={notif.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openNotification(notif)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  openNotification(notif);
+                                }
+                              }}
+                              className="group flex cursor-pointer items-start gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-ember/[0.05] active:bg-ember/10"
+                            >
+                              <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg border ${getNotifBg(notif.type)}`}>
+                                {getNotifIcon(notif.type)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className={`line-clamp-2 text-[13px] leading-snug ${!notif.read ? 'font-medium text-ink' : 'text-ink-muted'}`}>
+                                  {notif.text}
+                                </p>
+                                <span className="mt-1 block font-mono text-[10px] text-ink-muted">{notif.time}</span>
+                              </div>
+                              {!notif.read && <span aria-label="Unread" className="mt-1.5 size-1.5 shrink-0 rounded-full bg-ember" />}
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   deleteNotification(notif.id);
                                 }}
                                 // Always visible on touch screens (no hover); hover-reveal only with a mouse
-                                className="p-1.5 bg-red-50 hover:bg-red-100 rounded-full text-red-500 hover:text-red-600 transition-all [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+                                className="shrink-0 rounded-lg p-1.5 text-ink-muted transition-all hover:bg-red-50 hover:text-red-600 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
                                 title="Delete notification"
                                 aria-label="Delete notification"
                               >
-                                <Trash size={12} weight="bold" />
+                                <Trash size={13} />
                               </button>
                             </div>
-                          </div>
-                        ))
-                      )}
+                          ))
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
+                </AnimatePresence>
               </div>
+              )}
 
-              {/* Desktop profile avatar */}
-              <div className="hidden lg:flex size-[34px] rounded-full overflow-hidden items-center justify-center border-2 border-[#15803d]/40 hover:border-[#15803d] transition-colors">
-                <UserButton afterSignOutUrl="/sign-in" appearance={{ elements: { avatarBox: 'w-full h-full' } }} />
-              </div>
+              {/* Desktop profile avatar (member) or guest menu */}
+              {isMember ? (
+                <div className="hidden lg:flex size-[34px] rounded-full overflow-hidden items-center justify-center border-2 border-[#f97316]/40 hover:border-[#f97316] transition-colors">
+                  <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: 'w-full h-full' } }} />
+                </div>
+              ) : isGuest && user ? (
+                <div className="hidden lg:block">
+                  <GuestMenu name={user.fullName || 'Guest'} onLeave={leaveGuest} />
+                </div>
+              ) : null}
 
               {/* Mobile/Tablet collapsible sidebar trigger */}
               <button
@@ -466,6 +495,8 @@ const AppNavbar = () => {
                 <div className="size-[26px] rounded-full overflow-hidden border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0">
                   {user?.imageUrl ? (
                     <img src={user.imageUrl} alt="" className="w-full h-full object-cover" />
+                  ) : isGuest ? (
+                    <span className="font-pixel text-[12px] uppercase text-ember-deep">{(user?.fullName || 'G')[0]}</span>
                   ) : (
                     <List size={14} weight="bold" className="text-slate-500" />
                   )}
@@ -484,65 +515,15 @@ const AppNavbar = () => {
       {/* Mobile & Tablet collapsible sidebar panel — slides down from navbar */}
       <div
         ref={mobilePanelRef}
-        className={`lg:hidden fixed left-0 right-0 z-[39] bg-[#f8f9fa] border-b border-slate-200 shadow-lg shadow-black/5 overflow-hidden ${
+        className={`lg:hidden fixed left-0 right-0 z-[39] bg-white border-b border-black/5 shadow-lg shadow-black/5 overflow-hidden ${
           mobilePanelOpen 
             ? 'max-h-[500px] opacity-100' 
             : 'max-h-0 opacity-0 pointer-events-none'
         }`}
         style={{ top: '54px', transition: 'max-height 0.4s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease' }}
       >
-        {/* Subtle noise texture */}
-        <NoiseTexture className="opacity-[0.1]" />
-        <div className="relative z-10 px-4 pt-3 pb-4">
-          {/* Navigation links with staggered slide-down animation */}
-          <nav className="flex flex-col gap-1">
-            {mobileNavLinks.map((link, index) => {
-              const isActive = pathname === link.route || pathname.startsWith(`${link.route}/`);
-              const Icon = link.icon;
-              return (
-                <button
-                  key={link.route}
-                  onClick={() => {
-                    if (!link.disabled) {
-                      handleNavigation(link.route);
-                      setMobilePanelOpen(false);
-                    }
-                  }}
-                  disabled={link.disabled}
-                  className={`flex items-center gap-3.5 px-3 py-2.5 rounded-none text-[15px] font-medium transition-all duration-200 ${
-                    link.disabled
-                      ? 'text-slate-300 cursor-not-allowed'
-                      : isActive
-                      ? 'bg-[#15803d] text-white'
-                      : 'text-slate-600 hover:bg-[#15803d]/5 hover:text-slate-900 active:scale-[0.98]'
-                  }`}
-                  style={{
-                    opacity: mobilePanelOpen ? 1 : 0,
-                    transform: mobilePanelOpen ? 'translateY(0)' : 'translateY(-12px)',
-                    transition: `opacity 0.35s ease ${0.06 * (index + 1)}s, transform 0.35s ease ${0.06 * (index + 1)}s`,
-                  }}
-                >
-                  <Icon size={20} weight={isActive ? 'bold' : 'regular'} />
-                  <span>{link.label}</span>
-                  {link.disabled && (
-                    <span className="ml-auto text-[10px] font-semibold text-slate-300 bg-slate-100 px-2 py-0.5 rounded-full">Soon</span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Divider */}
-          <div 
-            className="my-4 h-px bg-slate-100"
-            style={{
-              opacity: mobilePanelOpen ? 1 : 0,
-              transform: mobilePanelOpen ? 'scaleX(1)' : 'scaleX(0)',
-              transition: 'opacity 0.3s ease 0.3s, transform 0.4s ease 0.25s',
-              transformOrigin: 'left',
-            }}
-          />
-
+        <div className="relative z-10 px-4 py-3">
+          {/* Navigation lives in the bottom dock; this panel is just the profile */}
           {/* Profile section pushed to bottom */}
           <div
             className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
@@ -552,17 +533,37 @@ const AppNavbar = () => {
               transition: 'opacity 0.4s ease 0.35s, transform 0.4s ease 0.35s',
             }}
           >
-            <div className="size-[36px] rounded-full overflow-hidden flex items-center justify-center border border-slate-200 shrink-0">
-              <UserButton afterSignOutUrl="/sign-in" appearance={{ elements: { avatarBox: 'w-full h-full' } }} />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[14px] font-semibold text-slate-800 truncate">
-                {user?.fullName || user?.firstName || 'Account'}
-              </span>
-              <span className="text-[12px] text-slate-400 truncate">
-                {user?.primaryEmailAddress?.emailAddress || 'Manage account'}
-              </span>
-            </div>
+            {isGuest ? (
+              <>
+                <GuestAvatar name={user?.fullName || 'Guest'} className="size-[36px] text-[14px]" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-[14px] font-semibold text-slate-800">{user?.fullName || 'Guest'}</span>
+                  <span className="truncate font-mono text-[11px] text-ink-muted">Guest session</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setMobilePanelOpen(false); void leaveGuest(); }}
+                  className="shrink-0 rounded-full px-2.5 py-1.5 text-[12px] text-ink-muted transition-colors hover:text-red-600"
+                >
+                  Leave
+                </button>
+                <a href="/sign-in" className="shrink-0 rounded-full bg-ink px-3 py-1.5 text-[12px] font-medium text-white">Sign in</a>
+              </>
+            ) : (
+              <>
+                <div className="size-[36px] rounded-full overflow-hidden flex items-center justify-center border border-slate-200 shrink-0">
+                  <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: 'w-full h-full' } }} />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[14px] font-semibold text-slate-800 truncate">
+                    {user?.fullName || user?.firstName || 'Account'}
+                  </span>
+                  <span className="text-[12px] text-slate-400 truncate">
+                    {user?.primaryEmailAddress?.emailAddress || 'Manage account'}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -575,6 +576,16 @@ const AppNavbar = () => {
           onClick={() => setMobilePanelOpen(false)}
         />
       )}
+
+      {/* Mobile & tablet: floating square dock — the main navigation below lg */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] lg:hidden">
+        <NavDock
+          className="pointer-events-auto"
+          layoutId="nav-dock-active-mobile"
+          pathname={pathname}
+          onNavigate={handleNavigation}
+        />
+      </div>
     </>
   );
 };

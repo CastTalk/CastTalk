@@ -25,7 +25,7 @@ const config = {
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         primary: {
-          DEFAULT: '#004bff',
+          DEFAULT: '#f97316',
           foreground: '#ffffff',
         },
         secondary: {
@@ -59,7 +59,19 @@ const config = {
           1: '#110b21',
           2: '#1a142e',
           3: '#25203d',
-        }
+        },
+        // Ember redesign palette: white stays the base, these are accents
+        ember: {
+          deep: '#9a3412',
+          DEFAULT: '#f97316',
+          glow: '#fde68a',
+        },
+        ink: {
+          DEFAULT: '#161618',
+          soft: '#3f3f46',
+          muted: '#71717a',
+        },
+        paper: '#fafaf9',
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -72,6 +84,9 @@ const config = {
         charlie: ['Charlie Sans', 'sans-serif'],
         sans: ['var(--font-geist-sans)', 'sans-serif'],
         heading: ['var(--font-geist-sans)', 'sans-serif'],
+        pixel: ['var(--font-geist-pixel-square)', 'var(--font-geist-mono)', 'monospace'],
+        serif: ['var(--font-source-serif)', 'Georgia', 'serif'],
+        mono: ['var(--font-geist-mono)', 'ui-monospace', 'monospace'],
       },
       letterSpacing: {
         tightest: '-.06em',

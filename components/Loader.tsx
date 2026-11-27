@@ -1,4 +1,4 @@
-import { CircleNotch } from '@phosphor-icons/react';
+import { CircleNotch } from '@/components/icons';
 
 const Loader = () => {
   return (

@@ -4,6 +4,9 @@ import { auth } from '@clerk/nextjs';
 import { Query, ID } from 'node-appwrite';
 import { fetchOpenRouterCompletion } from '@/lib/openrouter';
 
+// Never prerender at build time: every request needs the live session/DB.
+export const dynamic = 'force-dynamic';
+
 const DATABASE_ID = 'castdb';
 const CHATS_COLLECTION = 'chats';
 const MESSAGES_COLLECTION = 'messages';

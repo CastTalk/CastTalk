@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Info } from '@phosphor-icons/react';
+import { Info } from '@/components/icons';
 import { NoiseTexture } from './ui/noise-texture';
 
 interface PermissionCardProps {

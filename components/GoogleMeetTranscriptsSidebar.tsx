@@ -7,7 +7,7 @@ import {
   ClosedCaptioning, 
   MicrophoneSlash, 
   StopCircle
-} from '@phosphor-icons/react';
+} from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 export interface TranscriptItem {
@@ -65,7 +65,7 @@ export const GoogleMeetTranscriptsSidebar: React.FC<GoogleMeetTranscriptsSidebar
     <div className="flex flex-col h-full w-full bg-[#202124] text-white rounded-2xl border border-[#3c4043] shadow-2xl overflow-hidden font-sans select-none">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-[#3c4043]/60 bg-[#202124] shrink-0">
-        <h2 className="text-lg font-medium tracking-tight text-white">Transcripts</h2>
+        <h2 className="font-pixel text-lg font-normal text-white">Transcripts</h2>
         <button 
           onClick={onClose}
           className="p-1.5 -mr-1 rounded-full hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
@@ -85,14 +85,14 @@ export const GoogleMeetTranscriptsSidebar: React.FC<GoogleMeetTranscriptsSidebar
               {/* Whiteboard / Sheet */}
               <rect x="35" y="25" width="130" height="95" rx="6" fill="#2d2f34" stroke="#5f6368" strokeWidth="2" />
               {/* Top blue bar */}
-              <path d="M35 31 C35 27.6863 37.6863 25 41 25 L159 25 C162.314 25 165 27.6863 165 31 L165 38 L35 38 Z" fill="#8ab4f8" />
+              <path d="M35 31 C35 27.6863 37.6863 25 41 25 L159 25 C162.314 25 165 27.6863 165 31 L165 38 L35 38 Z" fill="#fdba74" />
               {/* Text lines */}
               <rect x="48" y="48" width="80" height="4" rx="2" fill="#5f6368" />
               <rect x="48" y="58" width="104" height="4" rx="2" fill="#3c4043" />
               <rect x="48" y="68" width="92" height="4" rx="2" fill="#3c4043" />
               <rect x="48" y="78" width="60" height="4" rx="2" fill="#3c4043" />
               {/* Speech bubble */}
-              <rect x="100" y="88" width="55" height="24" rx="12" fill="#1a73e8" />
+              <rect x="100" y="88" width="55" height="24" rx="12" fill="#f97316" />
               <circle cx="114" cy="100" r="2" fill="#ffffff" />
               <circle cx="127" cy="100" r="2" fill="#ffffff" />
               <circle cx="140" cy="100" r="2" fill="#ffffff" />
@@ -109,7 +109,7 @@ export const GoogleMeetTranscriptsSidebar: React.FC<GoogleMeetTranscriptsSidebar
 
           <button
             onClick={onStart}
-            className="px-6 py-2.5 bg-[#1a73e8] hover:bg-[#1b66c9] active:bg-[#1557b0] text-white text-sm font-medium rounded-full transition-all shadow-md flex items-center gap-2 cursor-pointer"
+            className="px-6 py-2.5 bg-[#f97316] hover:bg-[#ea580c] active:bg-[#c2410c] text-white text-sm font-medium rounded-full transition-all shadow-md flex items-center gap-2 cursor-pointer"
           >
             <ClosedCaptioning size={18} weight="bold" />
             <span>Start transcription</span>
@@ -124,11 +124,11 @@ export const GoogleMeetTranscriptsSidebar: React.FC<GoogleMeetTranscriptsSidebar
               <span className="relative flex h-2 w-2">
                 <span className={cn(
                   "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
-                  isListening && !isMicMuted ? "bg-emerald-400" : "bg-amber-400"
+                  isListening && !isMicMuted ? "bg-orange-400" : "bg-amber-400"
                 )} />
                 <span className={cn(
                   "relative inline-flex rounded-full h-2 w-2",
-                  isListening && !isMicMuted ? "bg-emerald-500" : "bg-amber-500"
+                  isListening && !isMicMuted ? "bg-orange-500" : "bg-amber-500"
                 )} />
               </span>
               <span className="font-medium text-slate-300">
@@ -140,10 +140,10 @@ export const GoogleMeetTranscriptsSidebar: React.FC<GoogleMeetTranscriptsSidebar
               {/* CastAI Button */}
               <button
                 onClick={onOpenCastAI}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-[#1a73e8]/20 text-[#8ab4f8] hover:bg-[#1a73e8]/30 transition-colors border border-[#8ab4f8]/30 cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-[#f97316]/20 text-[#fdba74] hover:bg-[#f97316]/30 transition-colors border border-[#fdba74]/30 cursor-pointer"
                 title="Open CastAI Assistant with meeting memory"
               >
-                <Sparkle size={14} weight="fill" className="text-[#8ab4f8]" />
+                <Sparkle size={14} weight="fill" className="text-[#fdba74]" />
                 <span>CastAI</span>
               </button>
             </div>
@@ -194,7 +194,7 @@ export const GoogleMeetTranscriptsSidebar: React.FC<GoogleMeetTranscriptsSidebar
                       {hasActiveTrailer && (
                         <span className="text-slate-300">
                           {' '}{interimText}
-                          <span className="inline-block w-1.5 h-3.5 ml-1 bg-[#8ab4f8] animate-pulse align-middle rounded-xs" />
+                          <span className="inline-block w-1.5 h-3.5 ml-1 bg-[#fdba74] animate-pulse align-middle rounded-xs" />
                         </span>
                       )}
                     </p>
@@ -220,7 +220,7 @@ export const GoogleMeetTranscriptsSidebar: React.FC<GoogleMeetTranscriptsSidebar
                   </div>
                   <p className="text-[13px] text-slate-300 leading-relaxed break-words">
                     {interimText}
-                    <span className="inline-block w-1.5 h-3.5 ml-1 bg-[#8ab4f8] animate-pulse align-middle rounded-xs" />
+                    <span className="inline-block w-1.5 h-3.5 ml-1 bg-[#fdba74] animate-pulse align-middle rounded-xs" />
                   </p>
                 </div>
               </div>

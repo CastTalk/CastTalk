@@ -4,6 +4,9 @@ import { Query } from 'node-appwrite';
 import crypto from 'crypto';
 import { getUserEmail, send1HourPrepEmail, sendTomorrowReminderEmail } from '@/lib/mail-templates';
 
+// Never prerender at build time: every request needs the live session/DB.
+export const dynamic = 'force-dynamic';
+
 function getNotificationId(prefix: string, meetingId: string, suffix?: string | number): string {
   const input = suffix ? `${prefix}_${meetingId}_${suffix}` : `${prefix}_${meetingId}`;
   return crypto.createHash('md5').update(input).digest('hex');
@@ -15,9 +18,10 @@ const NOTIFICATIONS_COLLECTION = 'notifications';
 
 export async function GET(req: Request) {
   try {
-    // Verify Cron Secret if set in env (Vercel Cron security best practice)
+    // This route is public in middleware (Vercel Cron has no Clerk session), so the
+    // secret is mandatory: without CRON_SECRET configured, nobody can trigger it.
     const authHeader = req.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json({ error: 'Unauthorized Cron Invocation' }, { status: 401 });
     }
 

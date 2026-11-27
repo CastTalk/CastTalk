@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useUser } from '@clerk/nextjs';
+import { useIdentity, useUser } from '@/providers/IdentityProvider';
 import { PromptInputBox } from '@/components/ui/ai-prompt-box';
-import { Brain, Sparkles, User, Calendar, FileText, CheckSquare, Plus, ArrowLeft, ChevronDown, Pin, Trash2, Search, MessageSquare, Loader2 } from 'lucide-react';
+import { Brain, Sparkles, User, Calendar, FileText, CheckSquare, Plus, ArrowLeft, ChevronDown, Pin, Trash2, Search, MessageSquare, Loader2 } from '@/components/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { NoiseTexture } from '@/components/ui/noise-texture';
+import CastAIMascot, { type MascotMood } from '@/components/CastAIMascot';
 import { TextAnimate } from '@/components/ui/text-animate';
 import { useStreamVideoClient } from '@stream-io/video-react-sdk';
 import Plan, { Task } from '@/components/ui/agent-plan';
@@ -457,10 +457,55 @@ const groupThreads = (threads: any[]) => {
 
 export default function CastAIPage() {
   const { user } = useUser();
+  const { isMember, isGuest, requireAccount } = useIdentity();
+  const CASTAI_NEEDS_ACCOUNT = 'Saved chat history lives in your account. As a guest your chat stays on this device until you close the browser.';
+  const AUTOMATION_NEEDS_ACCOUNT = 'Scheduling and other automations need a CastTalk account. Sign in to let CastAI do that for you.';
+  const openHistory = () => (isMember ? setShowHistoryModal((prev) => !prev) : requireAccount(CASTAI_NEEDS_ACCOUNT));
   const router = useRouter();
   const client = useStreamVideoClient();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+
+  // ── Mascot mood ──────────────────────────────────────────────────────────
+  // circle = easy chat, triangle = thinking (deep search), cloud = hard (automation /
+  // multi-step). Moods only escalate while working, and a long wait escalates on its
+  // own, so the body morphs circle -> triangle -> cloud mid-thought.
+  const [mascotMood, setMascotMood] = useState<MascotMood>('idle');
+  const moodTimerRef = useRef<number | null>(null);
+  const MOOD_RANK: Partial<Record<MascotMood, number>> = { easy: 1, thinking: 2, hard: 3 };
+  const escalateMood = (next: MascotMood) =>
+    setMascotMood((cur) => ((MOOD_RANK[cur] ?? 0) >= (MOOD_RANK[next] ?? 0) && MOOD_RANK[cur] ? cur : next));
+  const flashMood = (mood: MascotMood, ms: number) => {
+    if (moodTimerRef.current) window.clearTimeout(moodTimerRef.current);
+    setMascotMood(mood);
+    moodTimerRef.current = window.setTimeout(() => setMascotMood('idle'), ms);
+  };
+  useEffect(() => () => { if (moodTimerRef.current) window.clearTimeout(moodTimerRef.current); }, []);
+
+  // Taking a while? The task is harder than it looked.
+  useEffect(() => {
+    if (!isTyping) return;
+    const toThinking = window.setTimeout(() => escalateMood('thinking'), 6000);
+    const toHard = window.setTimeout(() => escalateMood('hard'), 16000);
+    return () => { window.clearTimeout(toThinking); window.clearTimeout(toHard); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTyping]);
+
+  // Dozes off after a minute of nothing; any key or tap wakes it.
+  useEffect(() => {
+    if (isTyping) return;
+    if (mascotMood === 'idle') {
+      const t = window.setTimeout(() => setMascotMood('sleep'), 60000);
+      return () => window.clearTimeout(t);
+    }
+    if (mascotMood === 'sleep') {
+      const wake = () => setMascotMood('idle');
+      window.addEventListener('keydown', wake, { once: true });
+      window.addEventListener('pointerdown', wake, { once: true });
+      return () => { window.removeEventListener('keydown', wake); window.removeEventListener('pointerdown', wake); };
+    }
+  }, [mascotMood, isTyping]);
+
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const [showInterruptModal, setShowInterruptModal] = useState<{ targetUrl: string } | null>(null);
@@ -518,7 +563,8 @@ export default function CastAIPage() {
       streamReaderRef.current.cancel().catch(() => {});
     }
     setIsTyping(false);
-    
+    setMascotMood('idle');
+
     const target = showInterruptModal?.targetUrl;
     setShowInterruptModal(null);
 
@@ -660,6 +706,11 @@ export default function CastAIPage() {
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
+    // Guests can chat; automations (Automate mode / scheduling) need an account
+    if (isGuest && /^\[Automate:/i.test(text.trim())) {
+      requireAccount(AUTOMATION_NEEDS_ACCOUNT);
+      return;
+    }
 
     startTimeRef.current = Date.now();
 
@@ -703,6 +754,8 @@ export default function CastAIPage() {
 
     setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
+    if (moodTimerRef.current) window.clearTimeout(moodTimerRef.current);
+    setMascotMood(mode === 'think' ? 'hard' : mode === 'search' ? 'thinking' : 'easy');
 
     const aiMessageId = `msg-ai-${Date.now()}`;
     const initialAiMsg: Message = {
@@ -718,8 +771,8 @@ export default function CastAIPage() {
 
     let currentChatId = activeChatId;
 
-    // Save user message to database history
-    try {
+    // Save user message to database history (members only: guest chats stay on the device)
+    if (isMember) try {
       const saveRes = await fetch('/api/chat/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -818,7 +871,8 @@ export default function CastAIPage() {
             if (eventType === 'mode_selected') {
               const detectedMode = eventData.mode; // 'chat' | 'deep_search' | 'automate'
               const clientMode = detectedMode === 'automate' ? 'think' : (detectedMode === 'deep_search' ? 'search' : undefined);
-              
+              escalateMood(clientMode === 'think' ? 'hard' : clientMode === 'search' ? 'thinking' : 'easy');
+
               setMessages((prev) =>
                 prev.map((msg) => {
                   if (msg.id !== aiMessageId) return msg;
@@ -832,6 +886,7 @@ export default function CastAIPage() {
                 })
               );
             } else if (eventType === 'plan_generated') {
+              escalateMood((eventData.tasks?.length ?? 0) >= 3 ? 'hard' : 'thinking');
               const uiTasks = eventData.tasks.map((t: any) => ({
                 id: t.id,
                 title: t.title,
@@ -857,6 +912,7 @@ export default function CastAIPage() {
               );
             } else if (eventType === 'task_update') {
               const updatedStatus = mapStatus(eventData.status);
+              if (updatedStatus === 'failed') escalateMood('hard');
 
               setMessages((prev) =>
                 prev.map((msg) => {
@@ -912,7 +968,8 @@ export default function CastAIPage() {
               );
             } else if (eventType === 'final_message') {
               let aiText = eventData.text || 'I could not process that request.';
-              
+              flashMood(eventData.text ? 'burst' : 'alert', eventData.text ? 1100 : 2600);
+
               if (eventData.actionPlans && Array.isArray(eventData.actionPlans) && eventData.actionPlans.length > 0) {
                 const results: string[] = [];
                 let hasErrors = false;
@@ -1264,6 +1321,18 @@ The event has been successfully deleted/cancelled and removed from your dashboar
               }
             } else if (eventType === 'error_message') {
               const durationMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+              flashMood('alert', 2600);
+              if (eventData.error?.code === 'ACCOUNT_REQUIRED') {
+                requireAccount(eventData.error.message || AUTOMATION_NEEDS_ACCOUNT);
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === aiMessageId
+                      ? { ...msg, text: 'That one needs an account — sign in and I can schedule it for you. Anything else I can help with?', tasks: undefined, durationMs }
+                      : msg
+                  )
+                );
+                continue;
+              }
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === aiMessageId 
@@ -1279,6 +1348,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
       }
     } catch (error: any) {
       console.error('Error fetching chat completion stream:', error);
+      if (error?.name !== 'AbortError') flashMood('alert', 2600);
       const durationMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
       setMessages((prev) =>
         prev.map((msg) =>
@@ -1298,41 +1368,35 @@ The event has been successfully deleted/cancelled and removed from your dashboar
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // Exactly one live mascot: on the "thinking" row while it shows, otherwise on the
+  // newest rendered AI reply (so a plan in progress, or a fresh answer, has it).
+  const showTypingRow = isTyping && !messages.some((m) => m.sender === 'ai' && !m.text && m.mode === 'think');
+  const lastAi = [...messages].reverse().find((m) => m.sender === 'ai' && (m.text || m.tasks));
+  const liveAiId = showTypingRow ? null : lastAi?.id ?? null;
+
   return (
-    <div className="relative flex-1 min-h-0 flex flex-col bg-background overflow-hidden font-geist">
-      <NoiseTexture className="opacity-[0.15]" />
-      <div
-        className="absolute inset-0 z-0 pointer-events-none opacity-40"
-        style={{
-          backgroundImage: `linear-gradient(to right, #c4cccc 1px, transparent 1px), linear-gradient(to bottom, #c4cccc 1px, transparent 1px)`,
-          backgroundSize: '40px 40px',
-          maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 50%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 50%)',
-        }}
-      />
+    <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden font-geist">
 
       {messages.length === 0 ? (
-        // Non-scrollable Empty Welcome Screen & Input together in the same div
-        <div className="flex-1 flex flex-col justify-between items-center relative z-10 px-4 md:px-6 lg:px-8 py-10 max-h-full overflow-hidden select-none">
-          {/* Spacer to push content down slightly for balance */}
-          <div className="flex-1" />
-
+        // Empty Welcome Screen & Input fitted cleanly within a single viewport
+        <div className="flex-1 flex flex-col items-center relative z-10 px-4 md:px-6 lg:px-8 py-3 sm:py-5 max-h-full overflow-y-auto select-none">
           {/* Clean Central Container */}
-          <div className="w-full max-w-[850px] flex flex-col items-center gap-12">
+          <div className="my-auto w-full max-w-[840px] flex flex-col items-center gap-[clamp(2rem,7.5vh,4.25rem)]">
             <motion.div 
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
               className="text-center flex flex-col items-center font-geist"
             >
-              <h1 className="text-5xl md:text-6xl lg:text-[88px] font-geist font-normal text-black tracking-[-1.8px] leading-[1.05]">
+              <CastAIMascot mood={mascotMood === 'sleep' ? 'sleep' : 'easy'} size={96} className="mb-2" />
+              <h1 className="max-w-[780px] font-pixel text-[clamp(2.5rem,7vh,4.5rem)] font-normal text-ink tracking-[-0.02em] leading-[1.04]">
                 How can I assist with your meetings?
               </h1>
               <TextAnimate
                 as="h2"
                 animation="fadeIn"
                 by="word"
-                className="text-[18px] md:text-[20px] font-geist font-normal text-[#475569] mt-8 leading-[32.5px] tracking-normal text-center"
+                className="mt-3 text-center font-serif text-[16px] font-normal leading-relaxed text-ink-muted md:text-[18px]"
               >
                 Schedule meetings, manage events, and coordinate collaboration from one place.
               </TextAnimate>
@@ -1344,13 +1408,12 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                 onSend={handleSend}
                 isLoading={isTyping}
                 placeholder="Ask CastAI anything about meetings, notes, or tasks..."
-                className="border-slate-200 shadow-none"
-                onHistoryClick={() => setShowHistoryModal(prev => !prev)}
+                className="max-w-full"
+                onHistoryClick={openHistory}
+                contextLabel={isGuest ? 'Guest chat · stays on this device until you close the browser' : undefined}
               />
             </div>
           </div>
-
-          <div className="flex-1" />
         </div>
       ) : (
         // Chat Mode - Scrollable conversation list and fixed bottom input bar
@@ -1369,17 +1432,41 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   className={`flex gap-4 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {msg.sender === 'ai' && (
-                    <div className="size-9 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
-                      <img src="/logo/Main.svg" alt="CastAI" className="size-6 object-contain" />
+                    <div className="flex size-12 shrink-0 items-center justify-center">
+                      {/* The newest reply carries the live mascot; older ones a still one */}
+                      {msg.id === liveAiId ? (
+                        <CastAIMascot mood={mascotMood} size={58} />
+                      ) : (
+                        <CastAIMascot mood="idle" size={58} animate={false} />
+                      )}
                     </div>
                   )}
                   <div className="flex flex-col max-w-[80%] gap-1">
                     {msg.sender === 'user' ? (
-                      <div className="px-4 py-3 rounded-2xl text-[14px] leading-relaxed shadow-sm border bg-slate-900 text-white border-slate-900 rounded-tr-none">
+                      <div className="relative rounded-2xl rounded-tr-[6px] border border-[#f97316]/20 bg-gradient-to-br from-[#fff4ea] via-[#ffe8d4] to-[#ffdbb8] px-4 py-2.5 font-pixel text-[15px] leading-relaxed tracking-[0.01em] text-[#7c2d12] shadow-[0_8px_22px_-14px_rgba(234,88,12,0.35)]">
+                        {/* Curved speech-bubble tail pointing toward the sender */}
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 11 14"
+                          className="pointer-events-none absolute -right-[8px] top-[7px] h-[14px] w-[11px]"
+                        >
+                          <path
+                            d="M0 0 L1.5 0 C4.5 1.6 7.6 2.8 10.5 3.6 C7.4 6.2 4.2 9.4 1.5 13 L0 13 Z"
+                            fill="#ffe4cc"
+                          />
+                          <path
+                            d="M1.2 0.4 C4.4 1.9 7.5 2.9 10.4 3.6 C7.4 6.2 4.3 9.3 1.2 12.6"
+                            fill="none"
+                            stroke="rgba(249, 115, 22, 0.22)"
+                            strokeWidth="1"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
                         <p className="whitespace-pre-line">{msg.text}</p>
                       </div>
                     ) : (
-                      <div className="py-2 text-[14px] leading-relaxed text-slate-800 flex flex-col gap-3">
+                      <div className="flex flex-col gap-3 py-2 font-serif text-[16px] leading-relaxed text-ink">
                         {msg.text && <p className="whitespace-pre-line">{msg.text}</p>}
                         
                         {/* If text is empty (processing in progress), render the plan directly */}
@@ -1394,7 +1481,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                           <div className="mt-2 flex flex-col gap-2">
                             <button
                               onClick={() => togglePlanExpanded(msg.id)}
-                              className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-slate-800 transition-colors w-fit font-medium"
+                              className="flex w-fit items-center gap-1.5 font-mono text-[11px] text-ink-muted transition-colors hover:text-ember-deep"
                             >
                               <ChevronDown className={`size-3.5 transition-transform duration-200 ${expandedPlans[msg.id] ? 'rotate-180' : ''}`} />
                               <span>worked for {formatDuration(msg.durationMs)}</span>
@@ -1418,25 +1505,25 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                         )}
                       </div>
                     )}
-                    <div className={`flex items-center gap-1.5 px-1 mt-0.5 text-[10px] text-slate-400 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`mt-0.5 flex items-center gap-1.5 px-1 font-mono text-[10px] text-ink-muted ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                       {msg.mode === 'search' && (
-                        <span className="font-normal text-[#1EAEDB]">Deep Search</span>
+                        <span className="font-normal text-[#c2410c]">Deep Search</span>
                       )}
                       {msg.mode === 'think' && (
-                        <span className="font-normal text-[#8B5CF6]">Automate</span>
+                        <span className="font-normal text-[#9a3412]">Automate</span>
                       )}
-                      {msg.mode && <span className="text-slate-300">•</span>}
+                      {msg.mode && <span className="text-black/20">•</span>}
                       <span>{msg.timestamp}</span>
                       {msg.sender === 'ai' && (
                         <>
-                          <span className="text-slate-300">•</span>
-                          <span className="font-normal text-emerald-600">worked for {formatDuration(msg.durationMs)}</span>
+                          <span className="text-black/20">•</span>
+                          <span className="font-normal text-orange-700">worked for {formatDuration(msg.durationMs)}</span>
                         </>
                       )}
                     </div>
                   </div>
                   {msg.sender === 'user' && (
-                    <div className="size-9 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
+                    <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/5 bg-white shadow-sm">
                       {user?.imageUrl ? (
                         <img src={user.imageUrl} alt={user.fullName || 'User'} className="size-full object-cover" />
                       ) : (
@@ -1448,20 +1535,18 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                 );
               })}
 
-              {isTyping && !messages.some(m => m.sender === 'ai' && !m.text && m.mode === 'think') && (
+              {showTypingRow && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="flex gap-4 justify-start items-center"
                 >
-                  <div className="size-9 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
-                    <img src="/logo/Main.svg" alt="CastAI" className="size-6 object-contain" />
+                  <div className="flex size-12 shrink-0 items-center justify-center">
+                    <CastAIMascot mood={mascotMood} size={58} />
                   </div>
-                  <div className="py-2 flex items-center gap-1.5">
-                    <div className="size-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
-                    <div className="size-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
-                    <div className="size-1.5 rounded-full bg-slate-400 animate-bounce" />
-                  </div>
+                  <span className="text-shimmer-ember font-mono text-[12px] tracking-wide">
+                    {mascotMood === 'hard' ? 'Working through it' : mascotMood === 'thinking' ? 'Pondering' : 'Thinking'}
+                  </span>
                 </motion.div>
               )}
               <div ref={messagesEndRef} />
@@ -1476,8 +1561,9 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   onSend={handleSend}
                   isLoading={isTyping}
                   placeholder="Ask CastAI anything about meetings, notes, or tasks..."
-                  className="border-slate-200 shadow-none"
-                  onHistoryClick={() => setShowHistoryModal(prev => !prev)}
+                  className="max-w-full"
+                  onHistoryClick={openHistory}
+                contextLabel={isGuest ? 'Guest chat · stays on this device until you close the browser' : undefined}
                 />
               </div>
             </div>
@@ -1527,7 +1613,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                 />
                 <button
                   onClick={startNewChat}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold shrink-0 transition-all shadow-sm"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-ink text-white hover:bg-ink-soft text-xs font-semibold shrink-0 transition-all shadow-sm"
                 >
                   <Plus className="size-3.5" />
                   <span>New chat</span>
@@ -1663,7 +1749,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
         maxWidth="max-w-[420px]"
       >
         <div className="flex flex-col font-geist">
-          <h2 className="text-[20px] font-medium text-[#111827] leading-none mb-2.5">
+          <h2 className="font-pixel text-[20px] font-normal text-ink leading-none mb-2.5">
             Automation in Progress
           </h2>
           <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
@@ -1673,14 +1759,14 @@ The event has been successfully deleted/cancelled and removed from your dashboar
             <button
               type="button"
               onClick={() => setShowInterruptModal(null)}
-              className="px-5 py-2.5 rounded-xl text-[14px] font-bold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
+              className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
             >
               Back
             </button>
             <button
               type="button"
               onClick={exitAutomation}
-              className="px-5 py-2.5 rounded-xl text-[14px] font-bold text-white bg-red-600 hover:bg-red-700 shadow-sm transition-colors"
+              className="px-5 py-2.5 rounded-full text-[14px] font-semibold text-white bg-red-600 hover:bg-red-700 shadow-sm transition-colors"
             >
               Exit
             </button>

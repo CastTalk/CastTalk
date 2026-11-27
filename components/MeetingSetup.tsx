@@ -1,20 +1,21 @@
 'use client';
 import { useEffect, useState, useRef, useCallback } from 'react';
+import Logo from '@/components/Logo';
 import { useRouter } from 'next/navigation';
 import {
   VideoPreview,
   useCall,
   useCallStateHooks,
 } from '@stream-io/video-react-sdk';
-import { Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash, Gear, PencilSimple, Check, Users, SpeakerSlash, Hourglass, Lock, ArrowLeft, Clock, SpinnerGap } from '@phosphor-icons/react';
+import { Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash, Gear, PencilSimple, Check, Users, SpeakerSlash, Hourglass, Lock, ArrowLeft, Clock, SpinnerGap } from '@/components/icons';
 
-import { useUser } from '@clerk/nextjs';
+import { useUser } from '@/providers/IdentityProvider';
 import { Ripple } from './ui/ripple';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import Alert from './Alert';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
-import { NoiseTexture } from './ui/noise-texture';
+import EmberAurora from './home/EmberAurora';
 import { useToast } from './ui/use-toast';
 
 const DEVICE_PREFS_KEY = '@stream-io/device-preferences';
@@ -99,7 +100,7 @@ const DeviceSettingsPanel = () => {
           >
             {tab.label}
             {activeTab === tab.id && (
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#110b21] rounded-none" />
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#f97316] rounded-full" />
             )}
           </button>
         ))}
@@ -134,7 +135,7 @@ const DeviceSettingsPanel = () => {
                 <label
                   key={device.deviceId}
                   className={cn(
-                    "flex items-center gap-4 justify-between p-4 rounded-none cursor-pointer transition-all duration-200 border",
+                    "flex items-center gap-4 justify-between p-4 rounded-xl cursor-pointer transition-all duration-200 border",
                     isSelected 
                       ? "bg-white border-black text-[#110b21] shadow-sm" 
                       : "bg-white/60 border-slate-300 text-slate-700 hover:bg-white/80"
@@ -154,7 +155,7 @@ const DeviceSettingsPanel = () => {
                   </div>
                   
                   <div className={cn(
-                    "size-5 rounded-none flex-center border transition-all",
+                    "size-5 rounded-md flex-center border transition-all",
                     isSelected ? "bg-black border-black text-white" : "border-slate-300 bg-white"
                   )}>
                     {isSelected && <Check weight="bold" size={12} className="text-white" />}
@@ -350,33 +351,26 @@ const MeetingSetup = ({
 
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#f8fafc] p-6 font-heading overflow-hidden relative">
-      <NoiseTexture className="opacity-[0.12]" />
-      <div
-        className="absolute inset-0 z-0 pointer-events-none opacity-50"
-        style={{
-          backgroundImage: `linear-gradient(to right, #c4cccc 1px, transparent 1px), linear-gradient(to bottom, #c4cccc 1px, transparent 1px)`,
-          backgroundSize: '40px 40px',
-        }}
-      />
+    <div className="relative flex h-[100dvh] w-full flex-col items-center overflow-y-auto overflow-x-hidden bg-white p-6 font-heading">
+      <EmberAurora />
       {/* Top Left Branding Logo Text */}
       <div 
         onClick={() => router.push('/')}
         className="absolute top-8 left-8 z-20 cursor-pointer select-none hover:opacity-80 transition-opacity"
       >
-        <img src="/logo/logoMain.svg" alt="CastTalk" className="h-8 w-auto object-contain" />
+        <Logo />
       </div>
 
-      <div className="flex flex-col items-center gap-8 w-full max-w-4xl relative z-10">
+      <div className="relative z-10 my-auto flex w-full max-w-4xl flex-col items-center gap-8 py-6">
         
         {/* Header Section */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-0">Ready to join?</h1>
-          <p className="text-slate-500 text-base max-w-md font-normal leading-relaxed">Configure your workspace and check your appearance before entering the call.</p>
+          <h1 className="font-pixel text-4xl sm:text-5xl font-normal tracking-[-0.02em] text-ink mb-0">Ready to join?</h1>
+          <p className="max-w-md font-serif text-lg leading-relaxed text-ink-muted">Configure your workspace and check your appearance before entering the call.</p>
         </div>
 
         {/* Video Preview Card */}
-        <div className="w-full max-w-2xl aspect-video rounded-sm overflow-hidden relative shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02),_0_24px_50px_-12px_rgba(0,0,0,0.06)] border border-black/5 bg-slate-900 group" style={{ borderWidth: '0.5px' }}>
+        <div className="w-full max-w-2xl aspect-video rounded-3xl overflow-hidden relative shadow-[inset_0_1px_0_#ffffff,_0_1px_3px_rgba(0,0,0,0.02),_0_24px_50px_-12px_rgba(0,0,0,0.06)] border border-black/5 bg-slate-900 group" style={{ borderWidth: '0.5px' }}>
           {isCameraOn ? (
             <div className="w-full h-full bg-black [&>*]:!w-full [&>*]:!h-full [&_video]:!w-full [&_video]:!h-full [&_video]:!object-cover [&>div]:!w-full [&>div]:!h-full [&_*]:!border-0 [&_*]:!outline-0 [&_*]:!bg-transparent">
               <VideoPreview />
@@ -409,13 +403,13 @@ const MeetingSetup = ({
           {/* Overlay Badges */}
           <div className="absolute top-6 left-6 z-20 flex items-center gap-2">
              {isWaitingForAdmission && (
-               <div className="flex items-center gap-2 bg-amber-500 text-white backdrop-blur-md rounded-none px-3 py-1.5 border border-amber-600 shadow-md">
+               <div className="flex items-center gap-2 bg-amber-500 text-white backdrop-blur-md rounded-full px-3 py-1.5 border border-amber-600 shadow-md">
                   <SpinnerGap className="animate-spin" size={14} />
                   <span className="text-[10px] font-bold uppercase tracking-widest">Waiting for host</span>
                </div>
              )}
              {participantCount > 0 && (
-               <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-none px-3 py-1.5 border border-white/10" style={{ borderWidth: '0.8px' }}>
+               <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/10" style={{ borderWidth: '0.8px' }}>
                   <Users weight="bold" size={14} className="text-white" />
                   <span className="text-white text-[10px] font-bold uppercase tracking-widest">{participantCount}</span>
                </div>
@@ -423,7 +417,7 @@ const MeetingSetup = ({
           </div>
 
           {/* Editable Name Overlay */}
-          <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 max-w-[55%] sm:max-w-none flex items-center gap-2 sm:gap-3 bg-black/50 backdrop-blur-md rounded-none p-1.5 sm:p-2 pl-3 sm:pl-4 z-20 border border-white/10 transition-all duration-300 hover:bg-black/70" style={{ borderWidth: '0.8px' }}>
+          <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 max-w-[55%] sm:max-w-none flex items-center gap-2 sm:gap-3 bg-black/50 backdrop-blur-md rounded-full p-1.5 sm:p-2 pl-3 sm:pl-4 z-20 border border-white/10 transition-all duration-300 hover:bg-black/70" style={{ borderWidth: '0.8px' }}>
             {isEditingName ? (
               <input
                 type="text"
@@ -439,7 +433,7 @@ const MeetingSetup = ({
             )}
             <button
               onClick={() => setIsEditingName(!isEditingName)}
-              className="size-7 sm:size-8 rounded-none bg-white/10 flex-center text-white hover:bg-white/20 transition-colors shrink-0"
+              className="size-7 sm:size-8 rounded-full bg-white/10 flex-center text-white hover:bg-white/20 transition-colors shrink-0"
             >
               <PencilSimple size={14} weight="bold" />
             </button>
@@ -449,7 +443,7 @@ const MeetingSetup = ({
           <div className="absolute bottom-3 right-3 sm:bottom-6 sm:right-6 z-20 flex gap-1.5 sm:gap-2">
             <div 
               className={cn(
-                "size-8 sm:size-10 rounded-none flex-center backdrop-blur-md border transition-all",
+                "size-8 sm:size-10 rounded-full flex-center backdrop-blur-md border transition-all",
                 isMicOn 
                   ? (isCameraOn ? "bg-white/20 text-white border-white/10" : "bg-slate-900/10 text-slate-800 border-slate-900/10")
                   : "bg-red-500/80 text-white border-transparent"
@@ -460,7 +454,7 @@ const MeetingSetup = ({
             </div>
             <div 
               className={cn(
-                "size-8 sm:size-10 rounded-none flex-center backdrop-blur-md border transition-all",
+                "size-8 sm:size-10 rounded-full flex-center backdrop-blur-md border transition-all",
                 isCameraOn 
                   ? "bg-white/20 text-white border-white/10" 
                   : "bg-red-500/80 text-white border-transparent"
@@ -479,7 +473,7 @@ const MeetingSetup = ({
             <button
               onClick={() => setIsMicOn(!isMicOn)}
               className={cn(
-                "size-14 rounded-none flex-center transition-all duration-300 border shadow-sm group",
+                "size-14 rounded-full flex-center transition-all duration-300 border shadow-sm group",
                 isMicOn 
                   ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-50" 
                   : "bg-red-600 text-white border-red-700 hover:bg-red-700"
@@ -492,7 +486,7 @@ const MeetingSetup = ({
             <button
               onClick={() => setIsCameraOn(!isCameraOn)}
               className={cn(
-                "size-14 rounded-none flex-center transition-all duration-300 border shadow-sm group",
+                "size-14 rounded-full flex-center transition-all duration-300 border shadow-sm group",
                 isCameraOn 
                   ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-50" 
                   : "bg-red-600 text-white border-red-700 hover:bg-red-700"
@@ -504,7 +498,7 @@ const MeetingSetup = ({
 
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="size-14 rounded-none bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 shadow-sm flex-center transition-all duration-300 group"
+              className="size-14 rounded-full bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 shadow-sm flex-center transition-all duration-300 group"
               style={{ borderWidth: '0.8px' }}
             >
               <Gear size={24} weight="regular" className="group-hover:rotate-90 transition-transform duration-500" />
@@ -546,7 +540,7 @@ const MeetingSetup = ({
                   setIsWaitingForAdmission(true);
                 }
               }}
-              className="w-full sm:w-auto h-14 px-10 bg-slate-900 hover:bg-slate-800 text-white rounded-none font-bold text-lg shadow-md transition-all active:scale-[0.98]"
+              className="w-full sm:w-auto h-14 px-10 bg-ink hover:bg-ink-soft text-white rounded-full font-semibold text-lg shadow-md transition-all active:scale-[0.98]"
             >
               Enter Meeting
             </Button>
@@ -556,8 +550,7 @@ const MeetingSetup = ({
 
       {/* Settings Sheet */}
       <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-[440px] bg-[#ecedef] p-0 border-l border-slate-200 flex flex-col font-heading overflow-hidden" style={{ borderWidth: '0.5px' }}>
-          <NoiseTexture className="opacity-[0.12]" />
+        <SheetContent side="right" className="w-full sm:max-w-[440px] bg-white p-0 border-l border-black/5 flex flex-col font-heading overflow-hidden" style={{ borderWidth: '0.5px' }}>
           
           <SheetHeader className="px-8 pt-10 pb-6 bg-transparent border-none relative z-10">
             <div className="flex items-center gap-4">

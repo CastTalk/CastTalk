@@ -2,10 +2,9 @@
 
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { StreamVideoClient, StreamVideo } from '@stream-io/video-react-sdk';
-import { useUser } from '@clerk/nextjs';
 
 import { tokenProvider } from '@/actions/stream.actions';
-import Loader from '@/components/Loader';
+import { useIdentity } from '@/providers/IdentityProvider';
 
 const API_KEY = process.env.NEXT_PUBLIC_STREAM_API_KEY;
 
@@ -27,20 +26,19 @@ const getToken = async () => {
 };
 
 /**
- * Creates ONE Stream client per signed-in user.
+ * Creates ONE Stream client per identity (member or session guest).
  *
- * The effect depends on the user ID only. Clerk's `user` object gets a new identity
- * whenever Clerk refreshes its resources (focus, session refresh); depending on it
- * used to build a brand-new StreamVideoClient each time — re-rendering the whole
- * app, re-fetching the current call (a new, un-joined Call instance mid-meeting) and
- * leaking the old client's WebSocket, which was never disconnected.
+ * - Depends on the user ID only, so Clerk refreshes don't rebuild the client.
+ * - Never blocks the page: children render immediately (Home shows its content
+ *   and the sign-in / guest prompt right away); pages that need Stream wait for
+ *   the client themselves. Visitors who are neither member nor guest get no client.
+ * - Guests are never synced to Appwrite (their data stays on the device).
  */
 const StreamVideoProvider = ({ children }: { children: ReactNode }) => {
   const [videoClient, setVideoClient] = useState<StreamVideoClient>();
-  const { user, isLoaded } = useUser();
+  const { user, isGuest } = useIdentity();
   const userId = user?.id;
 
-  // Latest profile fields, read when the client is created (not a dependency)
   const profileRef = useRef({ name: '', image: '' });
   profileRef.current = {
     name: user?.fullName || user?.firstName || user?.username || user?.id || '',
@@ -48,43 +46,81 @@ const StreamVideoProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    if (!isLoaded || !userId) return;
+    if (!userId) return;
     if (!API_KEY) {
       console.error('Stream API key is missing. Current value:', API_KEY);
       throw new Error('Stream API key is missing');
     }
 
+    let cancelled = false;
+    let isConnected = false;
+
+    // Construct WITHOUT passing `user` so the SDK does not fire an uncaught
+    // `connectUser()` inside the constructor (which causes an Unhandled Runtime
+    // Error overlay whenever the initial WS handshake fails on a flaky network).
     const client = new StreamVideoClient({
       apiKey: API_KEY,
-      user: {
-        id: userId,
-        name: profileRef.current.name || userId,
-        image: profileRef.current.image,
-      },
-      tokenProvider: getToken,
       options: {
         timeout: 30000,
-        axiosRequestConfig: {
-          timeout: 30000,
-        },
+        axiosRequestConfig: { timeout: 30000 },
       },
     });
+
+    const streamUser = {
+      id: userId,
+      name: profileRef.current.name || userId,
+      ...(profileRef.current.image ? { image: profileRef.current.image } : {}),
+    };
+
+    const connectWithRetry = async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (cancelled || isConnected) return;
+        try {
+          await client.connectUser(streamUser, getToken);
+          isConnected = true;
+          return;
+        } catch (err) {
+          if (cancelled) return;
+          console.warn(
+            `[StreamClientProvider] Stream WS connect attempt ${attempt + 1} failed:`,
+            err
+          );
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+          }
+        }
+      }
+    };
+
+    connectWithRetry();
+
+    // If the initial connection failed while offline, reconnect automatically once online
+    const handleOnline = () => {
+      if (!isConnected && !cancelled) {
+        connectWithRetry();
+      }
+    };
+    window.addEventListener('online', handleOnline);
 
     setVideoClient(client);
 
-    // Sync Clerk authenticated user to Appwrite Auth (identity is read from the
-    // Clerk session on the server) — once per user, not on every Clerk refresh
-    fetch('/api/auth/sync', { method: 'POST' }).catch((error) => {
-      console.error('[StreamClientProvider] Failed to sync user to Appwrite:', error);
-    });
+    // Mirror members into Appwrite Auth (identity read from the Clerk session on
+    // the server) — once per user. Guests are never written to the database.
+    if (!isGuest) {
+      fetch('/api/auth/sync', { method: 'POST' }).catch((error) => {
+        console.error('[StreamClientProvider] Failed to sync user to Appwrite:', error);
+      });
+    }
 
     return () => {
+      cancelled = true;
+      window.removeEventListener('online', handleOnline);
       setVideoClient(undefined);
       client.disconnectUser().catch((e) => console.warn('[StreamClientProvider] disconnect failed:', e));
     };
-  }, [isLoaded, userId]);
+  }, [userId, isGuest]);
 
-  if (!videoClient) return <Loader />;
+  if (!videoClient) return <>{children}</>;
 
   return <StreamVideo client={videoClient}>{children}</StreamVideo>;
 };

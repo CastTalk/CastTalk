@@ -2,13 +2,25 @@ import { ReactNode } from "react";
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 
-import "@stream-io/video-react-sdk/dist/css/styles.css";
-import "react-datepicker/dist/react-datepicker.css";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
+import { GeistPixelSquare } from 'geist/font/pixel';
 import localFont from 'next/font/local';
+
+// Ember redesign type system (same pairing as bryllim.com):
+// Geist Pixel Square for display headers, Source Serif 4 for descriptions,
+// Geist Sans for UI text, Geist Mono for small labels.
+// Self-hosted (from @fontsource-variable/source-serif-4) so dev and builds never
+// depend on fonts.googleapis.com — fetching it timed out and stalled compiles.
+const sourceSerif = localFont({
+  src: '../node_modules/@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2',
+  weight: '200 900',
+  style: 'normal',
+  variable: '--font-source-serif',
+  display: 'swap',
+});
 
 import "./theme.css";
 
@@ -56,15 +68,15 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" className={`light ${roobert.variable} ${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" className={`light ${roobert.variable} ${GeistSans.variable} ${GeistMono.variable} ${GeistPixelSquare.variable} ${sourceSerif.variable}`}>
       <ClerkProvider
         appearance={{
           layout: {
             socialButtonsVariant: "iconButton",
           },
           variables: {
-            colorText: "#110b21",
-            colorPrimary: "#004bff",
+            colorText: "#161618",
+            colorPrimary: "#161618",
             colorBackground: "#ffffff",
             colorInputBackground: "#f8f9fa",
             colorInputText: "#110b21",

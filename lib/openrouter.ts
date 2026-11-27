@@ -72,6 +72,16 @@ Do not reveal internal reasoning steps.
 Return only the final result.`;
 
 // ─────────────────────────────────────────────
+// Model Health / Cooldown Cache
+// Remembers models that recently timed out or hit 429 so subsequent requests
+// jump straight to healthy candidates instead of re-waiting on dead upstreams.
+// ─────────────────────────────────────────────
+
+const modelCooldownUntil = new Map<string, number>();
+const RATE_LIMIT_COOLDOWN_MS = 120_000; // 2 min cooldown after HTTP 429
+const FAILURE_COOLDOWN_MS = 60_000;     // 1 min cooldown after timeout / fetch error
+
+// ─────────────────────────────────────────────
 // Main Router
 // ─────────────────────────────────────────────
 
@@ -106,19 +116,30 @@ export const fetchOpenRouterCompletion = async (
 
   // ── 1. Build candidate queue ───────────────
   // Primary model first, then fallbacks in order.
-  const candidates: string[] = [];
+  // Any model currently on cooldown (recent 429 / timeout) is demoted to the
+  // end as a last resort so we don't waste 10-20s retrying it on every turn.
+  const rawCandidates: string[] = [];
 
   if (customModel) {
-    candidates.push(customModel);
+    rawCandidates.push(customModel);
   } else {
-    candidates.push(modelsConfig.primaryModelId);
+    rawCandidates.push(modelsConfig.primaryModelId);
   }
 
   modelsConfig.fallbacks.forEach((fallbackId) => {
-    if (!candidates.includes(fallbackId)) {
-      candidates.push(fallbackId);
+    if (!rawCandidates.includes(fallbackId)) {
+      rawCandidates.push(fallbackId);
     }
   });
+
+  const now = Date.now();
+  const healthyCandidates = rawCandidates.filter(
+    (id) => (modelCooldownUntil.get(id) ?? 0) <= now
+  );
+  const cooledDownCandidates = rawCandidates.filter(
+    (id) => (modelCooldownUntil.get(id) ?? 0) > now
+  );
+  const candidates = [...healthyCandidates, ...cooledDownCandidates];
 
   // ── 2. Resolve messages ────────────────────
   // If thinking mode is active, prepend the governance reasoning prompt
@@ -131,7 +152,9 @@ export const fetchOpenRouterCompletion = async (
   const baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
   let lastError: Error | null = null;
 
-  for (const modelId of candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const modelId = candidates[i];
+    const isLastCandidate = i === candidates.length - 1;
     const modelConfig = modelsConfig.models.find((m) => m.id === modelId) as ModelConfig | undefined;
 
     // Thinking mode → 0.2 (deterministic). Conversational → model default or 0.7.
@@ -173,10 +196,18 @@ export const fetchOpenRouterCompletion = async (
           'X-Title': 'CastTalk',
         },
         body: JSON.stringify(body),
+        // Fail over fast on stalled free models instead of burning 20s each;
+        // give the final fallback slightly more room.
+        signal: AbortSignal.timeout(isLastCandidate ? 15_000 : 10_000),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
+        if (response.status === 429) {
+          modelCooldownUntil.set(modelId, Date.now() + RATE_LIMIT_COOLDOWN_MS);
+        } else if (response.status >= 500) {
+          modelCooldownUntil.set(modelId, Date.now() + FAILURE_COOLDOWN_MS);
+        }
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
@@ -187,6 +218,7 @@ export const fetchOpenRouterCompletion = async (
       if (choice?.finish_reason === 'tool_calls' && choice.message.tool_calls?.length) {
         const toolCall = choice.message.tool_calls[0];
         console.log(`[CastAI Router] Tool call requested → "${toolCall.function.name}"`);
+        modelCooldownUntil.delete(modelId);
         // Return a serialized representation for the caller to dispatch
         return JSON.stringify({ __toolCall: true, ...toolCall });
       }
@@ -197,12 +229,16 @@ export const fetchOpenRouterCompletion = async (
         throw new Error('Response did not contain message content.');
       }
 
+      modelCooldownUntil.delete(modelId);
       console.log(`[CastAI Router] Resolved by → "${modelId}"`);
       return content;
 
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       lastError = err;
+      if (!modelCooldownUntil.has(modelId) || (modelCooldownUntil.get(modelId) ?? 0) <= Date.now()) {
+        modelCooldownUntil.set(modelId, Date.now() + FAILURE_COOLDOWN_MS);
+      }
       console.warn(
         `[CastAI Router] "${modelId}" failed → ${err.message}. Trying next candidate...`
       );

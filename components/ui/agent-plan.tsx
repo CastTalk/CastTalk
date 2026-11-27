@@ -7,7 +7,7 @@ import {
   AlertCircle,
   CircleDotDashed,
   XCircle,
-} from "lucide-react";
+} from '@/components/icons';
 import { motion, AnimatePresence, LayoutGroup, Variants } from "framer-motion";
 
 // Type definitions

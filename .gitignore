@@ -38,3 +38,6 @@ next-env.d.ts
 .vscode
 
 .env
+
+# local production build used for measuring
+/.next-prod/

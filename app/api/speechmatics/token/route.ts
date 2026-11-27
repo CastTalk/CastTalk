@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import { getCaller } from '@/lib/caller';
+
+// Never prerender at build time: every request needs the live session/DB.
+export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/speechmatics/token
@@ -14,6 +18,11 @@ import { NextResponse } from 'next/server';
  */
 
 export async function POST() {
+  // Public route so guests in a call get captions; still requires a member or a
+  // valid guest session.
+  if (!getCaller()) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const apiKey = process.env.SPEECHMATICS_API_KEY;
 
   if (!apiKey) {

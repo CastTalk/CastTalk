@@ -1,20 +1,22 @@
 import { Metadata } from 'next';
 import { ReactNode } from 'react';
 import AppNavbar from '@/components/AppNavbar';
+import PersistentAurora from '@/components/home/PersistentAurora';
 
 export const metadata: Metadata = {
-  title: 'CanTalk | Premium Video Communications',
+  title: 'CastTalk | Premium Video Communications',
   description: 'Next-generation video collaboration platform for modern teams.',
 };
 
 const HomeLayout = ({ children }: Readonly<{ children: ReactNode }>) => {
   return (
-    <div className="h-screen flex flex-col bg-[#f3f4f6] font-geist overflow-hidden">
-      <div className="w-full h-[3px] bg-[#15803d] shrink-0" />
+    <div className="flex h-screen flex-col overflow-hidden bg-white font-geist text-ink">
       <AppNavbar />
 
-      <div className="flex-1 w-full flex justify-center overflow-hidden">
-        <main className="relative w-full max-w-[1440px] flex flex-col flex-1 border-l-2 border-r-2 border-dashed border-[#15803d]/20 bg-[var(--theme-background)] overflow-hidden">
+      <div className="flex w-full flex-1 justify-center overflow-hidden">
+        <main className="relative flex w-full flex-1 flex-col overflow-hidden bg-white pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+          {/* Shared across Home/CastAI so it never re-spawns on navigation */}
+          <PersistentAurora />
           {children}
         </main>
       </div>

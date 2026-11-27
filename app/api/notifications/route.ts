@@ -5,6 +5,9 @@ import { Query, ID } from 'node-appwrite';
 import crypto from 'crypto';
 import { getUserEmail, send1HourPrepEmail, sendTomorrowReminderEmail } from '@/lib/mail-templates';
 
+// Never prerender at build time: every request needs the live session/DB.
+export const dynamic = 'force-dynamic';
+
 
 function getNotificationId(prefix: string, meetingId: string, suffix?: string | number): string {
   const input = suffix ? `${prefix}_${meetingId}_${suffix}` : `${prefix}_${meetingId}`;
@@ -21,35 +24,42 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 1. Fetch current notifications (limit to 100 to check set for existing notifications)
-    const response = await appwrite.databases.listDocuments(
-      DATABASE_ID,
-      COLLECTION_ID,
-      [
-        Query.equal('userId', userId),
-        Query.orderDesc('createdAt'),
-        Query.limit(100)
-      ]
-    );
+    // 1 & 2. Fetch current notifications and user schedules in parallel
+    const [response, schedulesResponse] = await Promise.all([
+      appwrite.databases.listDocuments(
+        DATABASE_ID,
+        COLLECTION_ID,
+        [
+          Query.equal('userId', userId),
+          Query.orderDesc('createdAt'),
+          Query.limit(100)
+        ]
+      ),
+      appwrite.databases.listDocuments(
+        DATABASE_ID,
+        'schedules',
+        [
+          Query.equal('createdBy', userId),
+          Query.orderDesc('startsAt'),
+          Query.limit(100)
+        ]
+      ),
+    ]);
 
     const existingNotifIds = new Set(response.documents.map((doc: any) => doc.$id));
-
-    // 2. Fetch all user schedules
-    const schedulesResponse = await appwrite.databases.listDocuments(
-      DATABASE_ID,
-      'schedules',
-      [
-        Query.equal('createdBy', userId),
-        Query.orderDesc('startsAt'),
-        Query.limit(100)
-      ]
-    );
 
     const now = new Date();
     const nowMs = now.getTime();
     const cutoffMs = 24 * 60 * 60 * 1000; // Only generate notifications for events in the last 24 hours
 
-    const userEmail = await getUserEmail(userId);
+    // Lazy-load email from Clerk ONLY if a schedule actually needs a reminder email right now
+    let resolvedUserEmail: string | null | undefined;
+    const getEmailLazy = async () => {
+      if (resolvedUserEmail === undefined) {
+        resolvedUserEmail = await getUserEmail(userId);
+      }
+      return resolvedUserEmail;
+    };
     const notificationPromises: Promise<any>[] = [];
 
     for (const schedule of schedulesResponse.documents) {
@@ -75,58 +85,64 @@ export async function GET(req: Request) {
       const diffMins = (startsAtTime - nowMs) / 60000;
 
       // EMAIL 1: Tomorrow / 24-Hour Reminder Email (between 18h and 28h away)
-      if (diffMins > 18 * 60 && diffMins <= 28 * 60 && userEmail) {
+      if (diffMins > 18 * 60 && diffMins <= 28 * 60) {
         const email24hId = getNotificationId('email_24h', meetingId);
         if (!existingNotifIds.has(email24hId)) {
-          existingNotifIds.add(email24hId);
-          notificationPromises.push(
-            sendTomorrowReminderEmail({
-              meetingId,
-              title,
-              startsAt: schedule.startsAt,
-              duration: durationMins,
-              description,
-              recipientEmail: userEmail,
-            })
-              .then(() =>
-                appwrite.databases.createDocument(DATABASE_ID, COLLECTION_ID, email24hId, {
-                  userId,
-                  text: `Email reminder sent for tomorrow: ${title}`,
-                  read: true,
-                  type: 'email',
-                  createdAt: new Date().toISOString(),
-                })
-              )
-              .catch((err: any) => console.error('[Tomorrow Email Error]:', err))
-          );
+          const userEmail = await getEmailLazy();
+          if (userEmail) {
+            existingNotifIds.add(email24hId);
+            notificationPromises.push(
+              sendTomorrowReminderEmail({
+                meetingId,
+                title,
+                startsAt: schedule.startsAt,
+                duration: durationMins,
+                description,
+                recipientEmail: userEmail,
+              })
+                .then(() =>
+                  appwrite.databases.createDocument(DATABASE_ID, COLLECTION_ID, email24hId, {
+                    userId,
+                    text: `Email reminder sent for tomorrow: ${title}`,
+                    read: true,
+                    type: 'email',
+                    createdAt: new Date().toISOString(),
+                  })
+                )
+                .catch((err: any) => console.error('[Tomorrow Email Error]:', err))
+            );
+          }
         }
       }
 
       // EMAIL 2: 1-Hour Prep Reminder Email (between 30m and 60m away)
-      if (diffMins > 30 && diffMins <= 60 && userEmail) {
+      if (diffMins > 30 && diffMins <= 60) {
         const email1hId = getNotificationId('email_1h', meetingId);
         if (!existingNotifIds.has(email1hId)) {
-          existingNotifIds.add(email1hId);
-          notificationPromises.push(
-            send1HourPrepEmail({
-              meetingId,
-              title,
-              startsAt: schedule.startsAt,
-              duration: durationMins,
-              description,
-              recipientEmail: userEmail,
-            })
-              .then(() =>
-                appwrite.databases.createDocument(DATABASE_ID, COLLECTION_ID, email1hId, {
-                  userId,
-                  text: `1-Hour Prep Email sent: ${title}`,
-                  read: true,
-                  type: 'email',
-                  createdAt: new Date().toISOString(),
-                })
-              )
-              .catch((err: any) => console.error('[1-Hour Prep Email Error]:', err))
-          );
+          const userEmail = await getEmailLazy();
+          if (userEmail) {
+            existingNotifIds.add(email1hId);
+            notificationPromises.push(
+              send1HourPrepEmail({
+                meetingId,
+                title,
+                startsAt: schedule.startsAt,
+                duration: durationMins,
+                description,
+                recipientEmail: userEmail,
+              })
+                .then(() =>
+                  appwrite.databases.createDocument(DATABASE_ID, COLLECTION_ID, email1hId, {
+                    userId,
+                    text: `1-Hour Prep Email sent: ${title}`,
+                    read: true,
+                    type: 'email',
+                    createdAt: new Date().toISOString(),
+                  })
+                )
+                .catch((err: any) => console.error('[1-Hour Prep Email Error]:', err))
+            );
+          }
         }
       }
 
@@ -293,21 +309,22 @@ export async function GET(req: Request) {
       }
     }
 
-    // Wait for all newly generated notifications to be created in DB
+    // Wait for all newly generated notifications to be created in DB, and only
+    // re-query Appwrite when new notifications were actually inserted.
+    let finalDocuments = response.documents.slice(0, 50);
     if (notificationPromises.length > 0) {
       await Promise.all(notificationPromises);
+      const finalResponse = await appwrite.databases.listDocuments(
+        DATABASE_ID,
+        COLLECTION_ID,
+        [
+          Query.equal('userId', userId),
+          Query.orderDesc('createdAt'),
+          Query.limit(50)
+        ]
+      );
+      finalDocuments = finalResponse.documents;
     }
-
-    // 3. Fetch final fresh list of notifications to return
-    const finalResponse = await appwrite.databases.listDocuments(
-      DATABASE_ID,
-      COLLECTION_ID,
-      [
-        Query.equal('userId', userId),
-        Query.orderDesc('createdAt'),
-        Query.limit(50)
-      ]
-    );
 
     // Work out where tapping each notification should go. Schedule-based
     // notification IDs are md5(`${prefix}_${meetingId}`), so rebuilding those IDs
@@ -332,7 +349,7 @@ export async function GET(req: Request) {
       return isJoinableNow ? `/meeting/${encodeURIComponent(schedule.meetingId)}` : '/upcoming';
     };
 
-    const notifications = finalResponse.documents.map((doc: any) => ({
+    const notifications = finalDocuments.map((doc: any) => ({
       id: doc.$id,
       text: doc.text,
       read: doc.read,
@@ -344,7 +361,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ notifications });
   } catch (error: any) {
     console.warn('[Get Notifications Warning]: Appwrite unreachable, returning fallback:', error?.message || error);
-    return NextResponse.json({ notifications: [] }, { status: 200 });
+    return NextResponse.json({ notifications: [], degraded: true }, { status: 200 });
   }
 }
 
