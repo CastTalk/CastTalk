@@ -1378,28 +1378,25 @@ The event has been successfully deleted/cancelled and removed from your dashboar
     <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden font-geist">
 
       {messages.length === 0 ? (
-        // Non-scrollable Empty Welcome Screen & Input together in the same div
-        <div className="flex-1 flex flex-col justify-between items-center relative z-10 px-4 md:px-6 lg:px-8 py-6 sm:py-10 max-h-full overflow-y-auto select-none">
-          {/* Spacer to push content down slightly for balance */}
-          <div className="flex-1" />
-
+        // Empty Welcome Screen & Input fitted cleanly within a single viewport
+        <div className="flex-1 flex flex-col items-center relative z-10 px-4 md:px-6 lg:px-8 py-3 sm:py-5 max-h-full overflow-y-auto select-none">
           {/* Clean Central Container */}
-          <div className="w-full max-w-[850px] flex flex-col items-center gap-12">
+          <div className="my-auto w-full max-w-[840px] flex flex-col items-center gap-[clamp(2rem,7.5vh,4.25rem)]">
             <motion.div 
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
               className="text-center flex flex-col items-center font-geist"
             >
-              <CastAIMascot mood={mascotMood === 'sleep' ? 'sleep' : 'easy'} size={120} className="mb-3" />
-              <h1 className="font-pixel text-5xl md:text-6xl lg:text-[72px] font-normal text-ink tracking-[-0.02em] leading-[1.05]">
+              <CastAIMascot mood={mascotMood === 'sleep' ? 'sleep' : 'easy'} size={96} className="mb-2" />
+              <h1 className="max-w-[780px] font-pixel text-[clamp(2.5rem,7vh,4.5rem)] font-normal text-ink tracking-[-0.02em] leading-[1.04]">
                 How can I assist with your meetings?
               </h1>
               <TextAnimate
                 as="h2"
                 animation="fadeIn"
                 by="word"
-                className="mt-6 text-center font-serif text-[18px] font-normal leading-relaxed text-ink-muted md:text-[20px]"
+                className="mt-3 text-center font-serif text-[16px] font-normal leading-relaxed text-ink-muted md:text-[18px]"
               >
                 Schedule meetings, manage events, and coordinate collaboration from one place.
               </TextAnimate>
@@ -1417,8 +1414,6 @@ The event has been successfully deleted/cancelled and removed from your dashboar
               />
             </div>
           </div>
-
-          <div className="flex-1" />
         </div>
       ) : (
         // Chat Mode - Scrollable conversation list and fixed bottom input bar
@@ -1448,7 +1443,26 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   )}
                   <div className="flex flex-col max-w-[80%] gap-1">
                     {msg.sender === 'user' ? (
-                      <div className="rounded-2xl rounded-tr-md bg-gradient-to-br from-[#c2410c] to-[#f97316] px-4 py-3 text-[14px] leading-relaxed text-white shadow-[0_10px_24px_-12px_rgba(194,65,12,0.7)]">
+                      <div className="relative rounded-2xl rounded-tr-[6px] border border-[#f97316]/20 bg-gradient-to-br from-[#fff4ea] via-[#ffe8d4] to-[#ffdbb8] px-4 py-2.5 font-pixel text-[15px] leading-relaxed tracking-[0.01em] text-[#7c2d12] shadow-[0_8px_22px_-14px_rgba(234,88,12,0.35)]">
+                        {/* Curved speech-bubble tail pointing toward the sender */}
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 11 14"
+                          className="pointer-events-none absolute -right-[8px] top-[7px] h-[14px] w-[11px]"
+                        >
+                          <path
+                            d="M0 0 L1.5 0 C4.5 1.6 7.6 2.8 10.5 3.6 C7.4 6.2 4.2 9.4 1.5 13 L0 13 Z"
+                            fill="#ffe4cc"
+                          />
+                          <path
+                            d="M1.2 0.4 C4.4 1.9 7.5 2.9 10.4 3.6 C7.4 6.2 4.3 9.3 1.2 12.6"
+                            fill="none"
+                            stroke="rgba(249, 115, 22, 0.22)"
+                            strokeWidth="1"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
                         <p className="whitespace-pre-line">{msg.text}</p>
                       </div>
                     ) : (

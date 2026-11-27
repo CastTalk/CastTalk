@@ -329,7 +329,7 @@ const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
           <div
             ref={ref}
             className={cn(
-              "rounded-[22px] border border-black/10 bg-white p-3 shadow-[0_18px_50px_-22px_rgba(154,52,18,0.4)] transition-all duration-300 focus-within:border-[#f97316]/50 focus-within:ring-4 focus-within:ring-[#f97316]/10",
+              "rounded-[22px] border border-black/10 bg-white p-2.5 shadow-[0_18px_50px_-22px_rgba(154,52,18,0.4)] transition-all duration-300 focus-within:border-[#f97316]/50 focus-within:ring-4 focus-within:ring-[#f97316]/10",
               isLoading && "border-red-500/70",
               className
             )}
@@ -701,7 +701,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
     <>
       <div className={cn("relative w-full", className)}>
         {/* Context strip peeking out from behind the box (Kole Jain's layered input) */}
-        <div className="relative z-0 mx-4 -mb-3 flex items-center gap-2 rounded-t-2xl border border-b-0 border-black/[0.07] bg-[#fafaf9]/90 px-4 pb-5 pt-2 font-mono text-[11px] text-ink-muted backdrop-blur">
+        <div className="relative z-0 mx-4 -mb-3 flex items-center gap-2 rounded-t-2xl border border-b-0 border-black/[0.07] bg-[#fafaf9]/90 px-4 pb-4 pt-1.5 font-mono text-[11px] text-ink-muted backdrop-blur">
           <span className="size-1.5 shrink-0 bg-[#f97316]" />
           {contextLabel}
         </div>
@@ -780,10 +780,10 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
 
           <PromptInputTextarea
             placeholder={showSearch ? "Search across your meetings..." : showThink ? "What should I set up for you?" : placeholder}
-            className="min-h-[72px] px-2 pt-2 text-[18px] leading-relaxed text-ink placeholder:text-[#a1a1aa] sm:text-[19px]"
+            className="min-h-[48px] sm:min-h-[54px] px-2 pt-1.5 font-serif text-[17px] leading-relaxed text-ink placeholder:font-serif placeholder:text-[#a1a1aa] sm:text-[18px]"
           />
 
-          <PromptInputActions className="flex items-center justify-between gap-2 px-1 pb-0.5 pt-3">
+          <PromptInputActions className="flex items-center justify-between gap-2 px-1 pb-0.5 pt-2">
             {actionButtons}
             <div className="flex items-center gap-1.5">
               {onHistoryClick && historyButton}

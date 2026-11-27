@@ -154,7 +154,7 @@ const Home = () => {
       const call = client.call('default', previewId);
       if (!call) throw new Error('Failed to create meeting');
       const startsAt = meetingMode === 'instant' ? new Date().toISOString() : formDate.toISOString();
-      
+
       const createCallData = {
         data: {
           starts_at: startsAt,
@@ -173,11 +173,14 @@ const Home = () => {
           await call.getOrCreate(createCallData);
           break;
         } catch (err: any) {
-          console.warn(`[Meeting Create attempt ${attempt + 1} failed]:`, err);
+          console.warn(
+            `[Meeting Create attempt ${attempt + 1} failed]:`,
+            err ?? 'Stream WebSocket connection closed/unreachable'
+          );
           if (attempt === 0) {
             await new Promise((r) => setTimeout(r, 800));
           } else {
-            throw err;
+            throw err ?? new Error('Stream video service unreachable (WebSocket closed)');
           }
         }
       }
@@ -309,98 +312,98 @@ const Home = () => {
           <h1 className="font-pixel text-[clamp(22px,6.4vw,60px)] font-normal leading-[1.1] tracking-[-0.01em] text-[#27272a] [-webkit-text-stroke:0.008em_currentColor]">
             {/* Always exactly two unbroken lines (size scales with width), so the
                 height is the same before and after the pixel font loads: no shift */}
-            <span className="block whitespace-nowrap">Talk the way you talk.</span>
+            <span className="block whitespace-nowrap">Be present.</span>
             <span className="block whitespace-nowrap">
-              We&apos;ll catch <GlowWord>every word</GlowWord>.
+              We&apos;ll handle the <GlowWord>details</GlowWord>.
             </span>
           </h1>
 
           <p className="mt-4 max-w-md font-serif text-lg leading-relaxed text-ink-muted sm:text-xl">
-            Video calls with live captions that keep up with how you actually talk, anywhere, with anyone.
+            No missing out on important discussions.
           </p>
 
           <LayoutGroup>
-          <div className="mt-8 flex w-full max-w-2xl flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            {/* New meeting: the pill morphs (animated width) into two choices in place,
+            <div className="mt-8 flex w-full max-w-2xl flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+              {/* New meeting: the pill morphs (animated width) into two choices in place,
                 so nothing floats over the mockup and nothing jumps */}
-            <motion.div
-              layout
-              transition={MORPH}
-              style={{ borderRadius: 9999 }}
-              role="group"
-              aria-label="New meeting"
-              className="relative flex h-12 shrink-0 items-center overflow-hidden bg-ink text-white shadow-[0_8px_24px_-8px_rgba(22,22,24,0.5)]"
-            >
-              <AnimatePresence mode="popLayout" initial={false}>
-                {!showDropdown ? (
-                  <motion.button
-                    key="new"
-                    onClick={() => setShowDropdown(true)}
-                    aria-expanded={false}
-                    initial={{ opacity: 0, filter: 'blur(4px)' }}
-                    animate={{ opacity: 1, filter: 'blur(0px)' }}
-                    exit={{ opacity: 0, filter: 'blur(4px)' }}
-                    transition={{ duration: 0.18 }}
-                    className="flex h-full w-full items-center justify-center gap-2 whitespace-nowrap px-6 text-[15px] font-medium transition-colors hover:bg-white/5"
-                  >
-                    <PixelPlus className="size-[18px]" />
-                    New meeting
-                  </motion.button>
-                ) : (
-                  <motion.div
-                    key="choices"
-                    initial={{ opacity: 0, filter: 'blur(4px)' }}
-                    animate={{ opacity: 1, filter: 'blur(0px)' }}
-                    exit={{ opacity: 0, filter: 'blur(4px)' }}
-                    transition={{ duration: 0.2, delay: 0.05 }}
-                    className="flex h-full w-full items-center gap-1 whitespace-nowrap p-1 text-[14px] font-medium"
-                  >
-                    <button onClick={() => openModal('instant')} className="flex h-full flex-1 items-center justify-center gap-1.5 rounded-full px-4 transition-colors hover:bg-white/10 sm:flex-none">
-                      <PixelVideo className="size-4 text-[#fdba74]" />
-                      Start now
-                    </button>
-                    <span className="h-5 w-px shrink-0 bg-white/15" />
-                    <button onClick={() => openModal('later')} className="flex h-full flex-1 items-center justify-center gap-1.5 rounded-full px-4 transition-colors hover:bg-white/10 sm:flex-none">
-                      <PixelLink className="size-4 text-[#fdba74]" />
-                      Schedule
-                    </button>
-                    <button onClick={() => setShowDropdown(false)} aria-label="Close" className="flex size-10 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white">
-                      <PixelClose className="size-4" />
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-
-            {/* Join with a code or link */}
-            <motion.div
-              layout
-              transition={MORPH}
-              style={{ borderRadius: 9999 }}
-              className="relative flex h-12 min-w-0 flex-1 items-center border border-black/10 bg-white/80 pl-4 pr-1 backdrop-blur transition-shadow focus-within:border-ember/60 focus-within:ring-4 focus-within:ring-ember/15"
-            >
-              <PixelKeyboard className="size-[18px] shrink-0 text-ink-muted" />
-              <input
-                type="text"
-                placeholder="Enter a code or link"
-                aria-label="Meeting code or link"
-                value={linkOrCode}
-                onChange={(e) => setLinkOrCode(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && linkOrCode && !isCheckingSchedule) joinMeeting(); }}
-                className="h-full min-w-0 flex-1 bg-transparent px-3 text-[15px] text-ink outline-none placeholder:text-ink-muted"
-              />
-              <button
-                onClick={joinMeeting}
-                disabled={!linkOrCode || isCheckingSchedule}
-                className={cn(
-                  "flex h-10 items-center rounded-full px-5 text-[14px] font-semibold transition-colors",
-                  linkOrCode && !isCheckingSchedule ? 'bg-ember text-white hover:bg-ember-deep' : 'cursor-not-allowed text-ink-muted'
-                )}
+              <motion.div
+                layout
+                transition={MORPH}
+                style={{ borderRadius: 9999 }}
+                role="group"
+                aria-label="New meeting"
+                className="relative flex h-12 shrink-0 items-center overflow-hidden bg-ink text-white shadow-[0_8px_24px_-8px_rgba(22,22,24,0.5)]"
               >
-                {isCheckingSchedule ? <SpinnerGap size={18} className="animate-spin" /> : 'Join'}
-              </button>
-            </motion.div>
-          </div>
+                <AnimatePresence mode="popLayout" initial={false}>
+                  {!showDropdown ? (
+                    <motion.button
+                      key="new"
+                      onClick={() => setShowDropdown(true)}
+                      aria-expanded={false}
+                      initial={{ opacity: 0, filter: 'blur(4px)' }}
+                      animate={{ opacity: 1, filter: 'blur(0px)' }}
+                      exit={{ opacity: 0, filter: 'blur(4px)' }}
+                      transition={{ duration: 0.18 }}
+                      className="flex h-full w-full items-center justify-center gap-2 whitespace-nowrap px-6 text-[15px] font-medium transition-colors hover:bg-white/5"
+                    >
+                      <PixelPlus className="size-[18px]" />
+                      New meeting
+                    </motion.button>
+                  ) : (
+                    <motion.div
+                      key="choices"
+                      initial={{ opacity: 0, filter: 'blur(4px)' }}
+                      animate={{ opacity: 1, filter: 'blur(0px)' }}
+                      exit={{ opacity: 0, filter: 'blur(4px)' }}
+                      transition={{ duration: 0.2, delay: 0.05 }}
+                      className="flex h-full w-full items-center gap-1 whitespace-nowrap p-1 text-[14px] font-medium"
+                    >
+                      <button onClick={() => openModal('instant')} className="flex h-full flex-1 items-center justify-center gap-1.5 rounded-full px-4 transition-colors hover:bg-white/10 sm:flex-none">
+                        <PixelVideo className="size-4 text-[#fdba74]" />
+                        Start now
+                      </button>
+                      <span className="h-5 w-px shrink-0 bg-white/15" />
+                      <button onClick={() => openModal('later')} className="flex h-full flex-1 items-center justify-center gap-1.5 rounded-full px-4 transition-colors hover:bg-white/10 sm:flex-none">
+                        <PixelLink className="size-4 text-[#fdba74]" />
+                        Schedule
+                      </button>
+                      <button onClick={() => setShowDropdown(false)} aria-label="Close" className="flex size-10 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white">
+                        <PixelClose className="size-4" />
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+
+              {/* Join with a code or link */}
+              <motion.div
+                layout
+                transition={MORPH}
+                style={{ borderRadius: 9999 }}
+                className="relative flex h-12 min-w-0 flex-1 items-center border border-black/10 bg-white/80 pl-4 pr-1 backdrop-blur transition-shadow focus-within:border-ember/60 focus-within:ring-4 focus-within:ring-ember/15"
+              >
+                <PixelKeyboard className="size-[18px] shrink-0 text-ink-muted" />
+                <input
+                  type="text"
+                  placeholder="Enter a code or link"
+                  aria-label="Meeting code or link"
+                  value={linkOrCode}
+                  onChange={(e) => setLinkOrCode(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && linkOrCode && !isCheckingSchedule) joinMeeting(); }}
+                  className="h-full min-w-0 flex-1 bg-transparent px-3 text-[15px] text-ink outline-none placeholder:text-ink-muted"
+                />
+                <button
+                  onClick={joinMeeting}
+                  disabled={!linkOrCode || isCheckingSchedule}
+                  className={cn(
+                    "flex h-10 items-center rounded-full px-5 text-[14px] font-semibold transition-colors",
+                    linkOrCode && !isCheckingSchedule ? 'bg-ember text-white hover:bg-ember-deep' : 'cursor-not-allowed text-ink-muted'
+                  )}
+                >
+                  {isCheckingSchedule ? <SpinnerGap size={18} className="animate-spin" /> : 'Join'}
+                </button>
+              </motion.div>
+            </div>
           </LayoutGroup>
         </section>
 
@@ -411,469 +414,469 @@ const Home = () => {
       </div>
 
       <AnimatePresence>
-      {meetingMode && step <= 2 && (
-        <CastTalkModal isOpen={!!meetingMode && step <= 2} onClose={() => { setMeetingMode(null); setStep(1); }}>
-          {step <= 2 && (
-            <>
-              {/* Step indicator */}
-              <div className="flex items-center gap-2 mb-2">
-                <div className={cn("flex-1 h-1.5 rounded-full", step >= 1 ? "bg-[#f97316]" : "bg-slate-200")} />
-                <div className={cn("flex-1 h-1.5 rounded-full", step >= 2 ? "bg-[#f97316]" : "bg-slate-200")} />
-              </div>
-              <div className="flex items-center gap-2 mb-6">
-                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 1 ? "text-[#9a3412]" : "text-slate-400")}>
-                  Session
+        {meetingMode && step <= 2 && (
+          <CastTalkModal isOpen={!!meetingMode && step <= 2} onClose={() => { setMeetingMode(null); setStep(1); }}>
+            {step <= 2 && (
+              <>
+                {/* Step indicator */}
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={cn("flex-1 h-1.5 rounded-full", step >= 1 ? "bg-[#f97316]" : "bg-slate-200")} />
+                  <div className={cn("flex-1 h-1.5 rounded-full", step >= 2 ? "bg-[#f97316]" : "bg-slate-200")} />
                 </div>
-                <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 2 ? "text-[#9a3412]" : "text-slate-400")}>
-                  Details
+                <div className="flex items-center gap-2 mb-6">
+                  <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 1 ? "text-[#9a3412]" : "text-slate-400")}>
+                    Session
+                  </div>
+                  <div className={cn("flex-1 text-[12px] font-medium text-left", step >= 2 ? "text-[#9a3412]" : "text-slate-400")}>
+                    Details
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            )}
 
-          <div className={cn(
-            "relative w-full transition-all duration-300 overflow-hidden",
-            (step === 2 && meetingType === 'general') ? "h-[140px]" : "h-[300px]"
-          )}>
-            {/* Step 1: Session Choice */}
             <div className={cn(
-              "absolute top-0 left-0 w-full transition-all duration-400 ease-in-out",
-              step === 1 ? "translate-x-0 opacity-100" : "-translate-x-8 opacity-0 pointer-events-none"
+              "relative w-full transition-all duration-300 overflow-hidden",
+              (step === 2 && meetingType === 'general') ? "h-[140px]" : "h-[300px]"
             )}>
-              <div className="space-y-6">
-                <div>
-                  <h2 className="font-pixel text-[22px] font-normal text-ink leading-none mb-1.5">
-                    Select Meeting Type
-                  </h2>
-                  <p className="font-serif text-[15px] text-ink-muted" style={{ marginBottom: '10px' }}>
-                    Select the type of meeting you want to create.
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <label
-                    className={cn(
-                      "flex items-start gap-3.5 p-3 rounded-xl cursor-pointer transition-all border border-transparent",
-                      meetingType === 'general' ? "bg-orange-50 border-orange-200" : "hover:bg-slate-50"
-                    )}
-                    onClick={() => setMeetingType('general')}
-                  >
-                    <div className="mt-0.5">
-                      <div className={cn(
-                        "w-5 h-5 rounded-full border-[2px] flex items-center justify-center transition-colors",
-                        meetingType === 'general' ? "border-orange-600" : "border-slate-300"
-                      )}>
-                        {meetingType === 'general' && <div className="w-2.5 h-2.5 rounded-full bg-orange-600" />}
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <Globe weight="fill" className={cn("w-4 h-4", meetingType === 'general' ? "text-orange-600" : "text-slate-500")} />
-                        <span className="text-[15px] font-medium text-[#111827]">General</span>
-                      </div>
-                      <p className="text-[13px] text-[#6B7280] leading-snug">
-                        Open to anyone with the link — session data is stored and accessible after the meeting.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label
-                    className={cn(
-                      "flex items-start gap-3.5 p-3 rounded-xl cursor-pointer transition-all border border-transparent",
-                      meetingType === 'secure' ? "bg-amber-50 border-amber-200" : "hover:bg-slate-50"
-                    )}
-                    onClick={() => setMeetingType('secure')}
-                  >
-                    <div className="mt-0.5">
-                      <div className={cn(
-                        "w-5 h-5 rounded-full border-[2px] flex items-center justify-center transition-colors",
-                        meetingType === 'secure' ? "border-amber-600" : "border-slate-300"
-                      )}>
-                        {meetingType === 'secure' && <div className="w-2.5 h-2.5 rounded-full bg-amber-600" />}
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <Lock weight="fill" className={cn("w-4 h-4", meetingType === 'secure' ? "text-amber-600" : "text-slate-500")} />
-                        <span className="text-[15px] font-medium text-[#111827]">Secure</span>
-                      </div>
-                      <p className="text-[13px] text-[#6B7280] leading-snug">
-                        Private and invite-only — all session data is permanently removed once the meeting ends.
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {/* Step 2: Details Form */}
-            <div className={cn(
-              "absolute top-0 left-0 w-full transition-all duration-400 ease-in-out",
-              step === 2
-                ? "translate-x-0 opacity-100"
-                : (step === 1 ? "translate-x-8 opacity-0 pointer-events-none" : "-translate-x-8 opacity-0 pointer-events-none")
-            )}>
-              <div className="space-y-4">
-                <div>
-                  <h2 className="font-pixel text-[22px] font-normal text-ink leading-none mb-1.5">
-                    {"What's your meeting about?"}
-                  </h2>
-                  <p className="font-serif text-[15px] text-ink-muted" style={{ marginBottom: '20px' }}>
-                    Fill out the details of your meeting.
-                  </p>
-                </div>
-
-                <div className="space-y-3">
+              {/* Step 1: Session Choice */}
+              <div className={cn(
+                "absolute top-0 left-0 w-full transition-all duration-400 ease-in-out",
+                step === 1 ? "translate-x-0 opacity-100" : "-translate-x-8 opacity-0 pointer-events-none"
+              )}>
+                <div className="space-y-6">
                   <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[13px] font-medium text-[#374151]">
-                        Event Topic <span className="text-red-500">*</span>
-                      </label>
-                      {formTitle.length > 0 && (
-                        <span className={`text-[11px] font-medium transition-colors ${formTitle.length >= 20 ? 'text-red-500 font-semibold' : 'text-slate-400'}`}>
-                          {formTitle.length}/20
-                        </span>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      maxLength={20}
-                      value={formTitle}
-                      onChange={(e) => setFormTitle(e.target.value)}
-                      placeholder="What's your meeting?"
-                      className="w-full px-3 py-2 rounded-lg text-[14px] outline-none transition-colors"
-
-                      style={{
-                        backgroundColor: '#F9FAFB',
-                        border: '1px solid #E5E7EB',
-                        color: '#111827'
-                      }}
-                    />
+                    <h2 className="font-pixel text-[22px] font-normal text-ink leading-none mb-1.5">
+                      Select Meeting Type
+                    </h2>
+                    <p className="font-serif text-[15px] text-ink-muted" style={{ marginBottom: '10px' }}>
+                      Select the type of meeting you want to create.
+                    </p>
                   </div>
 
+                  <div className="flex flex-col gap-3">
+                    <label
+                      className={cn(
+                        "flex items-start gap-3.5 p-3 rounded-xl cursor-pointer transition-all border border-transparent",
+                        meetingType === 'general' ? "bg-orange-50 border-orange-200" : "hover:bg-slate-50"
+                      )}
+                      onClick={() => setMeetingType('general')}
+                    >
+                      <div className="mt-0.5">
+                        <div className={cn(
+                          "w-5 h-5 rounded-full border-[2px] flex items-center justify-center transition-colors",
+                          meetingType === 'general' ? "border-orange-600" : "border-slate-300"
+                        )}>
+                          {meetingType === 'general' && <div className="w-2.5 h-2.5 rounded-full bg-orange-600" />}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <Globe weight="fill" className={cn("w-4 h-4", meetingType === 'general' ? "text-orange-600" : "text-slate-500")} />
+                          <span className="text-[15px] font-medium text-[#111827]">General</span>
+                        </div>
+                        <p className="text-[13px] text-[#6B7280] leading-snug">
+                          Open to anyone with the link — session data is stored and accessible after the meeting.
+                        </p>
+                      </div>
+                    </label>
 
-                  {meetingType !== 'general' && (
-                    <>
-                      <div className="flex flex-col w-full">
-                        <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
-                          Start Date <span className="text-red-500">*</span>
+                    <label
+                      className={cn(
+                        "flex items-start gap-3.5 p-3 rounded-xl cursor-pointer transition-all border border-transparent",
+                        meetingType === 'secure' ? "bg-amber-50 border-amber-200" : "hover:bg-slate-50"
+                      )}
+                      onClick={() => setMeetingType('secure')}
+                    >
+                      <div className="mt-0.5">
+                        <div className={cn(
+                          "w-5 h-5 rounded-full border-[2px] flex items-center justify-center transition-colors",
+                          meetingType === 'secure' ? "border-amber-600" : "border-slate-300"
+                        )}>
+                          {meetingType === 'secure' && <div className="w-2.5 h-2.5 rounded-full bg-amber-600" />}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <Lock weight="fill" className={cn("w-4 h-4", meetingType === 'secure' ? "text-amber-600" : "text-slate-500")} />
+                          <span className="text-[15px] font-medium text-[#111827]">Secure</span>
+                        </div>
+                        <p className="text-[13px] text-[#6B7280] leading-snug">
+                          Private and invite-only — all session data is permanently removed once the meeting ends.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2: Details Form */}
+              <div className={cn(
+                "absolute top-0 left-0 w-full transition-all duration-400 ease-in-out",
+                step === 2
+                  ? "translate-x-0 opacity-100"
+                  : (step === 1 ? "translate-x-8 opacity-0 pointer-events-none" : "-translate-x-8 opacity-0 pointer-events-none")
+              )}>
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="font-pixel text-[22px] font-normal text-ink leading-none mb-1.5">
+                      {"What's your meeting about?"}
+                    </h2>
+                    <p className="font-serif text-[15px] text-ink-muted" style={{ marginBottom: '20px' }}>
+                      Fill out the details of your meeting.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-[13px] font-medium text-[#374151]">
+                          Event Topic <span className="text-red-500">*</span>
                         </label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
+                        {formTitle.length > 0 && (
+                          <span className={`text-[11px] font-medium transition-colors ${formTitle.length >= 20 ? 'text-red-500 font-semibold' : 'text-slate-400'}`}>
+                            {formTitle.length}/20
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={20}
+                        value={formTitle}
+                        onChange={(e) => setFormTitle(e.target.value)}
+                        placeholder="What's your meeting?"
+                        className="w-full px-3 py-2 rounded-lg text-[14px] outline-none transition-colors"
+
+                        style={{
+                          backgroundColor: '#F9FAFB',
+                          border: '1px solid #E5E7EB',
+                          color: '#111827'
+                        }}
+                      />
+                    </div>
+
+
+                    {meetingType !== 'general' && (
+                      <>
+                        <div className="flex flex-col w-full">
+                          <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
+                            Start Date <span className="text-red-500">*</span>
+                          </label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                disabled={meetingMode === 'instant'}
+                                className={cn(
+                                  "w-full px-3 py-2 rounded-lg text-[14px] outline-none flex items-center justify-between transition-colors",
+                                  !formDate ? "text-[#9CA3AF]" : "text-[#111827]",
+                                  meetingMode === 'instant' && "disabled:opacity-50 disabled:cursor-not-allowed"
+                                )}
+                                style={{
+                                  backgroundColor: '#F9FAFB',
+                                  backgroundImage: 'none',
+                                  border: '1px solid #E5E7EB'
+                                }}
+                              >
+                                {meetingMode === 'instant' ? <span>Today</span> : (formDate ? format(formDate, "MMM d, yyyy") : <span>Pick a date</span>)}
+                                <Clock className="w-4 h-4 opacity-50" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0 z-[10000] border-[#E5E7EB] bg-white" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={formDate}
+                                onSelect={(date) => {
+                                  if (date) {
+                                    const d = new Date(formDate);
+                                    d.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                                    setFormDate(d);
+                                  }
+                                }}
+                                disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                                style={{
+                                  '--rdp-cell-size': '2rem',
+                                  '--rdp-accent-color': '#f97316',
+                                  '--rdp-background-color': '#ffffff',
+                                  color: '#111827',
+                                  fontSize: '0.85rem',
+                                  padding: '0.5rem',
+                                } as React.CSSProperties}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+
+                        <div className="flex w-full gap-4">
+                          <div className="flex flex-col w-1/2">
+                            <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
+                              Start Time <span className="text-red-500">*</span>
+                            </label>
+                            <Select
                               disabled={meetingMode === 'instant'}
-                              className={cn(
-                                "w-full px-3 py-2 rounded-lg text-[14px] outline-none flex items-center justify-between transition-colors",
-                                !formDate ? "text-[#9CA3AF]" : "text-[#111827]",
-                                meetingMode === 'instant' && "disabled:opacity-50 disabled:cursor-not-allowed"
-                              )}
-                              style={{
-                                backgroundColor: '#F9FAFB',
-                                backgroundImage: 'none',
-                                border: '1px solid #E5E7EB'
+                              value={`${formDate.getHours().toString().padStart(2, '0')}:${formDate.getMinutes().toString().padStart(2, '0')}`}
+                              onValueChange={(val) => {
+                                const [h, m] = val.split(':').map(Number);
+                                const d = new Date(formDate);
+                                d.setHours(h, m);
+                                setFormDate(d);
                               }}
                             >
-                              {meetingMode === 'instant' ? <span>Today</span> : (formDate ? format(formDate, "MMM d, yyyy") : <span>Pick a date</span>)}
-                              <Clock className="w-4 h-4 opacity-50" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 z-[10000] border-[#E5E7EB] bg-white" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={formDate}
-                              onSelect={(date) => {
-                                if (date) {
-                                  const d = new Date(formDate);
-                                  d.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-                                  setFormDate(d);
-                                }
-                              }}
-                              disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                              style={{
-                                '--rdp-cell-size': '2rem',
-                                '--rdp-accent-color': '#f97316',
-                                '--rdp-background-color': '#ffffff',
-                                color: '#111827',
-                                fontSize: '0.85rem',
-                                padding: '0.5rem',
-                              } as React.CSSProperties}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
+                              <SelectTrigger
+                                className={cn(
+                                  "w-full px-3 py-2 rounded-lg text-[14px] border-[#E5E7EB] focus:ring-0 focus:ring-offset-0 transition-colors",
+                                  "text-[#111827] bg-[#F9FAFB] disabled:opacity-50 disabled:cursor-not-allowed"
+                                )}
+                              >
+                                <SelectValue placeholder="Select time" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-white border-[#E5E7EB] z-[10000]">
+                                <ScrollArea className="h-[15rem]">
+                                  {Array.from({ length: 96 }).map((_, i) => {
+                                    const optH = Math.floor(i / 4);
+                                    const optM = (i % 4) * 15;
+                                    const hour = optH.toString().padStart(2, "0");
+                                    const minute = optM.toString().padStart(2, "0");
+                                    const ampm = optH >= 12 ? 'PM' : 'AM';
+                                    const displayHour = optH % 12 || 12;
+                                    const displayTime = `${displayHour}:${minute} ${ampm}`;
+                                    const val = `${hour}:${minute}`;
 
-                      <div className="flex w-full gap-4">
-                        <div className="flex flex-col w-1/2">
-                          <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
-                            Start Time <span className="text-red-500">*</span>
-                          </label>
-                          <Select
-                            disabled={meetingMode === 'instant'}
-                            value={`${formDate.getHours().toString().padStart(2, '0')}:${formDate.getMinutes().toString().padStart(2, '0')}`}
-                            onValueChange={(val) => {
-                              const [h, m] = val.split(':').map(Number);
-                              const d = new Date(formDate);
-                              d.setHours(h, m);
-                              setFormDate(d);
-                            }}
-                          >
-                            <SelectTrigger
-                              className={cn(
-                                "w-full px-3 py-2 rounded-lg text-[14px] border-[#E5E7EB] focus:ring-0 focus:ring-offset-0 transition-colors",
-                                "text-[#111827] bg-[#F9FAFB] disabled:opacity-50 disabled:cursor-not-allowed"
-                              )}
+                                    const now = new Date();
+                                    const isToday = formDate.toDateString() === now.toDateString();
+                                    const isPastTime = isToday && (optH < now.getHours() || (optH === now.getHours() && optM < now.getMinutes()));
+
+                                    return (
+                                      <SelectItem
+                                        key={i}
+                                        value={val}
+                                        disabled={isPastTime}
+                                        className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6] data-[disabled]:opacity-40 data-[disabled]:pointer-events-none"
+                                      >
+                                        {displayTime}
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </ScrollArea>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="flex flex-col w-1/2">
+                            <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
+                              Duration <span className="text-red-500">*</span>
+                            </label>
+                            <Select
+                              disabled={meetingMode === 'instant'}
+                              value={formDuration.toString()}
+                              onValueChange={(val) => setFormDuration(Number(val))}
                             >
-                              <SelectValue placeholder="Select time" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-white border-[#E5E7EB] z-[10000]">
-                              <ScrollArea className="h-[15rem]">
-                                {Array.from({ length: 96 }).map((_, i) => {
-                                  const optH = Math.floor(i / 4);
-                                  const optM = (i % 4) * 15;
-                                  const hour = optH.toString().padStart(2, "0");
-                                  const minute = optM.toString().padStart(2, "0");
-                                  const ampm = optH >= 12 ? 'PM' : 'AM';
-                                  const displayHour = optH % 12 || 12;
-                                  const displayTime = `${displayHour}:${minute} ${ampm}`;
-                                  const val = `${hour}:${minute}`;
-
-                                  const now = new Date();
-                                  const isToday = formDate.toDateString() === now.toDateString();
-                                  const isPastTime = isToday && (optH < now.getHours() || (optH === now.getHours() && optM < now.getMinutes()));
-
-                                  return (
-                                    <SelectItem
-                                      key={i}
-                                      value={val}
-                                      disabled={isPastTime}
-                                      className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6] data-[disabled]:opacity-40 data-[disabled]:pointer-events-none"
-                                    >
-                                      {displayTime}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </ScrollArea>
-                            </SelectContent>
-                          </Select>
+                              <SelectTrigger className="w-full px-3 py-2 rounded-lg text-[14px] text-[#111827] bg-[#F9FAFB] border-[#E5E7EB] focus:ring-0 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <SelectValue placeholder="Select duration" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-white border-[#E5E7EB] z-[10000]">
+                                <SelectItem value="30" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">30 mins</SelectItem>
+                                <SelectItem value="45" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">45 mins</SelectItem>
+                                <SelectItem value="60" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">1 hour</SelectItem>
+                                <SelectItem value="90" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">1.5 hours</SelectItem>
+                                <SelectItem value="120" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">2 hours</SelectItem>
+                                <SelectItem value="180" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">3 hours</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
-
-                        <div className="flex flex-col w-1/2">
-                          <label className="text-[13px] font-medium text-[#374151] mb-1.5 block">
-                            Duration <span className="text-red-500">*</span>
-                          </label>
-                          <Select
-                            disabled={meetingMode === 'instant'}
-                            value={formDuration.toString()}
-                            onValueChange={(val) => setFormDuration(Number(val))}
-                          >
-                            <SelectTrigger className="w-full px-3 py-2 rounded-lg text-[14px] text-[#111827] bg-[#F9FAFB] border-[#E5E7EB] focus:ring-0 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed">
-                              <SelectValue placeholder="Select duration" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-white border-[#E5E7EB] z-[10000]">
-                              <SelectItem value="30" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">30 mins</SelectItem>
-                              <SelectItem value="45" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">45 mins</SelectItem>
-                              <SelectItem value="60" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">1 hour</SelectItem>
-                              <SelectItem value="90" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">1.5 hours</SelectItem>
-                              <SelectItem value="120" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">2 hours</SelectItem>
-                              <SelectItem value="180" className="text-[13px] cursor-pointer hover:bg-[#F3F4F6] focus:bg-[#F3F4F6]">3 hours</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </>
-                  )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {step <= 2 && (
-            <div className="flex items-center justify-between mt-8 pt-4 border-t border-[#E5E7EB]">
-              <div>
-                <button
-                  onClick={() => { setMeetingMode(null); setStep(1); }}
-                  className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
-                >
-                  Cancel
-                </button>
-              </div>
-              <div className="flex gap-3">
-                {step > 1 && (
+            {step <= 2 && (
+              <div className="flex items-center justify-between mt-8 pt-4 border-t border-[#E5E7EB]">
+                <div>
                   <button
-                    onClick={() => setStep(1)}
-                    className="px-5 py-2.5 rounded-full text-[14px] font-semibold bg-[#f97316]/10 text-[#9a3412] hover:bg-[#f97316]/15 transition-colors"
+                    onClick={() => { setMeetingMode(null); setStep(1); }}
+                    className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
                   >
-                    Back
+                    Cancel
                   </button>
-                )}
-                <button
-                  onClick={step === 2 ? () => handleSubmit(false) : () => setStep(2)}
-                  disabled={isCreating || (step === 2 && !formTitle.trim())}
-                  className="px-6 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#3f3f46] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm bg-[#161618]"
-                >
-                  {step === 2 ? (isCreating ? 'Creating...' : 'Create Event') : 'Next'}
-                </button>
+                </div>
+                <div className="flex gap-3">
+                  {step > 1 && (
+                    <button
+                      onClick={() => setStep(1)}
+                      className="px-5 py-2.5 rounded-full text-[14px] font-semibold bg-[#f97316]/10 text-[#9a3412] hover:bg-[#f97316]/15 transition-colors"
+                    >
+                      Back
+                    </button>
+                  )}
+                  <button
+                    onClick={step === 2 ? () => handleSubmit(false) : () => setStep(2)}
+                    disabled={isCreating || (step === 2 && !formTitle.trim())}
+                    className="px-6 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#3f3f46] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm bg-[#161618]"
+                  >
+                    {step === 2 ? (isCreating ? 'Creating...' : 'Create Event') : 'Next'}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </CastTalkModal>
-      )}
+            )}
+          </CastTalkModal>
+        )}
       </AnimatePresence>
 
       {/* Step 3: Meeting Conflict — separate compact modal, sizes to content */}
       <AnimatePresence>
-      {meetingMode && step === 3 && (
-        <CastTalkModal isOpen={step === 3} onClose={() => { setMeetingMode(null); setStep(1); }} maxWidth="max-w-[460px]">
-          <div className="flex flex-col font-geist">
-            {/* Title */}
-            <h2 className="font-pixel text-[20px] font-normal text-ink leading-tight font-geist mb-2">
-              Meeting Conflict
-            </h2>
+        {meetingMode && step === 3 && (
+          <CastTalkModal isOpen={step === 3} onClose={() => { setMeetingMode(null); setStep(1); }} maxWidth="max-w-[460px]">
+            <div className="flex flex-col font-geist">
+              {/* Title */}
+              <h2 className="font-pixel text-[20px] font-normal text-ink leading-tight font-geist mb-2">
+                Meeting Conflict
+              </h2>
 
-            {/* Description */}
-            <p className="text-[15px] text-slate-600 leading-[24px] font-geist mb-5">
-              Preferred meeting window overlaps an existing scheduled timeframe.
-            </p>
+              {/* Description */}
+              <p className="text-[15px] text-slate-600 leading-[24px] font-geist mb-5">
+                Preferred meeting window overlaps an existing scheduled timeframe.
+              </p>
 
-            {/* Footer */}
-            <div className="flex justify-end gap-3 pt-3 border-t border-[#E5E7EB]">
-              <button
-                onClick={() => setStep(2)}
-                className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white font-geist"
-              >
-                Back
-              </button>
-              <button
-                onClick={() => handleSubmit(true)}
-                className="bg-[#161618] hover:bg-[#3f3f46] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] font-geist"
-              >
-                Continue
-              </button>
+              {/* Footer */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-[#E5E7EB]">
+                <button
+                  onClick={() => setStep(2)}
+                  className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white font-geist"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => handleSubmit(true)}
+                  className="bg-[#161618] hover:bg-[#3f3f46] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] font-geist"
+                >
+                  Continue
+                </button>
+              </div>
             </div>
-          </div>
-        </CastTalkModal>
-      )}
+          </CastTalkModal>
+        )}
       </AnimatePresence>
 
       <AnimatePresence>
-      {meetingLink && (
-        <CastTalkModal isOpen onClose={() => setMeetingLink(null)} maxWidth="max-w-md">
-          <h2 className="mb-1.5 pr-16 font-pixel text-xl font-normal text-ink">Your meeting is ready</h2>
-          <p className="mb-6 font-serif text-[15px] text-ink-muted">Share this link with people you want to meet with.</p>
-          <div className="mb-6 flex items-center gap-2 rounded-xl border border-black/10 bg-paper px-4 py-3">
-            <span className="flex-1 truncate font-mono text-[13px] text-ink-soft">{meetingLink}</span>
+        {meetingLink && (
+          <CastTalkModal isOpen onClose={() => setMeetingLink(null)} maxWidth="max-w-md">
+            <h2 className="mb-1.5 pr-16 font-pixel text-xl font-normal text-ink">Your meeting is ready</h2>
+            <p className="mb-6 font-serif text-[15px] text-ink-muted">Share this link with people you want to meet with.</p>
+            <div className="mb-6 flex items-center gap-2 rounded-xl border border-black/10 bg-paper px-4 py-3">
+              <span className="flex-1 truncate font-mono text-[13px] text-ink-soft">{meetingLink}</span>
+              <button
+                onClick={async () => { await navigator.clipboard.writeText(meetingLink!); toast({ title: 'Link copied!' }); }}
+                className="flex shrink-0 items-center justify-center rounded-md p-1.5 text-ink-muted transition-colors hover:bg-ember/10 hover:text-ember-deep active:scale-95"
+                title="Copy link"
+                aria-label="Copy link"
+              >
+                <Copy size={18} />
+              </button>
+            </div>
             <button
-              onClick={async () => { await navigator.clipboard.writeText(meetingLink!); toast({ title: 'Link copied!' }); }}
-              className="flex shrink-0 items-center justify-center rounded-md p-1.5 text-ink-muted transition-colors hover:bg-ember/10 hover:text-ember-deep active:scale-95"
-              title="Copy link"
-              aria-label="Copy link"
+              onClick={() => setMeetingLink(null)}
+              className="w-full rounded-full bg-ink py-3 font-medium text-white transition-colors hover:bg-ink-soft"
             >
-              <Copy size={18} />
+              Done
             </button>
-          </div>
-          <button
-            onClick={() => setMeetingLink(null)}
-            className="w-full rounded-full bg-ink py-3 font-medium text-white transition-colors hover:bg-ink-soft"
-          >
-            Done
-          </button>
-        </CastTalkModal>
-      )}
+          </CastTalkModal>
+        )}
       </AnimatePresence>
 
       {/* Scheduled Meeting Join Modal */}
       <AnimatePresence>
-      {showScheduledJoinModal && scheduledMeetingInfo && (
-        <CastTalkModal
-          isOpen={showScheduledJoinModal}
-          onClose={() => {
-            setShowScheduledJoinModal(false);
-            setScheduledMeetingInfo(null);
-          }}
-          maxWidth="max-w-[420px]"
-        >
-          <div className="flex flex-col font-geist">
-            <h2 className="font-pixel text-[20px] font-normal text-ink leading-none mb-2.5">
-              Scheduled Meeting
-            </h2>
-            <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
-              &ldquo;{scheduledMeetingInfo.title}&rdquo; is scheduled for {new Date(scheduledMeetingInfo.startsAt).toLocaleString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true,
-              })}. Would you like to add it to your calendar?
-            </p>
-            <div className="flex justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowScheduledJoinModal(false);
-                  setScheduledMeetingInfo(null);
-                }}
-                className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={handleAddToCalendar}
-                disabled={isJoining}
-                className="bg-[#161618] hover:bg-[#3f3f46] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm"
-              >
-                {isJoining ? 'Adding...' : 'Add to calendar'}
-              </button>
+        {showScheduledJoinModal && scheduledMeetingInfo && (
+          <CastTalkModal
+            isOpen={showScheduledJoinModal}
+            onClose={() => {
+              setShowScheduledJoinModal(false);
+              setScheduledMeetingInfo(null);
+            }}
+            maxWidth="max-w-[420px]"
+          >
+            <div className="flex flex-col font-geist">
+              <h2 className="font-pixel text-[20px] font-normal text-ink leading-none mb-2.5">
+                Scheduled Meeting
+              </h2>
+              <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
+                &ldquo;{scheduledMeetingInfo.title}&rdquo; is scheduled for {new Date(scheduledMeetingInfo.startsAt).toLocaleString('en-US', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                })}. Would you like to add it to your calendar?
+              </p>
+              <div className="flex justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowScheduledJoinModal(false);
+                    setScheduledMeetingInfo(null);
+                  }}
+                  className="px-5 py-2.5 rounded-full text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors text-[#374151] border border-[#E5E7EB] hover:border-[#D1D5DB] shadow-sm bg-white"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddToCalendar}
+                  disabled={isJoining}
+                  className="bg-[#161618] hover:bg-[#3f3f46] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 shadow-sm"
+                >
+                  {isJoining ? 'Adding...' : 'Add to calendar'}
+                </button>
+              </div>
             </div>
-          </div>
-        </CastTalkModal>
-      )}
+          </CastTalkModal>
+        )}
       </AnimatePresence>
 
       {/* Meeting Not Started Warning Modal */}
       <AnimatePresence>
-      {showNotStartedModal && notStartedInfo && (
-        <CastTalkModal
-          isOpen={showNotStartedModal}
-          onClose={() => {
-            setShowNotStartedModal(false);
-            setNotStartedInfo(null);
-          }}
-          maxWidth="max-w-[420px]"
-        >
-          <div className="flex flex-col font-geist">
-            <h2 className="font-pixel text-[20px] font-normal text-ink leading-none mb-2.5">
-              Meeting Not Started
-            </h2>
-            <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
-              Your meeting has not started yet. It is scheduled for {new Date(notStartedInfo.startsAt).toLocaleString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true,
-              })}.
-            </p>
-            <div className="flex justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowNotStartedModal(false);
-                  setNotStartedInfo(null);
-                }}
-                className="bg-[#161618] hover:bg-[#3f3f46] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] shadow-sm"
-              >
-                Back to Home
-              </button>
+        {showNotStartedModal && notStartedInfo && (
+          <CastTalkModal
+            isOpen={showNotStartedModal}
+            onClose={() => {
+              setShowNotStartedModal(false);
+              setNotStartedInfo(null);
+            }}
+            maxWidth="max-w-[420px]"
+          >
+            <div className="flex flex-col font-geist">
+              <h2 className="font-pixel text-[20px] font-normal text-ink leading-none mb-2.5">
+                Meeting Not Started
+              </h2>
+              <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
+                Your meeting has not started yet. It is scheduled for {new Date(notStartedInfo.startsAt).toLocaleString('en-US', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                })}.
+              </p>
+              <div className="flex justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNotStartedModal(false);
+                    setNotStartedInfo(null);
+                  }}
+                  className="bg-[#161618] hover:bg-[#3f3f46] text-white text-[14px] font-bold px-6 py-2.5 rounded-xl transition-all active:scale-[0.98] shadow-sm"
+                >
+                  Back to Home
+                </button>
+              </div>
             </div>
-          </div>
-        </CastTalkModal>
-      )}
+          </CastTalkModal>
+        )}
       </AnimatePresence>
     </>
   );

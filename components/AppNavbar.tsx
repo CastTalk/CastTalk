@@ -181,6 +181,7 @@ const AppNavbar = () => {
         const res = await fetch('/api/notifications');
         if (res.ok) {
           const data = await res.json();
+          if (data.degraded) return; // Keep existing notifications during transient backend blips
           if (pendingMutationsRef.current > 0 || mutationVersionRef.current !== versionAtStart) return;
           const formatted = (data.notifications || []).map((n: any) => ({
             ...n,

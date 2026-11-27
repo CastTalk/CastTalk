@@ -52,19 +52,55 @@ const StreamVideoProvider = ({ children }: { children: ReactNode }) => {
       throw new Error('Stream API key is missing');
     }
 
+    let cancelled = false;
+    let isConnected = false;
+
+    // Construct WITHOUT passing `user` so the SDK does not fire an uncaught
+    // `connectUser()` inside the constructor (which causes an Unhandled Runtime
+    // Error overlay whenever the initial WS handshake fails on a flaky network).
     const client = new StreamVideoClient({
       apiKey: API_KEY,
-      user: {
-        id: userId,
-        name: profileRef.current.name || userId,
-        ...(profileRef.current.image ? { image: profileRef.current.image } : {}),
-      },
-      tokenProvider: getToken,
       options: {
         timeout: 30000,
         axiosRequestConfig: { timeout: 30000 },
       },
     });
+
+    const streamUser = {
+      id: userId,
+      name: profileRef.current.name || userId,
+      ...(profileRef.current.image ? { image: profileRef.current.image } : {}),
+    };
+
+    const connectWithRetry = async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (cancelled || isConnected) return;
+        try {
+          await client.connectUser(streamUser, getToken);
+          isConnected = true;
+          return;
+        } catch (err) {
+          if (cancelled) return;
+          console.warn(
+            `[StreamClientProvider] Stream WS connect attempt ${attempt + 1} failed:`,
+            err
+          );
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+          }
+        }
+      }
+    };
+
+    connectWithRetry();
+
+    // If the initial connection failed while offline, reconnect automatically once online
+    const handleOnline = () => {
+      if (!isConnected && !cancelled) {
+        connectWithRetry();
+      }
+    };
+    window.addEventListener('online', handleOnline);
 
     setVideoClient(client);
 
@@ -77,6 +113,8 @@ const StreamVideoProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return () => {
+      cancelled = true;
+      window.removeEventListener('online', handleOnline);
       setVideoClient(undefined);
       client.disconnectUser().catch((e) => console.warn('[StreamClientProvider] disconnect failed:', e));
     };

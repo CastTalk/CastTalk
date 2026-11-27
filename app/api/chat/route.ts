@@ -13,78 +13,74 @@ export const dynamic = 'force-dynamic';
 
 async function getAIUserContext(userId: string): Promise<string> {
   if (!userId) return '';
-  try {
+  const fetchContext = async (): Promise<string> => {
     const DATABASE_ID = 'castdb';
-    
-    // 1. Fetch user schedules
-    let schedulesText = 'None';
-    try {
-      const schedulesRes = await appwrite.databases.listDocuments(
-        DATABASE_ID,
-        'schedules',
-        [
-          Query.equal('createdBy', userId),
-          Query.limit(100)
-        ]
-      );
-      if (schedulesRes.documents.length > 0) {
-        schedulesText = schedulesRes.documents.map((d: any) => 
-          `- ID: ${d.meetingId}, Title: ${d.title}, Starts At: ${d.startsAt}, Duration: ${d.duration} mins, Type: ${d.meetingType}`
-        ).join('\n');
-      }
-    } catch (err) {
-      console.warn('[AI User Context] Failed to fetch schedules:', err);
-    }
 
-    // 2. Fetch user tasks
-    let tasksText = 'None';
-    try {
-      const tasksRes = await appwrite.databases.listDocuments(
-        DATABASE_ID,
-        'tasks',
-        [
+    // Fetch schedules & tasks in parallel (and reuse schedules for recordings
+    // instead of querying the schedules collection twice sequentially).
+    const [schedulesRes, tasksRes] = await Promise.all([
+      appwrite.databases
+        .listDocuments(DATABASE_ID, 'schedules', [
+          Query.equal('createdBy', userId),
+          Query.limit(100),
+        ])
+        .catch((err) => {
+          console.warn('[AI User Context] Failed to fetch schedules:', err);
+          return null;
+        }),
+      appwrite.databases
+        .listDocuments(DATABASE_ID, 'tasks', [
           Query.equal('userId', userId),
-          Query.limit(100)
-        ]
-      );
-      if (tasksRes.documents.length > 0) {
-        tasksText = tasksRes.documents.map((d: any) => 
-          `- Title: ${d.title}, Status: ${d.status}, Due Date: ${d.dueDate || 'N/A'}`
-        ).join('\n');
-      }
-    } catch (err) {
-      console.warn('[AI User Context] Failed to fetch tasks:', err);
-    }
+          Query.limit(100),
+        ])
+        .catch((err) => {
+          console.warn('[AI User Context] Failed to fetch tasks:', err);
+          return null;
+        }),
+    ]);
 
-    // 3. Fetch user recordings (linked via meetingId of schedules created by the user)
+    const schedulesDocs = schedulesRes?.documents ?? [];
+    const schedulesText =
+      schedulesDocs.length > 0
+        ? schedulesDocs
+            .map(
+              (d: any) =>
+                `- ID: ${d.meetingId}, Title: ${d.title}, Starts At: ${d.startsAt}, Duration: ${d.duration} mins, Type: ${d.meetingType}`
+            )
+            .join('\n')
+        : 'None';
+
+    const tasksDocs = tasksRes?.documents ?? [];
+    const tasksText =
+      tasksDocs.length > 0
+        ? tasksDocs
+            .map(
+              (d: any) =>
+                `- Title: ${d.title}, Status: ${d.status}, Due Date: ${d.dueDate || 'N/A'}`
+            )
+            .join('\n')
+        : 'None';
+
     let recordingsText = 'None';
-    try {
-      const schedulesRes = await appwrite.databases.listDocuments(
-        DATABASE_ID,
-        'schedules',
-        [
-          Query.equal('createdBy', userId),
-          Query.limit(100)
-        ]
-      );
-      const meetingIds = schedulesRes.documents.map((d: any) => d.meetingId);
-      if (meetingIds.length > 0) {
+    const meetingIds = schedulesDocs.map((d: any) => d.meetingId).filter(Boolean);
+    if (meetingIds.length > 0) {
+      try {
         const recordingsRes = await appwrite.databases.listDocuments(
           DATABASE_ID,
           'recordings',
-          [
-            Query.equal('meetingId', meetingIds),
-            Query.limit(100)
-          ]
+          [Query.equal('meetingId', meetingIds), Query.limit(100)]
         );
         if (recordingsRes.documents.length > 0) {
-          recordingsText = recordingsRes.documents.map((d: any) => 
-            `- Title: ${d.title}, URL: ${d.url}, Duration: ${d.duration} mins, Created At: ${d.createdAt}`
-          ).join('\n');
+          recordingsText = recordingsRes.documents
+            .map(
+              (d: any) =>
+                `- Title: ${d.title}, URL: ${d.url}, Duration: ${d.duration} mins, Created At: ${d.createdAt}`
+            )
+            .join('\n');
         }
+      } catch (err) {
+        console.warn('[AI User Context] Failed to fetch recordings:', err);
       }
-    } catch (err) {
-      console.warn('[AI User Context] Failed to fetch recordings:', err);
     }
 
     return `
@@ -100,6 +96,20 @@ ${tasksText}
 Recordings:
 ${recordingsText}
 ========================================================`;
+  };
+
+  try {
+    // Cap DB context lookup at 3s so an unreachable/slow Appwrite never blocks chat
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<string>((resolve) => {
+      timer = setTimeout(() => {
+        console.warn('[AI User Context] Timed out after 3s, continuing without DB context.');
+        resolve('');
+      }, 3000);
+    });
+    const result = await Promise.race([fetchContext(), timeout]);
+    if (timer) clearTimeout(timer);
+    return result;
   } catch (err) {
     console.error('[AI User Context] Global error:', err);
     return '';

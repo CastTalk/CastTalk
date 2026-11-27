@@ -13,17 +13,31 @@ interface EmailMeetingParams {
   userName?: string;
 }
 
+const userEmailCache = new Map<string, { email: string | null; expiresAt: number }>();
+const EMAIL_CACHE_TTL_MS = 15 * 60 * 1000; // 15 min when resolved
+const EMAIL_ERROR_BACKOFF_MS = 2 * 60 * 1000; // 2 min backoff when Clerk is unreachable
+
 /**
- * Helper to fetch a user's primary email address from Clerk
+ * Helper to fetch a user's primary email address from Clerk (cached in memory
+ * so notification polling does not hit Clerk's API every 25 seconds).
  */
 export async function getUserEmail(userId: string): Promise<string | null> {
+  const cached = userEmailCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.email;
+  }
+
   try {
     const user = await clerkClient.users.getUser(userId);
     if (!user) return null;
     const primary = user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId);
-    return primary?.emailAddress || user.emailAddresses[0]?.emailAddress || null;
+    const email = primary?.emailAddress || user.emailAddresses[0]?.emailAddress || null;
+    userEmailCache.set(userId, { email, expiresAt: Date.now() + EMAIL_CACHE_TTL_MS });
+    return email;
   } catch (error: any) {
-    console.warn('[getUserEmail]: Could not fetch user email (network/offline):', error?.message || error);
+    const reason = error?.errors?.[0]?.message || error?.message || 'fetch failed';
+    console.warn(`[getUserEmail]: Could not fetch user email (network/offline): ${reason}`);
+    userEmailCache.set(userId, { email: null, expiresAt: Date.now() + EMAIL_ERROR_BACKOFF_MS });
     return null;
   }
 }
