@@ -1446,7 +1446,7 @@ function SchedulePageContent() {
         <CastTalkModal isOpen={step === 3} onClose={() => { setMeetingMode(null); setStep(1); }} maxWidth="max-w-[460px]">
           <div className="flex flex-col font-geist">
             {/* Title */}
-            <h2 className="font-pixel text-[20px] font-normal text-ink leading-tight font-geist mb-2">
+            <h2 className="mb-2 font-pixel text-[20px] font-normal leading-tight text-ink">
               Meeting Conflict
             </h2>
 
