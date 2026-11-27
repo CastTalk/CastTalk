@@ -18,13 +18,13 @@ const TILES: Tile[] = [
  * Purely decorative.
  */
 const HeroLaptopMockup = () => (
-  <div aria-hidden className="relative mx-auto w-[74%] max-w-[460px] select-none [perspective:2200px]">
+  <div aria-hidden className="relative mx-auto w-[80%] max-w-[540px] select-none [perspective:2200px]">
     {/* Ember glow behind the device */}
     <div className="absolute -inset-x-10 -top-6 bottom-6 -z-10 rounded-[50%] bg-[radial-gradient(closest-side,rgba(249,115,22,0.32),rgba(253,230,138,0.22)_55%,transparent)] blur-2xl" />
 
     <div className="origin-bottom [transform-style:preserve-3d] [transform:rotateX(7deg)_rotateY(14deg)_rotateZ(-0.6deg)]">
       {/* Lid */}
-      <div className="rounded-[2.2cqw] border border-white/10 bg-[#1c1c1f] p-[1.1%] pb-[1.6%] shadow-[0_40px_80px_-30px_rgba(154,52,18,0.55)] [container-type:inline-size]">
+      <div className="overflow-hidden rounded-[16px] border border-white/10 bg-[#1c1c1f] p-[1.1%] pb-[1.6%] shadow-[0_40px_80px_-30px_rgba(154,52,18,0.55)] [container-type:inline-size]">
         <div className="relative flex aspect-[16/10] flex-col overflow-hidden rounded-[1cqw] bg-[#121212] px-[2.2cqw] pb-[1.6cqw] pt-[1.8cqw] text-white">
           {/* Camera notch */}
           <div className="absolute left-1/2 top-0 h-[1.6cqw] w-[9cqw] -translate-x-1/2 rounded-b-[0.8cqw] bg-[#1c1c1f]" />
@@ -100,19 +100,24 @@ const HeroLaptopMockup = () => (
         </div>
       </div>
 
-      {/* Hinge */}
-      <div className="relative mx-auto -mt-px h-[6px] w-[96%] rounded-b-[4px] bg-gradient-to-b from-[#52525b] to-[#27272a]" />
-      {/* Keyboard deck, folded toward the viewer in perspective. A 3D transform keeps
-          the flat layout height, so the negative margin gives that empty space back. */}
-      <div className="relative mx-auto mb-[-30%] w-[104%] origin-top -translate-x-[1.9%] [container-type:inline-size] [transform:rotateX(74deg)]">
-        <div className="aspect-[16/8.5] rounded-b-[3cqw] rounded-t-[0.8cqw] border border-white/10 bg-gradient-to-b from-[#3f3f46] via-[#2c2c31] to-[#202024] px-[6cqw] pt-[3.4cqw] shadow-[0_6cqw_8cqw_-3cqw_rgba(0,0,0,0.45)]">
-          <div className="grid grid-cols-14 gap-[0.7cqw]" style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}>
+      {/* Base: a solid slab folded toward the viewer. preserve-3d lets its front
+          edge (rotated 90deg off the deck) shows real thickness.
+          A 3D transform keeps the flat layout height, so the negative margin gives
+          that empty space back. */}
+      <div className="relative mx-auto -mt-[2px] mb-[-30%] w-[104%] origin-top -translate-x-[1.9%] [container-type:inline-size] [transform-style:preserve-3d] [transform:rotateX(74deg)]">
+        {/* Deck surface */}
+        <div className="relative aspect-[16/8.5] rounded-b-[1.6cqw] rounded-t-[1cqw] border-x border-t border-white/10 bg-gradient-to-b from-[#45454c] via-[#323237] to-[#2a2a2f] px-[6cqw] pt-[3.4cqw]">
+          {/* Hinge recess along the top of the deck */}
+          <div className="absolute inset-x-[4%] top-0 h-[1.6cqw] rounded-b-[1cqw] bg-gradient-to-b from-[#121214] to-transparent" />
+          <div className="grid gap-[0.7cqw]" style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}>
             {Array.from({ length: 14 * 5 }).map((_, i) => (
               <div key={i} className="h-[3.6cqw] rounded-[0.5cqw] bg-[#161618] shadow-[inset_0_-0.25cqw_0_rgba(255,255,255,0.05)]" />
             ))}
           </div>
           <div className="mx-auto mt-[3cqw] h-[16cqw] w-[38%] rounded-[1.4cqw] border border-white/5 bg-[#29292e]" />
         </div>
+        {/* Front edge (thickness) */}
+        <div className="absolute inset-x-0 bottom-0 h-[2.6cqw] origin-bottom rounded-b-[1.6cqw] bg-gradient-to-b from-[#2a2a2f] via-[#1c1c1f] to-[#0f0f11] [transform:rotateX(-90deg)]" />
       </div>
     </div>
   </div>
