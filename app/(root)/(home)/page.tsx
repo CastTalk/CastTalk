@@ -14,9 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn, generateShortMeetingId } from '@/lib/utils';
 import { format } from 'date-fns';
 import CastTalkModal from '@/components/CastTalkModal';
-import EmberAurora from '@/components/home/EmberAurora';
 import GlowWord from '@/components/home/GlowWord';
-import EmberPixels from '@/components/EmberPixels';
 import HeroLaptopMockup from '@/components/home/HeroLaptopMockup';
 import { Close as PixelClose, Keyboard as PixelKeyboard, Link as PixelLink, Plus as PixelPlus, Video as PixelVideo } from 'pixelarticons/react';
 
@@ -303,24 +301,26 @@ const Home = () => {
   return (
     <>
       <div className="relative flex-1 overflow-y-auto overflow-x-hidden">
-        <EmberAurora />
         {/* Ember pixels on the border line only: a thin band at the top edge, part of
             the scrolling content so it leaves with the aurora */}
 
         {/* Hero: centered headline, two actions, product mockup below */}
-        <section className="relative z-20 mx-auto flex max-w-4xl flex-col items-center px-4 pt-12 text-center sm:pt-16">
-          <h1 className="font-pixel text-[34px] font-normal leading-[1.1] tracking-[-0.01em] text-[#27272a] [-webkit-text-stroke:0.008em_currentColor] [text-wrap:balance] sm:text-5xl lg:text-[60px]">
-            Talk the way you talk.
-            <br />
-            We&apos;ll catch <GlowWord>every word</GlowWord>.
+        <section className="relative z-20 mx-auto flex max-w-4xl flex-col items-center px-4 pt-10 text-center sm:pt-14">
+          <h1 className="font-pixel text-[clamp(22px,6.4vw,60px)] font-normal leading-[1.1] tracking-[-0.01em] text-[#27272a] [-webkit-text-stroke:0.008em_currentColor]">
+            {/* Always exactly two unbroken lines (size scales with width), so the
+                height is the same before and after the pixel font loads: no shift */}
+            <span className="block whitespace-nowrap">Talk the way you talk.</span>
+            <span className="block whitespace-nowrap">
+              We&apos;ll catch <GlowWord>every word</GlowWord>.
+            </span>
           </h1>
 
-          <p className="mt-5 max-w-md font-serif text-lg leading-relaxed text-ink-muted sm:text-xl">
+          <p className="mt-4 max-w-md font-serif text-lg leading-relaxed text-ink-muted sm:text-xl">
             Video calls with live captions that keep up with how you actually talk, anywhere, with anyone.
           </p>
 
           <LayoutGroup>
-          <div className="mt-9 flex w-full max-w-2xl flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+          <div className="mt-8 flex w-full max-w-2xl flex-col items-stretch gap-3 sm:flex-row sm:items-center">
             {/* New meeting: the pill morphs (animated width) into two choices in place,
                 so nothing floats over the mockup and nothing jumps */}
             <motion.div
@@ -405,7 +405,7 @@ const Home = () => {
         </section>
 
         {/* Product shot: the call UI on a laptop, turned slightly left */}
-        <section className="relative z-10 mt-12 px-4 pb-10 [overflow-y:clip] sm:mt-14">
+        <section className="relative z-10 mt-10 px-4 pb-4 [overflow-y:clip]">
           <HeroLaptopMockup />
         </section>
       </div>

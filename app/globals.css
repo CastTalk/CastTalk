@@ -446,31 +446,6 @@
   }
 }
 
-/* Ember pixels (components/EmberPixels.tsx): fade in, drift in stepped pixel
-   moves, fade out. Paused off screen via [data-paused]. */
-@keyframes emberDrift {
-  0% { opacity: 0; transform: translate(0, 0); }
-  15% { opacity: var(--o, 0.8); }
-  70% { opacity: calc(var(--o, 0.8) * 0.7); }
-  100% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, -24px)); }
-}
-.ember-px {
-  opacity: 0;
-  animation-name: emberDrift;
-  animation-timing-function: steps(10, end);
-  animation-iteration-count: infinite;
-  will-change: transform, opacity;
-}
-.ember-field[data-paused='true'] .ember-px {
-  animation-play-state: paused;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ember-px {
-    animation: none;
-    opacity: var(--o, 0.6);
-  }
-}
-
 /* "Thinking" label: a slow ember shimmer sweeping across the text */
 @keyframes emberShimmer {
   from { background-position: 100% 0; }
@@ -486,4 +461,60 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .text-shimmer-ember { animation: none; color: #9a3412; }
+}
+
+/* CSS aurora (components/home/EmberAurora.tsx fallback): two oversized blurred
+   ember bands drifting slowly. Transform/opacity only, so it runs on the
+   compositor with no main-thread or shader cost. */
+.ember-aurora-css {
+  overflow: hidden;
+  opacity: 0.75;
+}
+.ember-aurora-css__band {
+  position: absolute;
+  left: -20%;
+  width: 140%;
+  height: 70%;
+  filter: blur(40px);
+  will-change: transform;
+}
+.ember-aurora-css__band--a {
+  top: -18%;
+  background: linear-gradient(90deg, rgba(154, 52, 18, 0.45), rgba(249, 115, 22, 0.45) 45%, rgba(253, 230, 138, 0.55));
+  border-radius: 0 0 50% 40% / 0 0 100% 70%;
+  animation: emberAuroraA 16s ease-in-out infinite alternate;
+}
+.ember-aurora-css__band--b {
+  top: 2%;
+  height: 50%;
+  background: linear-gradient(90deg, rgba(253, 230, 138, 0.35), rgba(249, 115, 22, 0.3) 55%, rgba(154, 52, 18, 0.28));
+  border-radius: 0 0 40% 55% / 0 0 80% 100%;
+  animation: emberAuroraB 22s ease-in-out infinite alternate;
+}
+@keyframes emberAuroraA {
+  from { transform: translate3d(-4%, 0, 0) scaleY(1); }
+  to { transform: translate3d(4%, 3%, 0) scaleY(1.12); }
+}
+@keyframes emberAuroraB {
+  from { transform: translate3d(5%, 2%, 0) scaleY(1.1); }
+  to { transform: translate3d(-5%, -2%, 0) scaleY(0.92); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ember-aurora-css__band { animation: none; }
+}
+.ember-aurora-css--paused .ember-aurora-css__band {
+  animation-play-state: paused;
+}
+
+/* First appearance per visit (fresh load / reload): fade + slide down into place,
+   then the bands just drift. Later page switches reuse the same instance. */
+@keyframes emberAuroraIntro {
+  from { opacity: 0; transform: translate3d(0, -28px, 0); }
+  to { opacity: 0.75; transform: translate3d(0, 0, 0); }
+}
+.ember-aurora-css--intro {
+  animation: emberAuroraIntro 1.6s cubic-bezier(0.075, 0.82, 0.165, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ember-aurora-css--intro { animation: none; }
 }

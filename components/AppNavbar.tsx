@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { UserButton } from '@clerk/nextjs';
 import { useIdentity, useUser } from '@/providers/IdentityProvider';
 import { Bell, Calendar, Clock, Trash, AndroidLogo, List, CaretDown } from '@/components/icons';
+import { AnimatePresence, motion } from 'framer-motion';
 import Logo from '@/components/Logo';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import NavDock from '@/components/NavDock';
@@ -378,88 +379,97 @@ const AppNavbar = () => {
                   )}
                 </button>
 
+                <AnimatePresence>
                 {showNotifications && (
-                  <div className="fixed inset-x-3 top-[62px] z-50 overflow-hidden rounded-3xl border border-black/5 bg-white text-ink shadow-[0_24px_60px_-24px_rgba(154,52,18,0.35)] animate-slide-down sm:absolute sm:inset-x-auto sm:right-0 sm:top-[46px] sm:w-[380px]">
-                    <div className="flex items-center justify-between p-4 border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <Bell size={18} weight="fill" className="text-[#9a3412]" />
-                        <span className="font-pixel text-[16px] text-ink">Notifications</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {visibleNotifications.some(n => !n.read) && (
-                          <button 
-                            onClick={markAllRead}
-                            className="px-2 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200/60 rounded-md transition-colors"
-                          >
-                            Mark all read
-                          </button>
-                        )}
-                        {visibleNotifications.length > 0 && visibleNotifications.every(n => n.read) && (
-                          <button 
-                            onClick={clearAllNotifications}
-                            className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 rounded-md transition-colors"
-                            title="Clear all notifications"
-                          >
-                            <Trash size={13} weight="bold" />
-                            <span>Clear all</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="max-h-[320px] overflow-y-auto no-scrollbar py-2">
-                      {visibleNotifications.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-                          <div className="size-12 rounded-full bg-slate-50 flex items-center justify-center mb-3 border border-slate-100">
-                            <Bell size={24} className="text-slate-400" />
-                          </div>
-                          <h4 className="text-sm font-semibold text-slate-700">All caught up!</h4>
-                          <p className="text-xs text-slate-400 mt-1">No new notifications at the moment.</p>
+                  <motion.div
+                    key="notif-panel"
+                    initial={{ opacity: 0, scale: 0.96, y: -6 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.97, y: -4, transition: { duration: 0.15, ease: 'easeIn' } }}
+                    transition={{ duration: 0.45, ease: [0.075, 0.82, 0.165, 1] }}
+                    style={{ transformOrigin: 'top right' }}
+                    className="fixed inset-x-3 top-[62px] z-50 rounded-[20px] bg-[#fafafa] p-1 shadow-[0_30px_80px_-28px_rgba(154,52,18,0.4),0_0_0_1px_rgba(0,0,0,0.04)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-[46px] sm:w-[380px]"
+                  >
+                    <div className="relative overflow-hidden rounded-2xl border-[0.8px] border-[#e0e0e0] bg-white text-ink">
+                      <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-16 size-64 rounded-full bg-[radial-gradient(closest-side,rgba(249,115,22,0.12),rgba(253,230,138,0.1)_60%,transparent)] blur-2xl" />
+                      <div className="relative flex items-center justify-between border-b border-black/[0.06] px-4 py-3.5">
+                        <span className="font-pixel text-[17px] text-ink">Notifications</span>
+                        <div className="flex items-center gap-1.5">
+                          {visibleNotifications.some(n => !n.read) && (
+                            <button
+                              onClick={markAllRead}
+                              className="rounded-full border border-black/10 px-2.5 py-1 text-[11px] font-medium text-ink-soft transition-colors hover:border-ember/40 hover:bg-ember/5 hover:text-ember-deep"
+                            >
+                              Mark all read
+                            </button>
+                          )}
+                          {visibleNotifications.length > 0 && visibleNotifications.every(n => n.read) && (
+                            <button
+                              onClick={clearAllNotifications}
+                              className="flex items-center gap-1 rounded-full border border-black/10 px-2.5 py-1 text-[11px] font-medium text-ink-soft transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                              title="Clear all notifications"
+                            >
+                              <Trash size={12} />
+                              Clear all
+                            </button>
+                          )}
                         </div>
-                      ) : (
-                        visibleNotifications.map((notif) => (
-                          <div
-                            key={notif.id}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => openNotification(notif)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                openNotification(notif);
-                              }
-                            }}
-                            className="group flex items-start gap-3 px-4 py-3 hover:bg-slate-50/80 active:bg-slate-100 cursor-pointer border-b border-slate-100 last:border-0 transition-colors"
-                          >
-                            <div className={`size-8 rounded-full flex items-center justify-center border shrink-0 ${getNotifBg(notif.type)}`}>
-                              {getNotifIcon(notif.type)}
+                      </div>
+
+                      <div className="relative max-h-[340px] overflow-y-auto no-scrollbar p-1.5">
+                        {visibleNotifications.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+                            <div className="mb-3 flex size-11 items-center justify-center rounded-xl bg-ember/10 text-ember-deep">
+                              <Bell size={22} />
                             </div>
-                            <div className="flex-1 min-w-0 pr-4">
-                              <p className={`text-[12px] leading-normal line-clamp-2 ${!notif.read ? 'text-slate-900 font-medium' : 'text-slate-500 font-normal'}`}>
-                                {notif.text}
-                              </p>
-                              <span className="text-[10px] text-slate-400 mt-1 block">{notif.time}</span>
-                            </div>
-                            <div className="flex flex-col items-center justify-center gap-2 shrink-0">
-                              <button 
+                            <h4 className="font-pixel text-[15px] text-ink">All caught up</h4>
+                            <p className="mt-1 font-serif text-[13px] text-ink-muted">No new notifications right now.</p>
+                          </div>
+                        ) : (
+                          visibleNotifications.map((notif) => (
+                            <div
+                              key={notif.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openNotification(notif)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  openNotification(notif);
+                                }
+                              }}
+                              className="group flex cursor-pointer items-start gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-ember/[0.05] active:bg-ember/10"
+                            >
+                              <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg border ${getNotifBg(notif.type)}`}>
+                                {getNotifIcon(notif.type)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className={`line-clamp-2 text-[13px] leading-snug ${!notif.read ? 'font-medium text-ink' : 'text-ink-muted'}`}>
+                                  {notif.text}
+                                </p>
+                                <span className="mt-1 block font-mono text-[10px] text-ink-muted">{notif.time}</span>
+                              </div>
+                              {!notif.read && <span aria-label="Unread" className="mt-1.5 size-1.5 shrink-0 rounded-full bg-ember" />}
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   deleteNotification(notif.id);
                                 }}
                                 // Always visible on touch screens (no hover); hover-reveal only with a mouse
-                                className="p-1.5 bg-red-50 hover:bg-red-100 rounded-full text-red-500 hover:text-red-600 transition-all [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+                                className="shrink-0 rounded-lg p-1.5 text-ink-muted transition-all hover:bg-red-50 hover:text-red-600 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
                                 title="Delete notification"
                                 aria-label="Delete notification"
                               >
-                                <Trash size={12} weight="bold" />
+                                <Trash size={13} />
                               </button>
                             </div>
-                          </div>
-                        ))
-                      )}
+                          ))
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
+                </AnimatePresence>
               </div>
               )}
 

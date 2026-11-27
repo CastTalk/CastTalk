@@ -6,8 +6,6 @@ import { PromptInputBox } from '@/components/ui/ai-prompt-box';
 import { Brain, Sparkles, User, Calendar, FileText, CheckSquare, Plus, ArrowLeft, ChevronDown, Pin, Trash2, Search, MessageSquare, Loader2 } from '@/components/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import EmberAurora from '@/components/home/EmberAurora';
-import EmberPixels from '@/components/EmberPixels';
 import PixelLoader from '@/components/PixelLoader';
 import { TextAnimate } from '@/components/ui/text-animate';
 import { useStreamVideoClient } from '@stream-io/video-react-sdk';
@@ -459,8 +457,9 @@ const groupThreads = (threads: any[]) => {
 
 export default function CastAIPage() {
   const { user } = useUser();
-  const { isMember, requireAccount } = useIdentity();
-  const CASTAI_NEEDS_ACCOUNT = 'CastAI plans and books meetings on your calendar and keeps your chat history, so it needs an account. Sign in to start chatting.';
+  const { isMember, isGuest, requireAccount } = useIdentity();
+  const CASTAI_NEEDS_ACCOUNT = 'Saved chat history lives in your account. As a guest your chat stays on this device until you close the browser.';
+  const AUTOMATION_NEEDS_ACCOUNT = 'Scheduling and other automations need a CastTalk account. Sign in to let CastAI do that for you.';
   const openHistory = () => (isMember ? setShowHistoryModal((prev) => !prev) : requireAccount(CASTAI_NEEDS_ACCOUNT));
   const router = useRouter();
   const client = useStreamVideoClient();
@@ -665,9 +664,9 @@ export default function CastAIPage() {
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
-    // Guests and visitors: CastAI is member-only (calendar actions + saved history)
-    if (!isMember) {
-      requireAccount(CASTAI_NEEDS_ACCOUNT);
+    // Guests can chat; automations (Automate mode / scheduling) need an account
+    if (isGuest && /^\[Automate:/i.test(text.trim())) {
+      requireAccount(AUTOMATION_NEEDS_ACCOUNT);
       return;
     }
 
@@ -728,8 +727,8 @@ export default function CastAIPage() {
 
     let currentChatId = activeChatId;
 
-    // Save user message to database history
-    try {
+    // Save user message to database history (members only: guest chats stay on the device)
+    if (isMember) try {
       const saveRes = await fetch('/api/chat/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1274,6 +1273,17 @@ The event has been successfully deleted/cancelled and removed from your dashboar
               }
             } else if (eventType === 'error_message') {
               const durationMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+              if (eventData.error?.code === 'ACCOUNT_REQUIRED') {
+                requireAccount(eventData.error.message || AUTOMATION_NEEDS_ACCOUNT);
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === aiMessageId
+                      ? { ...msg, text: 'That one needs an account — sign in and I can schedule it for you. Anything else I can help with?', tasks: undefined, durationMs }
+                      : msg
+                  )
+                );
+                continue;
+              }
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === aiMessageId 
@@ -1309,8 +1319,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
   }, [messages, isTyping]);
 
   return (
-    <div className="relative flex-1 min-h-0 flex flex-col bg-background overflow-hidden font-geist">
-      <EmberAurora className="opacity-80" />
+    <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden font-geist">
 
       {messages.length === 0 ? (
         // Non-scrollable Empty Welcome Screen & Input together in the same div
@@ -1347,6 +1356,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                 placeholder="Ask CastAI anything about meetings, notes, or tasks..."
                 className="max-w-full"
                 onHistoryClick={openHistory}
+                contextLabel={isGuest ? 'Guest chat · stays on this device until you close the browser' : undefined}
               />
             </div>
           </div>
@@ -1479,6 +1489,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   placeholder="Ask CastAI anything about meetings, notes, or tasks..."
                   className="max-w-full"
                   onHistoryClick={openHistory}
+                contextLabel={isGuest ? 'Guest chat · stays on this device until you close the browser' : undefined}
                 />
               </div>
             </div>

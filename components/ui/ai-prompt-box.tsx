@@ -457,9 +457,11 @@ interface PromptInputBoxProps {
   placeholder?: string;
   className?: string;
   onHistoryClick?: () => void;
+  /** Text on the strip peeking behind the box */
+  contextLabel?: string;
 }
 export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref: React.Ref<HTMLDivElement>) => {
-  const { onSend = () => {}, isLoading = false, placeholder = "Type your message here...", className, onHistoryClick } = props;
+  const { onSend = () => {}, isLoading = false, placeholder = "Type your message here...", className, onHistoryClick, contextLabel = "Connected to your schedule and meetings" } = props;
   const [input, setInput] = React.useState("");
   const [files, setFiles] = React.useState<File[]>([]);
   const [filePreviews, setFilePreviews] = React.useState<{ [key: string]: string }>({});
@@ -701,7 +703,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
         {/* Context strip peeking out from behind the box (Kole Jain's layered input) */}
         <div className="relative z-0 mx-4 -mb-3 flex items-center gap-2 rounded-t-2xl border border-b-0 border-black/[0.07] bg-[#fafaf9]/90 px-4 pb-5 pt-2 font-mono text-[11px] text-ink-muted backdrop-blur">
           <span className="size-1.5 shrink-0 bg-[#f97316]" />
-          Connected to your schedule and meetings
+          {contextLabel}
         </div>
 
         <PromptInput

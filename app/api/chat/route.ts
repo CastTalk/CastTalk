@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs';
+import { getCaller } from '@/lib/caller';
 import { fetchOpenRouterCompletion, OpenRouterMessage } from '@/lib/openrouter';
 import { systemPromptTemplate } from '@/ai-context/prompts/systemPrompt';
 import { ActionPlanner } from '@/ai-context/planner/actionPlanner';
@@ -559,12 +559,16 @@ async function classifyMode(userMessage: string): Promise<{ mode: 'chat' | 'deep
 
 export async function POST(req: Request) {
   try {
-    // Identity comes from the Clerk session only. A userId in the body is ignored,
-    // otherwise anyone could load another user's schedules into the AI context.
-    const { userId } = auth();
-    if (!userId) {
+    // Identity comes from the Clerk session (or a signed guest session) only. A
+    // userId in the body is ignored, otherwise anyone could load another user's
+    // schedules into the AI context.
+    const caller = getCaller();
+    if (!caller) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const isGuest = caller.kind === 'guest';
+    // Guests chat without any database context (they have none)
+    const userId = isGuest ? '' : caller.id;
 
     const { messages, isThinking, currentDateTime, mode } = await req.json();
 
@@ -631,6 +635,20 @@ ${userContextText}`;
           source,
           confidence,
         });
+
+        // Guests can chat and search, but automations (scheduling etc.) need an account
+        if (isGuest && effectiveMode === 'automate') {
+          await dispatcher.send({
+            schema_version: '1.0',
+            timestamp: new Date().toISOString(),
+            type: 'error_message',
+            error: {
+              code: 'ACCOUNT_REQUIRED',
+              message: 'Scheduling and other automations need a CastTalk account. Sign in to let CastAI do that for you.',
+            },
+          });
+          return;
+        }
 
         let isAutomate = effectiveMode === 'automate';
         const effectiveThinking = isThinking || effectiveMode === 'deep_search';
@@ -711,6 +729,19 @@ ${userContextText}`;
 
           if (parsedPlans.length > 0) {
             isActionPlan = true;
+          }
+          // A meeting action plan from the model is an automation: account only
+          if (isActionPlan && isGuest) {
+            await dispatcher.send({
+            schema_version: '1.0',
+            timestamp: new Date().toISOString(),
+            type: 'error_message',
+            error: {
+              code: 'ACCOUNT_REQUIRED',
+              message: 'Scheduling and other automations need a CastTalk account. Sign in to let CastAI do that for you.',
+            },
+          });
+            return;
           }
         } catch (e) {
           // Not structured JSON action plans — treat as plain text

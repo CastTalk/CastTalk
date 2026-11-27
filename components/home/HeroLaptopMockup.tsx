@@ -18,7 +18,7 @@ const TILES: Tile[] = [
  * Purely decorative.
  */
 const HeroLaptopMockup = () => (
-  <div aria-hidden className="relative mx-auto w-[78%] max-w-[600px] select-none [perspective:2200px]">
+  <div aria-hidden className="relative mx-auto w-[74%] max-w-[460px] select-none [perspective:2200px]">
     {/* Ember glow behind the device */}
     <div className="absolute -inset-x-10 -top-6 bottom-6 -z-10 rounded-[50%] bg-[radial-gradient(closest-side,rgba(249,115,22,0.32),rgba(253,230,138,0.22)_55%,transparent)] blur-2xl" />
 

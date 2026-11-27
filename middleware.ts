@@ -14,6 +14,7 @@ export default authMiddleware({
     '/api/stream/token',
     '/api/speechmatics/token',
     '/api/cast-ai',
+    '/api/chat',
     // Vercel Cron calls this without a Clerk session; the route checks CRON_SECRET itself.
     '/api/cron/reminders',
   ],
