@@ -173,6 +173,9 @@ export const fetchOpenRouterCompletion = async (
           'X-Title': 'CastTalk',
         },
         body: JSON.stringify(body),
+        // Free models can stall; give up on this one and try the next fallback
+        // instead of hanging until the serverless function times out.
+        signal: AbortSignal.timeout(20_000),
       });
 
       if (!response.ok) {

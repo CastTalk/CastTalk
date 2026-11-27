@@ -1,29 +1,38 @@
 {
-  "primaryModelId": "cohere/north-mini-code:free",
+  "primaryModelId": "google/gemma-4-31b-it:free",
   "fallbacks": [
-    "poolside/laguna-s-2.1:free",
-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
-    "google/gemma-4-31b-it:free"
+    "google/gemma-4-26b-a4b-it:free",
+    "recursive/flint-v1.0:free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
   ],
   "models": [
     {
-      "id": "cohere/north-mini-code:free",
-      "name": "Cohere North Mini Code (Free)",
-      "description": "Cohere's agentic model with 256K context — fast 2.5s responses, permanent free tier.",
+      "id": "google/gemma-4-31b-it:free",
+      "name": "Gemma 4 31B (Free)",
+      "description": "Google's instruction-tuned Gemma 4, 262K context. Primary model.",
       "maxTokens": 1000,
       "temperature": 0.7,
-      "supportsTools": false,
+      "supportsTools": true,
       "supportsStructuredOutput": false,
       "supportsReasoning": false
     },
     {
-      "id": "poolside/laguna-s-2.1:free",
-      "name": "Poolside Laguna S 2.1 (Free)",
-      "description": "Poolside's 118B agentic model with 262K context — fast 4s responses, permanent free tier.",
+      "id": "google/gemma-4-26b-a4b-it:free",
+      "name": "Gemma 4 26B A4B (Free)",
+      "description": "Google's mixture-of-experts Gemma 4 (4B active), 262K context. Fast fallback.",
       "maxTokens": 1000,
       "temperature": 0.7,
-      "supportsTools": false,
+      "supportsTools": true,
+      "supportsStructuredOutput": false,
+      "supportsReasoning": false
+    },
+    {
+      "id": "recursive/flint-v1.0:free",
+      "name": "Flint v1.0 (Free)",
+      "description": "Recursive's Flint, 262K context. Fallback.",
+      "maxTokens": 1000,
+      "temperature": 0.7,
+      "supportsTools": true,
       "supportsStructuredOutput": false,
       "supportsReasoning": false
     },
@@ -31,26 +40,6 @@
       "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
       "name": "Nemotron 3 Nano Omni (Free)",
       "description": "NVIDIA 30B multimodal model with 256K context — fast 4s responses, permanent free tier.",
-      "maxTokens": 1000,
-      "temperature": 0.7,
-      "supportsTools": false,
-      "supportsStructuredOutput": false,
-      "supportsReasoning": true
-    },
-    {
-      "id": "nvidia/nemotron-3-super-120b-a12b:free",
-      "name": "Nemotron 3 Super 120B (Free)",
-      "description": "NVIDIA's 120B parameter MoE model.",
-      "maxTokens": 1000,
-      "temperature": 0.7,
-      "supportsTools": false,
-      "supportsStructuredOutput": false,
-      "supportsReasoning": true
-    },
-    {
-      "id": "google/gemma-4-31b-it:free",
-      "name": "Gemma 4 31B Instruct (Free)",
-      "description": "Google's 31B dense multimodal model.",
       "maxTokens": 1000,
       "temperature": 0.7,
       "supportsTools": false,
