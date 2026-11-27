@@ -18,7 +18,7 @@ const TILES: Tile[] = [
  * Purely decorative.
  */
 const HeroLaptopMockup = () => (
-  <div aria-hidden className="relative mx-auto w-[80%] max-w-[540px] select-none [perspective:2200px]">
+  <div aria-hidden className="relative mx-auto w-[82%] max-w-[595px] select-none [perspective:2200px] sm:w-[88%]">
     {/* Ember glow behind the device */}
     <div className="absolute -inset-x-10 -top-6 bottom-6 -z-10 rounded-[50%] bg-[radial-gradient(closest-side,rgba(249,115,22,0.32),rgba(253,230,138,0.22)_55%,transparent)] blur-2xl" />
 
@@ -101,10 +101,26 @@ const HeroLaptopMockup = () => (
       </div>
 
       {/* Base: a solid slab folded toward the viewer. preserve-3d lets its front
-          edge (rotated 90deg off the deck) shows real thickness.
+          layers stacked beneath it give it real thickness.
           A 3D transform keeps the flat layout height, so the negative margin gives
           that empty space back. */}
       <div className="relative mx-auto -mt-[2px] mb-[-30%] w-[104%] origin-top -translate-x-[1.9%] [container-type:inline-size] [transform-style:preserve-3d] [transform:rotateX(74deg)]">
+        {/* Thickness: copies of the deck outline stacked just beneath the surface
+            (same shape and tilt, so their edges always line up with the deck's
+            corners — nothing sticks out). The visible slivers read as the slab's
+            front and right side. */}
+        {Array.from({ length: 10 }, (_, i) => (i + 1) * 0.25).map((depth, i) => (
+          <div
+            key={depth}
+            aria-hidden
+            className="absolute inset-0 rounded-b-[1.6cqw] rounded-t-[1cqw]"
+            style={{
+              // 10 thin steps blend into one continuous edge; darker the deeper it goes
+              transform: `translateZ(-${depth}cqw)`,
+              background: `rgb(${38 - i * 3}, ${38 - i * 3}, ${42 - i * 3})`,
+            }}
+          />
+        ))}
         {/* Deck surface */}
         <div className="relative aspect-[16/8.5] rounded-b-[1.6cqw] rounded-t-[1cqw] border-x border-t border-white/10 bg-gradient-to-b from-[#45454c] via-[#323237] to-[#2a2a2f] px-[6cqw] pt-[3.4cqw]">
           {/* Hinge recess along the top of the deck */}
@@ -116,8 +132,6 @@ const HeroLaptopMockup = () => (
           </div>
           <div className="mx-auto mt-[3cqw] h-[16cqw] w-[38%] rounded-[1.4cqw] border border-white/5 bg-[#29292e]" />
         </div>
-        {/* Front edge (thickness) */}
-        <div className="absolute inset-x-0 bottom-0 h-[2.6cqw] origin-bottom rounded-b-[1.6cqw] bg-gradient-to-b from-[#2a2a2f] via-[#1c1c1f] to-[#0f0f11] [transform:rotateX(-90deg)]" />
       </div>
     </div>
   </div>
