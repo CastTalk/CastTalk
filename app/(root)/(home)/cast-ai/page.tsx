@@ -6,7 +6,7 @@ import { PromptInputBox } from '@/components/ui/ai-prompt-box';
 import { Brain, Sparkles, User, Calendar, FileText, CheckSquare, Plus, ArrowLeft, ChevronDown, Pin, Trash2, Search, MessageSquare, Loader2 } from '@/components/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import PixelLoader from '@/components/PixelLoader';
+import CastAIMascot, { type MascotMood } from '@/components/CastAIMascot';
 import { TextAnimate } from '@/components/ui/text-animate';
 import { useStreamVideoClient } from '@stream-io/video-react-sdk';
 import Plan, { Task } from '@/components/ui/agent-plan';
@@ -465,6 +465,47 @@ export default function CastAIPage() {
   const client = useStreamVideoClient();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+
+  // ── Mascot mood ──────────────────────────────────────────────────────────
+  // circle = easy chat, triangle = thinking (deep search), cloud = hard (automation /
+  // multi-step). Moods only escalate while working, and a long wait escalates on its
+  // own, so the body morphs circle -> triangle -> cloud mid-thought.
+  const [mascotMood, setMascotMood] = useState<MascotMood>('idle');
+  const moodTimerRef = useRef<number | null>(null);
+  const MOOD_RANK: Partial<Record<MascotMood, number>> = { easy: 1, thinking: 2, hard: 3 };
+  const escalateMood = (next: MascotMood) =>
+    setMascotMood((cur) => ((MOOD_RANK[cur] ?? 0) >= (MOOD_RANK[next] ?? 0) && MOOD_RANK[cur] ? cur : next));
+  const flashMood = (mood: MascotMood, ms: number) => {
+    if (moodTimerRef.current) window.clearTimeout(moodTimerRef.current);
+    setMascotMood(mood);
+    moodTimerRef.current = window.setTimeout(() => setMascotMood('idle'), ms);
+  };
+  useEffect(() => () => { if (moodTimerRef.current) window.clearTimeout(moodTimerRef.current); }, []);
+
+  // Taking a while? The task is harder than it looked.
+  useEffect(() => {
+    if (!isTyping) return;
+    const toThinking = window.setTimeout(() => escalateMood('thinking'), 6000);
+    const toHard = window.setTimeout(() => escalateMood('hard'), 16000);
+    return () => { window.clearTimeout(toThinking); window.clearTimeout(toHard); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTyping]);
+
+  // Dozes off after a minute of nothing; any key or tap wakes it.
+  useEffect(() => {
+    if (isTyping) return;
+    if (mascotMood === 'idle') {
+      const t = window.setTimeout(() => setMascotMood('sleep'), 60000);
+      return () => window.clearTimeout(t);
+    }
+    if (mascotMood === 'sleep') {
+      const wake = () => setMascotMood('idle');
+      window.addEventListener('keydown', wake, { once: true });
+      window.addEventListener('pointerdown', wake, { once: true });
+      return () => { window.removeEventListener('keydown', wake); window.removeEventListener('pointerdown', wake); };
+    }
+  }, [mascotMood, isTyping]);
+
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const [showInterruptModal, setShowInterruptModal] = useState<{ targetUrl: string } | null>(null);
@@ -522,7 +563,8 @@ export default function CastAIPage() {
       streamReaderRef.current.cancel().catch(() => {});
     }
     setIsTyping(false);
-    
+    setMascotMood('idle');
+
     const target = showInterruptModal?.targetUrl;
     setShowInterruptModal(null);
 
@@ -712,6 +754,8 @@ export default function CastAIPage() {
 
     setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
+    if (moodTimerRef.current) window.clearTimeout(moodTimerRef.current);
+    setMascotMood(mode === 'think' ? 'hard' : mode === 'search' ? 'thinking' : 'easy');
 
     const aiMessageId = `msg-ai-${Date.now()}`;
     const initialAiMsg: Message = {
@@ -827,7 +871,8 @@ export default function CastAIPage() {
             if (eventType === 'mode_selected') {
               const detectedMode = eventData.mode; // 'chat' | 'deep_search' | 'automate'
               const clientMode = detectedMode === 'automate' ? 'think' : (detectedMode === 'deep_search' ? 'search' : undefined);
-              
+              escalateMood(clientMode === 'think' ? 'hard' : clientMode === 'search' ? 'thinking' : 'easy');
+
               setMessages((prev) =>
                 prev.map((msg) => {
                   if (msg.id !== aiMessageId) return msg;
@@ -841,6 +886,7 @@ export default function CastAIPage() {
                 })
               );
             } else if (eventType === 'plan_generated') {
+              escalateMood((eventData.tasks?.length ?? 0) >= 3 ? 'hard' : 'thinking');
               const uiTasks = eventData.tasks.map((t: any) => ({
                 id: t.id,
                 title: t.title,
@@ -866,6 +912,7 @@ export default function CastAIPage() {
               );
             } else if (eventType === 'task_update') {
               const updatedStatus = mapStatus(eventData.status);
+              if (updatedStatus === 'failed') escalateMood('hard');
 
               setMessages((prev) =>
                 prev.map((msg) => {
@@ -921,7 +968,8 @@ export default function CastAIPage() {
               );
             } else if (eventType === 'final_message') {
               let aiText = eventData.text || 'I could not process that request.';
-              
+              flashMood(eventData.text ? 'burst' : 'alert', eventData.text ? 1100 : 2600);
+
               if (eventData.actionPlans && Array.isArray(eventData.actionPlans) && eventData.actionPlans.length > 0) {
                 const results: string[] = [];
                 let hasErrors = false;
@@ -1273,6 +1321,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
               }
             } else if (eventType === 'error_message') {
               const durationMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+              flashMood('alert', 2600);
               if (eventData.error?.code === 'ACCOUNT_REQUIRED') {
                 requireAccount(eventData.error.message || AUTOMATION_NEEDS_ACCOUNT);
                 setMessages((prev) =>
@@ -1299,6 +1348,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
       }
     } catch (error: any) {
       console.error('Error fetching chat completion stream:', error);
+      if (error?.name !== 'AbortError') flashMood('alert', 2600);
       const durationMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
       setMessages((prev) =>
         prev.map((msg) =>
@@ -1318,6 +1368,12 @@ The event has been successfully deleted/cancelled and removed from your dashboar
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // Exactly one live mascot: on the "thinking" row while it shows, otherwise on the
+  // newest rendered AI reply (so a plan in progress, or a fresh answer, has it).
+  const showTypingRow = isTyping && !messages.some((m) => m.sender === 'ai' && !m.text && m.mode === 'think');
+  const lastAi = [...messages].reverse().find((m) => m.sender === 'ai' && (m.text || m.tasks));
+  const liveAiId = showTypingRow ? null : lastAi?.id ?? null;
+
   return (
     <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden font-geist">
 
@@ -1335,6 +1391,7 @@ The event has been successfully deleted/cancelled and removed from your dashboar
               transition={{ duration: 0.4 }}
               className="text-center flex flex-col items-center font-geist"
             >
+              <CastAIMascot mood={mascotMood === 'sleep' ? 'sleep' : 'easy'} size={76} className="mb-5" />
               <h1 className="font-pixel text-5xl md:text-6xl lg:text-[72px] font-normal text-ink tracking-[-0.02em] leading-[1.05]">
                 How can I assist with your meetings?
               </h1>
@@ -1380,8 +1437,13 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                   className={`flex gap-4 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {msg.sender === 'ai' && (
-                    <div className="size-9 rounded-xl bg-white border border-black/5 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
-                      <img src="/logo/Main.svg" alt="CastAI" className="size-6 object-contain" />
+                    <div className="flex size-9 shrink-0 items-center justify-center">
+                      {/* The newest reply carries the live mascot; older ones a still one */}
+                      {msg.id === liveAiId ? (
+                        <CastAIMascot mood={mascotMood} size={36} />
+                      ) : (
+                        <CastAIMascot mood="idle" size={36} animate={false} />
+                      )}
                     </div>
                   )}
                   <div className="flex flex-col max-w-[80%] gap-1">
@@ -1459,20 +1521,18 @@ The event has been successfully deleted/cancelled and removed from your dashboar
                 );
               })}
 
-              {isTyping && !messages.some(m => m.sender === 'ai' && !m.text && m.mode === 'think') && (
+              {showTypingRow && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="flex gap-4 justify-start items-center"
                 >
-                  <div className="size-9 rounded-xl bg-white border border-black/5 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
-                    <img src="/logo/Main.svg" alt="CastAI" className="size-6 object-contain" />
+                  <div className="flex size-9 shrink-0 items-center justify-center">
+                    <CastAIMascot mood={mascotMood} size={36} />
                   </div>
-                  {/* Claude-style thinking: a tiny glyph that keeps changing shape */}
-                  <div className="flex items-center gap-2">
-                    <PixelLoader cell={3} gap={1} />
-                    <span className="text-shimmer-ember font-mono text-[12px] tracking-wide">Thinking</span>
-                  </div>
+                  <span className="text-shimmer-ember font-mono text-[12px] tracking-wide">
+                    {mascotMood === 'hard' ? 'Working through it' : mascotMood === 'thinking' ? 'Pondering' : 'Thinking'}
+                  </span>
                 </motion.div>
               )}
               <div ref={messagesEndRef} />
